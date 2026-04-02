@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload CPO Price Data{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold text-slate-800 mb-6">Upload CPO Price Data</h1>
+
+    <!-- Instructions -->
+    <div class="bg-teal-50 border-l-4 border-primary p-4 mb-6 rounded-r-lg">
+        <h3 class="text-sm font-medium text-teal-800 mb-2">CSV Format Requirements</h3>
+        <ul class="text-sm text-teal-700 list-disc list-inside space-y-1">
+            <li>Headers: Tanggal, Terakhir, Pembukaan, Tertinggi, Terendah, Vol.</li>
+            <li>Or English: Date, Close, Open, High, Low, Volume</li>
+            <li>Date format: DD/MM/YYYY or DD.MM.YYYY</li>
+            <li>Downloaded from investing.com or similar sources</li>
+        </ul>
+    </div>
+
+    <!-- Upload Form -->
+    <div class="bg-white shadow-sm rounded-lg border border-slate-100 p-6 mb-6">
+        <form method="POST" enctype="multipart/form-data" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="csv_file" class="block text-sm font-medium text-slate-700 mb-2">Select CSV File</label>
+                <div class="flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-lg hover:border-primary transition">
+                    <div class="space-y-1 text-center">
+                        <p class="text-slate-400 text-3xl mb-2">&uarr;</p>
+                        <div class="flex text-sm text-slate-600">
+                            <label for="csv_file" class="relative cursor-pointer rounded-md font-medium text-primary hover:underline">
+                                <span>Upload a file</span>
+                                <input id="csv_file" name="csv_file" type="file" accept=".csv" required class="sr-only">
+                            </label>
+                            <p class="pl-1">or drag and drop</p>
+                        </div>
+                        <p class="text-xs text-slate-500">CSV files only</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Process Info -->
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <h4 class="text-sm font-medium text-slate-700 mb-2">What happens after upload:</h4>
+                <ol class="text-sm text-slate-600 space-y-1 list-decimal list-inside">
+                    <li>CSV data is validated and parsed</li>
+                    <li>Price data is saved to Firestore (DailyMarketData collection)</li>
+                    <li><strong>HMM calculation is triggered automatically</strong></li>
+                    <li>Market states are updated in Firestore (MarketStates collection)</li>
+                    <li>Dashboard is refreshed with new data</li>
+                </ol>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <a href="{% url 'dashboard' %}" class="text-slate-600 hover:text-slate-800 text-sm">
+                    &larr; Back to Dashboard
+                </a>
+                <button type="submit" class="bg-primary hover:bg-teal-800 text-white font-medium py-2 px-6 rounded-lg text-sm transition-colors">
+                    Upload &amp; Process
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="space-y-3">
+        {% for message in messages %}
+        <div class="{% if message.tags == 'success' %}bg-green-50 border-green-400 text-green-800{% elif message.tags == 'error' %}bg-red-50 border-red-400 text-red-800{% else %}bg-blue-50 border-blue-400 text-blue-800{% endif %} border-l-4 p-4 rounded-r-lg">
+            <p class="text-sm font-medium">{{ message }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('csv_file').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name;
+    if (fileName) {
+        const label = document.querySelector('label[for="csv_file"] span');
+        label.textContent = fileName;
+    }
+});
+</script>
+{% endblock %}

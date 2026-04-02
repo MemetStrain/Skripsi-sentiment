@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Diagram - Admin Update Price Data (Firestore)</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .header p {
+            font-size: 16px;
+            opacity: 0.95;
+        }
+        .content {
+            padding: 30px;
+        }
+        .info-banner {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border-left: 5px solid #ff9800;
+            padding: 20px 25px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .info-banner h2 {
+            color: #e65100;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+        .info-banner p {
+            color: #424242;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .diagram-container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            border: 3px solid #333;
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .info-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .info-card h3 {
+            color: #667eea;
+            margin-bottom: 12px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .info-card.admin {
+            border-left: 5px solid #FF5722;
+        }
+        .info-card.admin h3 {
+            color: #FF5722;
+        }
+        .info-card.backend {
+            border-left: 5px solid #2196F3;
+        }
+        .info-card.backend h3 {
+            color: #2196F3;
+        }
+        .info-card.database {
+            border-left: 5px solid #9C27B0;
+        }
+        .info-card.database h3 {
+            color: #9C27B0;
+        }
+        .info-card ul {
+            margin-left: 20px;
+            color: #555;
+            line-height: 1.8;
+        }
+        .info-card li {
+            margin-bottom: 8px;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 25px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+        .legend-symbol {
+            min-width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 24px;
+            border-radius: 8px;
+        }
+        .symbol-start { 
+            width: 30px;
+            height: 30px;
+            background: #000;
+            border-radius: 50%;
+        }
+        .symbol-end { 
+            width: 30px;
+            height: 30px;
+            background: #000;
+            border-radius: 50%;
+            border: 5px solid #fff;
+            box-shadow: 0 0 0 3px #000;
+        }
+        .symbol-process { background: #fff; border: 2px solid #000; color: #000; }
+        .symbol-decision { 
+            width: 50px;
+            height: 50px;
+            background: #fff;
+            border: 2px solid #000;
+            transform: rotate(45deg);
+        }
+        footer {
+            background: #f5f5f5;
+            padding: 25px;
+            text-align: center;
+            color: #666;
+            border-top: 2px solid #e0e0e0;
+        }
+        footer p {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Activity Diagram - Admin Update Price Data</h1>
+            <p>Swimlane Style - Django Backend & Google Firestore</p>
+        </div>
+
+        <div class="content">
+            <div class="info-banner">
+                <h2>🎯 Diagram Overview</h2>
+                <p><strong>Feature:</strong> Admin Upload CSV to Update Daily Price Data</p>
+                <p><strong>Backend:</strong> Django (Python) - Business Logic & HMM Calculation</p>
+                <p><strong>Database:</strong> Google Firestore (NoSQL) - Collections & Documents</p>
+                <p><strong>Swimlanes:</strong> Admin (UI) | Backend (Django) | Database (Firestore)</p>
+            </div>
+
+            <div class="diagram-container">
+                <div class="mermaid">
+graph TB
+    subgraph Thread1["👨‍💼 ADMIN"]
+        Start1(("●"))
+        SelectMenu["select<br/>Update Price Menu"]
+        UploadCSV["upload CSV file<br/>Date, Open, High,<br/>Low, Close"]
+        ViewSuccess["view Update Successful<br/>notification"]
+        ViewError["view error message<br/>Invalid CSV Format"]
+        FixFile["fix CSV file<br/>and retry"]
+        End1(("◉"))
+        
+        Start1 --> SelectMenu
+        SelectMenu --> UploadCSV
+        ViewSuccess --> End1
+    end
+    
+    subgraph Thread2["⚙️ BACKEND Django"]
+        ReceiveFile["receive file<br/>multipart form-data"]
+        ParseCSV["parse CSV content<br/>read headers and rows"]
+        ValidateFormat{"validate CSV format<br/>Check headers:<br/>Date, Open, High,<br/>Low, Close?"}
+        CleanData["clean data<br/>remove duplicates<br/>null values"]
+        BatchWrite["prepare batch write<br/>format documents"]
+        TriggerHMM["trigger HMM calculation<br/>Hidden Markov Model<br/>determine market states"]
+        CalcStates["calculate states<br/>Bullish=1, Bearish=0<br/>and probabilities"]
+        PrepareUpdate["prepare document updates<br/>add hmm_state field"]
+        LogActivity["prepare audit log<br/>Admin uploaded data"]
+        SendSuccess["send success response<br/>HTTP 200"]
+        SendError["send error response<br/>HTTP 400"]
+        
+        ReceiveFile --> ParseCSV
+        ParseCSV --> ValidateFormat
+        ValidateFormat -->|No| SendError
+        ValidateFormat -->|Yes| CleanData
+        CleanData --> BatchWrite
+        TriggerHMM --> CalcStates
+        CalcStates --> PrepareUpdate
+        LogActivity --> SendSuccess
+    end
+    
+    subgraph Thread3["💾 DATABASE Firestore"]
+        BatchWriteDB["batch write<br/>collection: DailyMarketData<br/>raw price documents"]
+        UpdateDocs["batch update<br/>DailyMarketData<br/>add hmm_state and<br/>hmm_prob fields"]
+        InsertLog["insert document<br/>collection: ActivityLog<br/>audit trail"]
+        CommitBatch["commit batch<br/>atomic operation"]
+        
+        BatchWriteDB --> UpdateDocs
+        UpdateDocs --> InsertLog
+        InsertLog --> CommitBatch
+    end
+    
+    UploadCSV -.->|POST /api/admin/update| ReceiveFile
+    SendError -.->|Error Response| ViewError
+    ViewError --> FixFile
+    FixFile -.->|Re-upload| UploadCSV
+    BatchWrite -.->|Firestore batch| BatchWriteDB
+    BatchWriteDB -.->|complete| TriggerHMM
+    PrepareUpdate -.->|Firestore batch.update| UpdateDocs
+    InsertLog -.->|Firestore add| LogActivity
+    CommitBatch -.->|complete| LogActivity
+    SendSuccess -.->|JSON Response| ViewSuccess
+    
+    classDef startEnd fill:#000,stroke:#000,stroke-width:3px,color:#fff
+    classDef activity fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    classDef decision fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    
+    class Start1,End1 startEnd
+    class SelectMenu,UploadCSV,ViewSuccess,ViewError,FixFile,ReceiveFile,ParseCSV,CleanData,BatchWrite,TriggerHMM,CalcStates,PrepareUpdate,LogActivity,SendSuccess,SendError,BatchWriteDB,UpdateDocs,InsertLog,CommitBatch activity
+    class ValidateFormat decision
+                </div>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-card admin">
+                    <h3>👨‍💼 Admin Swimlane</h3>
+                    <ul>
+                        <li><strong>Select Menu:</strong> Akses menu "Update Price" (role-based access)</li>
+                        <li><strong>Upload CSV:</strong> File dengan format Indonesian headers (Tanggal, Terakhir, dll)</li>
+                        <li><strong>View Success:</strong> Notifikasi "Data berhasil diupdate & HMM recalculated"</li>
+                        <li><strong>Error Handling:</strong> Jika format invalid, tampil error & retry</li>
+                    </ul>
+                </div>
+
+                <div class="info-card backend">
+                    <h3>⚙️ Backend Swimlane (Django)</h3>
+                    <ul>
+                        <li><strong>Receive File:</strong> Accept multipart/form-data upload</li>
+                        <li><strong>Parse CSV:</strong> Read headers & validate structure</li>
+                        <li><strong>Validation:</strong> Check required columns (Date, Open, High, Low, Close)</li>
+                        <li><strong>Clean Data:</strong> Remove duplicates, handle nulls, format dates</li>
+                        <li><strong>Batch Write:</strong> Prepare Firestore batch operation</li>
+                        <li><strong>HMM Calculation:</strong> Run Hidden Markov Model algorithm</li>
+                        <li><strong>States:</strong> Determine Bullish (1) / Bearish (0) / Neutral (2)</li>
+                        <li><strong>Update Docs:</strong> Add hmm_state & hmm_prob fields</li>
+                        <li><strong>Audit Log:</strong> Record activity untuk compliance</li>
+                    </ul>
+                </div>
+
+                <div class="info-card database">
+                    <h3>💾 Database Swimlane (Firestore)</h3>
+                    <ul>
+                        <li><strong>Collection:</strong> DailyMarketData (price documents)</li>
+                        <li><strong>Batch Write:</strong> db.batch() untuk atomic operations</li>
+                        <li><strong>Document Structure:</strong> {date, open, high, low, close, hmm_state, hmm_prob}</li>
+                        <li><strong>Update Fields:</strong> batch.update() untuk existing documents</li>
+                        <li><strong>Activity Log:</strong> Collection ActivityLog untuk audit trail</li>
+                        <li><strong>Commit:</strong> batch.commit() - all or nothing</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="info-banner" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left-color: #4CAF50; margin-top: 30px;">
+                <h2 style="color: #2e7d32;">🔄 Process Flow Summary</h2>
+                <p><strong>1. Upload:</strong> Admin upload CSV file dengan price data baru</p>
+                <p><strong>2. Validation:</strong> Backend validate format & clean data</p>
+                <p><strong>3. Batch Write:</strong> Firestore batch write raw price documents</p>
+                <p><strong>4. HMM Calculation:</strong> Backend run Hidden Markov Model untuk determine market states</p>
+                <p><strong>5. Update States:</strong> Firestore batch update documents dengan hmm_state & hmm_prob</p>
+                <p><strong>6. Audit Log:</strong> Insert record ke ActivityLog collection</p>
+                <p><strong>7. Success Response:</strong> Return JSON response ke Admin UI</p>
+                <p><strong>8. Notification:</strong> Admin view success message</p>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-symbol symbol-start"></div>
+                    <div>
+                        <strong>Start Node</strong><br>
+                        <small>Initial state (●)</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol symbol-end"></div>
+                    <div>
+                        <strong>End Node</strong><br>
+                        <small>Final state (◉)</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol symbol-process">Activity</div>
+                    <div>
+                        <strong>Process/Activity</strong><br>
+                        <small>Action or operation</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol symbol-decision"></div>
+                    <div>
+                        <strong>Decision Node</strong><br>
+                        <small>Conditional branch (◇)</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 60px; height: 2px; background: #000;"></div>
+                    <div>
+                        <strong>Control Flow</strong><br>
+                        <small>Solid line (→)</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 60px; height: 2px; border-top: 2px dashed #000;"></div>
+                    <div>
+                        <strong>Data Flow</strong><br>
+                        <small>Dashed line (- - →)</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-banner" style="background: #f3e5f5; border-left-color: #9C27B0; margin-top: 30px;">
+                <h2 style="color: #6a1b9a;">🔥 Firestore Operations</h2>
+                <p><strong>Batch Write:</strong> <code>db.batch().set(docRef, data)</code> untuk multiple documents</p>
+                <p><strong>Batch Update:</strong> <code>batch.update(docRef, {hmm_state: 1, hmm_prob: 0.85})</code></p>
+                <p><strong>Add Document:</strong> <code>collection('ActivityLog').add({timestamp, action, admin})</code></p>
+                <p><strong>Commit:</strong> <code>batch.commit()</code> untuk atomic operation (all or nothing)</p>
+                <p><strong>Advantage:</strong> NoSQL flexibility, automatic scaling, real-time sync</p>
+            </div>
+        </div>
+
+        <footer>
+            <p><strong>UML Activity Diagram</strong> | Admin Update Price Data Flow</p>
+            <p>Django Backend + Google Firestore | CPO Price Prediction System | December 2025</p>
+            <p style="font-size: 12px; margin-top: 12px; color: #999;">
+                Generated by: System Architect & UML Expert | For: Skripsi/Thesis Documentation
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 30,
+                nodeSpacing: 60,
+                rankSpacing: 80
+            },
+            securityLevel: 'loose'
+        });
+    </script>
+</body>
+</html>

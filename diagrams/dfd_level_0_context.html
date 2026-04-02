@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFD Level 0 - Context Diagram | Sistem Prediksi Harga CPO</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        h2 {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 18px;
+            font-weight: normal;
+        }
+        .diagram-container {
+            background: #fafafa;
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #1976D2;
+            font-size: 18px;
+        }
+        .info-box p {
+            margin: 8px 0;
+            color: #555;
+            line-height: 1.6;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .legend-symbol {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        .entity { background: #e1f5fe; color: #01579b; }
+        .system { background: #fff9c4; color: #f57f17; }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Data Flow Diagram Level 0</h1>
+        <h2>Context Diagram - Sistem Web Prediksi Harga CPO</h2>
+
+        <div class="info-box">
+            <h3>📋 Deskripsi Sistem</h3>
+            <p><strong>Nama Sistem:</strong> Aplikasi Web Prediksi Harga CPO (Crude Palm Oil)</p>
+            <p><strong>Teknologi:</strong> FinBERT (Sentiment Analysis) + Hidden Markov Model (HMM)</p>
+            <p><strong>Fase:</strong> Production/Inference (menggunakan model pre-trained)</p>
+        </div>
+
+        <div class="diagram-container">
+            <div class="mermaid">
+graph TD
+    %% Entities
+    User["👤 User<br/>(Pengguna Umum)"]
+    Admin["👨‍💼 Admin"]
+    MPOB["🌐 MPOB<br/>(Malaysian Palm Oil Board)"]
+
+    %% System
+    System(("🔮 Sistem Web<br/>Prediksi Harga CPO"))
+
+    %% Flows - User
+    User -->|"1️⃣ Credentials,<br/>Request Prediction"| System
+    System -->|"2️⃣ Access Token,<br/>Prediction Results,<br/>Visualizations"| User
+
+    %% Flows - Admin
+    Admin -->|"3️⃣ Credentials,<br/>Input Price Data (OHLC)"| System
+    System -->|"4️⃣ Access Token,<br/>Update Confirmation"| Admin
+
+    %% Flows - MPOB
+    MPOB -->|"5️⃣ Raw News Data"| System
+
+    %% Styling
+    classDef entityStyle fill:#e1f5fe,stroke:#01579b,stroke-width:3px,color:#01579b;
+    classDef systemStyle fill:#fff9c4,stroke:#f57f17,stroke-width:4px,color:#f57f17;
+
+    class User,Admin,MPOB entityStyle;
+    class System systemStyle;
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>🔄 Aliran Data Utama</h3>
+            <p><strong>Flow 1-2:</strong> User melakukan autentikasi dan meminta prediksi → Sistem memberikan hasil prediksi dengan visualisasi</p>
+            <p><strong>Flow 3-4:</strong> Admin mengelola data harga aktual → Sistem mengkonfirmasi update data</p>
+            <p><strong>Flow 5:</strong> Sistem otomatis mengambil berita dari MPOB (background process)</p>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-symbol entity">E</div>
+                <div>
+                    <strong>Entitas Eksternal</strong><br>
+                    <small>Aktor di luar sistem</small>
+                </div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-symbol system">S</div>
+                <div>
+                    <strong>Sistem</strong><br>
+                    <small>Batas sistem yang dianalisis</small>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p><strong>Data Flow Diagram Level 0</strong> | Generated: December 2025</p>
+            <p>Sistem Prediksi Harga CPO dengan Machine Learning</p>
+        </footer>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="mb-8">
+    <h1 class="text-2xl font-bold text-slate-800">CPO News &amp; Sentiment Analysis</h1>
+    <p class="text-slate-500 mt-1">Latest news with FinBERT sentiment classification</p>
+</div>
+
+<!-- Sentiment Statistics -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
+        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.positive }}</div>
+        <div class="text-sm text-slate-500">Positive</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
+        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.negative }}</div>
+        <div class="text-sm text-slate-500">Negative</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
+        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.neutral }}</div>
+        <div class="text-sm text-slate-500">Neutral</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
+        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.total }}</div>
+        <div class="text-sm text-slate-500">Total</div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <span class="text-sm font-medium text-slate-700">Filter by Sentiment:</span>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'news' %}"
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if not current_filter %}bg-primary text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+                All
+            </a>
+            <a href="{% url 'news' %}?sentiment=Positive"
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if current_filter == 'Positive' %}bg-green-600 text-white{% else %}bg-green-50 text-green-700 hover:bg-green-100{% endif %}">
+                Positive
+            </a>
+            <a href="{% url 'news' %}?sentiment=Negative"
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if current_filter == 'Negative' %}bg-red-600 text-white{% else %}bg-red-50 text-red-700 hover:bg-red-100{% endif %}">
+                Negative
+            </a>
+            <a href="{% url 'news' %}?sentiment=Neutral"
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if current_filter == 'Neutral' %}bg-slate-600 text-white{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
+                Neutral
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- News Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    {% if news_page %}
+        {% for news_item in news_page %}
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6 flex flex-col h-full">
+            <!-- Header: Badge & Date -->
+            <div class="flex justify-between items-start mb-3">
+                {% if news_item.sentiment_label == 'Positive' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Positive</span>
+                {% elif news_item.sentiment_label == 'Negative' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Negative</span>
+                {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Neutral</span>
+                {% endif %}
+
+                <span class="text-slate-400 text-xs">{{ news_item.date|date:"d M Y" }}</span>
+            </div>
+
+            <!-- Title -->
+            <h5 class="text-base font-bold text-slate-800 mb-2 line-clamp-2">
+                <a href="{{ news_item.url }}" target="_blank" class="hover:text-primary transition-colors">{{ news_item.title }}</a>
+            </h5>
+
+            <!-- Snippet -->
+            <p class="text-slate-500 text-sm mb-4 line-clamp-3 flex-grow">{{ news_item.snippet }}</p>
+
+            <!-- Footer -->
+            <div class="flex justify-between items-center text-sm pt-3 border-t border-slate-100">
+                <span class="text-slate-400 text-xs">Score: {{ news_item.sentiment_score|floatformat:3 }}</span>
+                <a href="{{ news_item.url }}" target="_blank" class="text-primary hover:underline font-medium">
+                    Read Article &rarr;
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-span-full">
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+                <h4 class="text-lg font-bold text-slate-800 mb-2">No News Found</h4>
+                <p class="text-slate-600 text-sm">
+                    {% if current_filter %}
+                        No {{ current_filter|lower }} news available. Try selecting a different filter.
+                    {% else %}
+                        No news articles available yet. Add news via Django Admin.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Pagination -->
+{% if pagination.total_pages > 1 %}
+<div class="flex flex-col items-center justify-center gap-3 mt-8">
+    <nav aria-label="News pagination">
+        <ul class="flex items-center gap-1">
+            {% if pagination.has_previous %}
+                <li>
+                    <a href="?page={{ pagination.previous_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                        &lt;
+                    </a>
+                </li>
+            {% else %}
+                <li>
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                        &lt;
+                    </span>
+                </li>
+            {% endif %}
+
+            {% for num in pagination.page_range %}
+                {% if pagination.current_page == num %}
+                    <li>
+                        <span class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white font-medium text-sm">
+                            {{ num }}
+                        </span>
+                    </li>
+                {% else %}
+                    <li>
+                        <a href="?page={{ num }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                           class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                            {{ num }}
+                        </a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if pagination.has_next %}
+                <li>
+                    <a href="?page={{ pagination.next_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                        &gt;
+                    </a>
+                </li>
+            {% else %}
+                <li>
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                        &gt;
+                    </span>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <p class="text-sm text-slate-500">
+        Page <span class="font-medium text-slate-700">{{ pagination.current_page }}</span> of <span class="font-medium text-slate-700">{{ pagination.total_pages }}</span>
+    </p>
+</div>
+{% endif %}
+
+<!-- Info Card -->
+<div class="mt-10 bg-slate-50 rounded-lg border border-slate-200 p-6">
+    <h5 class="text-base font-bold text-slate-800 mb-3">About Sentiment Analysis</h5>
+    <p class="text-slate-600 mb-4 text-sm leading-relaxed">
+        <strong>FinBERT</strong> is a pre-trained NLP model specifically designed for financial sentiment analysis.
+        It analyzes news articles and classifies them into:
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div>
+            <strong class="text-green-700">Positive</strong>
+            <span class="text-slate-500"> &mdash; Optimistic outlook, price increases, favorable market conditions</span>
+        </div>
+        <div>
+            <strong class="text-red-700">Negative</strong>
+            <span class="text-slate-500"> &mdash; Pessimistic outlook, price drops, unfavorable market conditions</span>
+        </div>
+        <div>
+            <strong class="text-slate-700">Neutral</strong>
+            <span class="text-slate-500"> &mdash; Balanced or factual information without clear sentiment direction</span>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

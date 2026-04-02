@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="mb-8 text-center max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold text-slate-800 mb-2">About This Project</h1>
+    <p class="text-slate-500">CPO Price Prediction System - Skripsi Project</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- Left Column: Identity -->
+    <div class="lg:col-span-1">
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-full mx-auto mb-4 flex items-center justify-center text-slate-400 text-3xl font-bold">
+                ?
+            </div>
+            <h3 class="text-lg font-bold text-slate-800">Student Name</h3>
+            <p class="text-primary font-medium text-sm mb-1">NIM: 12345678</p>
+            <p class="text-slate-500 text-sm">Computer Science Department</p>
+        </div>
+    </div>
+
+    <!-- Right Column: Project Details -->
+    <div class="lg:col-span-2 space-y-6">
+
+        <!-- Overview -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <h3 class="text-lg font-bold text-slate-800 mb-3">Project Overview</h3>
+            <p class="text-slate-600 text-sm leading-relaxed mb-3">
+                This web application is a comprehensive system for predicting Crude Palm Oil (CPO) commodity prices
+                using advanced machine learning techniques. The system integrates <strong>Hidden Markov Models (HMM)</strong> for
+                market state prediction and <strong>FinBERT</strong> for news sentiment analysis.
+            </p>
+            <p class="text-slate-600 text-sm leading-relaxed">
+                The goal is to provide traders and analysts with a robust tool that not only forecasts prices but also
+                identifies the underlying market regime (Bullish, Bearish, or Neutral) to support better decision-making.
+            </p>
+        </div>
+
+        <!-- Methodology -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <h3 class="text-lg font-bold text-slate-800 mb-4">Methodology</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="border border-slate-100 rounded-lg p-4">
+                    <h4 class="font-bold text-slate-800 mb-2">Hidden Markov Model</h4>
+                    <p class="text-sm text-slate-500">
+                        Used to model the hidden states of the market. It assumes that the market is always in one of several states (Bullish, Bearish, Neutral) which are not directly observable but can be inferred from price movements.
+                    </p>
+                </div>
+
+                <div class="border border-slate-100 rounded-lg p-4">
+                    <h4 class="font-bold text-slate-800 mb-2">FinBERT Sentiment</h4>
+                    <p class="text-sm text-slate-500">
+                        A BERT model pre-trained on financial texts. It analyzes news headlines and snippets to determine market sentiment, providing an additional layer of insight beyond technical analysis.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <h3 class="text-lg font-bold text-slate-800 mb-4">Technologies Used</h3>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                <div>
+                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">Backend</h6>
+                    <ul class="space-y-1 text-slate-500">
+                        <li>Django 5.0</li>
+                        <li>SQLite</li>
+                        <li>Python 3.10</li>
+                    </ul>
+                </div>
+                <div>
+                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">Frontend</h6>
+                    <ul class="space-y-1 text-slate-500">
+                        <li>Tailwind CSS</li>
+                        <li>Chart.js</li>
+                    </ul>
+                </div>
+                <div>
+                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">ML / AI</h6>
+                    <ul class="space-y-1 text-slate-500">
+                        <li>HMM Learn</li>
+                        <li>FinBERT</li>
+                        <li>Scikit-learn</li>
+                    </ul>
+                </div>
+                <div>
+                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">Tools</h6>
+                    <ul class="space-y-1 text-slate-500">
+                        <li>Git</li>
+                        <li>VS Code</li>
+                        <li>Pandas</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

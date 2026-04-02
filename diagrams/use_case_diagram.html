@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Use Case Diagram | Sistem Prediksi Harga CPO</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .header p {
+            font-size: 16px;
+            opacity: 0.95;
+        }
+        .content {
+            padding: 30px;
+        }
+        .info-banner {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-left: 5px solid #2196F3;
+            padding: 20px 25px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .info-banner h2 {
+            color: #1565C0;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+        .info-banner p {
+            color: #424242;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .diagram-container {
+            background: #fafafa;
+            padding: 40px;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+        .tab-button {
+            padding: 12px 24px;
+            background: white;
+            border: 2px solid #ddd;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        .tab-button:hover {
+            background: #f5f5f5;
+            border-color: #667eea;
+            color: #667eea;
+        }
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .actors-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .actor-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        .actor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        .actor-card.user {
+            border-left: 5px solid #4CAF50;
+        }
+        .actor-card.admin {
+            border-left: 5px solid #FF5722;
+        }
+        .actor-card.system {
+            border-left: 5px solid #9C27B0;
+        }
+        .actor-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+        .actor-card .icon {
+            font-size: 28px;
+        }
+        .actor-card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        .actor-card ul {
+            margin-left: 20px;
+            color: #555;
+        }
+        .actor-card li {
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+        .usecase-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .usecase-card {
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+        .usecase-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        .usecase-card .uc-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        .usecase-card .uc-id {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .usecase-card h4 {
+            color: #333;
+            flex: 1;
+            font-size: 16px;
+        }
+        .usecase-card .description {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .usecase-card .actors-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .usecase-card .actor-badge {
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .actor-badge.user { background: #c8e6c9; color: #2e7d32; }
+        .actor-badge.admin { background: #ffccbc; color: #d84315; }
+        .actor-badge.system { background: #e1bee7; color: #6a1b9a; }
+        .relationships-section {
+            background: #fff3e0;
+            border-left: 5px solid #ff9800;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .relationships-section h3 {
+            color: #e65100;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .relationship-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #ffcc80;
+        }
+        .relationship-item strong {
+            color: #333;
+        }
+        .relationship-item code {
+            background: #f5f5f5;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #d32f2f;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            padding: 25px;
+            background: #f5f5f5;
+            border-radius: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+        .legend-symbol {
+            font-size: 24px;
+            min-width: 40px;
+            text-align: center;
+        }
+        .legend-text strong {
+            display: block;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .legend-text small {
+            color: #666;
+            font-size: 12px;
+        }
+        footer {
+            background: #f5f5f5;
+            padding: 25px;
+            text-align: center;
+            color: #666;
+            border-top: 2px solid #e0e0e0;
+        }
+        footer p {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📐 Use Case Diagram</h1>
+            <p>Aplikasi Web Prediksi Harga CPO dengan FinBERT & Hidden Markov Model</p>
+        </div>
+
+        <div class="content">
+            <div class="info-banner">
+                <h2>📋 System Overview</h2>
+                <p><strong>System Boundary:</strong> Aplikasi Web Prediksi Harga CPO (Crude Palm Oil)</p>
+                <p><strong>Purpose:</strong> Menyediakan platform prediksi harga komoditas berbasis machine learning dengan analisis sentimen berita</p>
+                <p><strong>Methodology:</strong> UML Use Case Diagram - menggambarkan interaksi aktor dengan sistem</p>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-button active" onclick="switchTab(event, 'diagram')">
+                    📊 Use Case Diagram
+                </button>
+                <button class="tab-button" onclick="switchTab(event, 'actors')">
+                    👥 Actors
+                </button>
+                <button class="tab-button" onclick="switchTab(event, 'usecases')">
+                    🎯 Use Cases
+                </button>
+                <button class="tab-button" onclick="switchTab(event, 'relationships')">
+                    🔗 Relationships
+                </button>
+            </div>
+
+            <!-- TAB 1: Diagram -->
+            <div id="diagram" class="tab-content active">
+                <div class="diagram-container">
+                    <div class="mermaid">
+graph LR
+    %% Actors
+    User["👤 User<br/>(Pengguna Umum)"]
+    Admin["👨‍💼 Admin"]
+    Scheduler["⏰ Scheduler<br/>(System Timer)"]
+    
+    %% System Boundary
+    subgraph System["🔮 Aplikasi Web Prediksi Harga CPO"]
+        %% Authentication Use Cases
+        UC01["UC01:<br/>🔐 Login<br/>(Autentikasi)"]
+        UC02["UC02:<br/>📝 Register<br/>(Pendaftaran Akun)"]
+        
+        %% User Use Cases
+        UC03["UC03:<br/>📊 Melihat Dashboard<br/>(Visualisasi Grafik<br/>Harga & HMM States)"]
+        UC04["UC04:<br/>🔮 Melakukan Prediksi<br/>(Input Parameter<br/>Waktu & Model)"]
+        UC05["UC05:<br/>📰 Melihat Berita<br/>& Sentimen<br/>(Label FinBERT)"]
+        
+        %% Admin Use Cases
+        UC06["UC06:<br/>📁 Update Data Harga<br/>(Upload CSV)<br/>&lt;Admin Only&gt;"]
+        
+        %% System Use Cases
+        UC07["UC07:<br/>🤖 Scraping & Analisis<br/>Berita Otomatis<br/>(Background Process)"]
+    end
+    
+    %% --- Actor Connections ---
+    
+    %% User Connections
+    User ---|Association| UC02
+    User ---|Association| UC03
+    User ---|Association| UC04
+    User ---|Association| UC05
+    
+    %% Admin Inheritance (Admin IS-A User)
+    Admin -.->|"⬅️ inherits"| User
+    
+    %% Admin Specific Connection
+    Admin ---|Association| UC06
+    
+    %% Scheduler Connection
+    Scheduler ---|Association| UC07
+    
+    %% --- Include Relationships ---
+    %% UC03, UC04, UC05, UC06 require Login (UC01)
+    UC03 -.->|"≪include≫"| UC01
+    UC04 -.->|"≪include≫"| UC01
+    UC05 -.->|"≪include≫"| UC01
+    UC06 -.->|"≪include≫"| UC01
+    
+    %% Styling
+    classDef actorStyle fill:#e1f5fe,stroke:#01579b,stroke-width:3px,color:#01579b;
+    classDef adminStyle fill:#ffccbc,stroke:#d84315,stroke-width:3px,color:#d84315;
+    classDef systemStyle fill:#e1bee7,stroke:#6a1b9a,stroke-width:3px,color:#6a1b9a;
+    classDef authUC fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#333;
+    classDef userUC fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#333;
+    classDef adminUC fill:#ffccbc,stroke:#d84315,stroke-width:2px,color:#333;
+    classDef systemUC fill:#e1bee7,stroke:#6a1b9a,stroke-width:2px,color:#333;
+    classDef boundaryStyle fill:#f5f5f5,stroke:#666,stroke-width:3px,stroke-dasharray:5 5;
+    
+    class User actorStyle;
+    class Admin adminStyle;
+    class Scheduler systemStyle;
+    class UC01,UC02 authUC;
+    class UC03,UC04,UC05 userUC;
+    class UC06 adminUC;
+    class UC07 systemUC;
+    class System boundaryStyle;
+                    </div>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-symbol">👤</div>
+                        <div class="legend-text">
+                            <strong>Actor</strong>
+                            <small>Entitas yang berinteraksi dengan sistem</small>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">⭕</div>
+                        <div class="legend-text">
+                            <strong>Use Case</strong>
+                            <small>Fungsionalitas sistem</small>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">→</div>
+                        <div class="legend-text">
+                            <strong>Association</strong>
+                            <small>Aktor menggunakan use case</small>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">- - →</div>
+                        <div class="legend-text">
+                            <strong>Include</strong>
+                            <small>Use case memerlukan use case lain</small>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">⬅️</div>
+                        <div class="legend-text">
+                            <strong>Inheritance</strong>
+                            <small>Admin mewarisi dari User</small>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-symbol">🔲</div>
+                        <div class="legend-text">
+                            <strong>System Boundary</strong>
+                            <small>Batas sistem yang dianalisis</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Actors -->
+            <div id="actors" class="tab-content">
+                <div class="actors-section">
+                    <div class="actor-card user">
+                        <h3>
+                            <span class="icon">👤</span>
+                            User (Pengguna Umum)
+                        </h3>
+                        <p><strong>Deskripsi:</strong> Pengguna umum / investor yang ingin melihat prediksi harga CPO</p>
+                        <p><strong>Hak Akses:</strong></p>
+                        <ul>
+                            <li>Register akun baru</li>
+                            <li>Login ke sistem</li>
+                            <li>Melihat dashboard dengan grafik HMM</li>
+                            <li>Melakukan prediksi harga</li>
+                            <li>Melihat berita dengan sentimen analysis</li>
+                        </ul>
+                        <p><strong>Karakteristik:</strong> Read-only access, tidak bisa mengubah data sistem</p>
+                    </div>
+
+                    <div class="actor-card admin">
+                        <h3>
+                            <span class="icon">👨‍💼</span>
+                            Admin
+                        </h3>
+                        <p><strong>Deskripsi:</strong> Administrator sistem dengan hak akses penuh</p>
+                        <p><strong>Relationship:</strong> Inherits from User (Admin IS-A User)</p>
+                        <p><strong>Hak Akses:</strong></p>
+                        <ul>
+                            <li><strong>Semua fitur User</strong> (Dashboard, Prediksi, Berita)</li>
+                            <li>Upload data harga baru (CSV)</li>
+                            <li>Trigger HMM state recalculation</li>
+                            <li>Manage database & system settings</li>
+                        </ul>
+                        <p><strong>Karakteristik:</strong> Full CRUD access, dapat memodifikasi data sistem</p>
+                    </div>
+
+                    <div class="actor-card system">
+                        <h3>
+                            <span class="icon">⏰</span>
+                            Scheduler (System Timer)
+                        </h3>
+                        <p><strong>Deskripsi:</strong> Background process otomatis (Cron Job / Task Scheduler)</p>
+                        <p><strong>Jenis:</strong> Secondary Actor (Non-human actor)</p>
+                        <p><strong>Fungsi:</strong></p>
+                        <ul>
+                            <li>Scraping berita dari MPOB secara otomatis (harian)</li>
+                            <li>Menjalankan FinBERT sentiment analysis</li>
+                            <li>Update News_Sentiment database</li>
+                            <li>Tidak memerlukan login/autentikasi</li>
+                        </ul>
+                        <p><strong>Jadwal:</strong> Runs daily at 00:00 UTC</p>
+                    </div>
+                </div>
+
+                <div class="relationships-section">
+                    <h3>👥 Actor Hierarchy</h3>
+                    <div class="relationship-item">
+                        <strong>Inheritance Relationship:</strong><br>
+                        <code>Admin -.-> User</code><br>
+                        Admin mewarisi semua capabilities dari User. Ini berarti Admin dapat mengakses semua use case yang dapat diakses oleh User, PLUS use case tambahan yang eksklusif untuk Admin.
+                    </div>
+                    <div class="relationship-item">
+                        <strong>Implication:</strong><br>
+                        Saat mendesain sistem, setiap fitur yang dibuat untuk User otomatis tersedia untuk Admin. Admin tidak perlu koneksi eksplisit ke UC03, UC04, UC05 karena sudah inherited dari User.
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Use Cases -->
+            <div id="usecases" class="tab-content">
+                <div class="usecase-section">
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC01</span>
+                            <h4>🔐 Login (Autentikasi)</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Memvalidasi kredensial user dan memberikan akses ke sistem<br>
+                            <strong>Input:</strong> Username/email, password<br>
+                            <strong>Output:</strong> Session token / JWT<br>
+                            <strong>Precondition:</strong> User sudah terdaftar<br>
+                            <strong>Postcondition:</strong> User mendapat akses ke dashboard
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge user">User</span>
+                            <span class="actor-badge admin">Admin</span>
+                        </div>
+                    </div>
+
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC02</span>
+                            <h4>📝 Register (Pendaftaran Akun)</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Membuat akun baru di sistem<br>
+                            <strong>Input:</strong> Username, email, password, konfirmasi password<br>
+                            <strong>Output:</strong> Akun baru terbuat, auto-login<br>
+                            <strong>Precondition:</strong> Email belum terdaftar<br>
+                            <strong>Postcondition:</strong> User ter-autentikasi dan masuk dashboard
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge user">User</span>
+                        </div>
+                    </div>
+
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC03</span>
+                            <h4>📊 Melihat Dashboard</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Menampilkan visualisasi harga CPO dan HMM market states<br>
+                            <strong>Output:</strong> Grafik harga historis, HMM states (Bullish/Bearish), metrik evaluasi<br>
+                            <strong>Include:</strong> UC01 (Login) - harus login terlebih dahulu<br>
+                            <strong>Data Source:</strong> Price_MarketState DB
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge user">User</span>
+                            <span class="actor-badge admin">Admin (inherited)</span>
+                        </div>
+                    </div>
+
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC04</span>
+                            <h4>🔮 Melakukan Prediksi</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Memprediksi harga CPO untuk periode t+n hari ke depan<br>
+                            <strong>Input:</strong> Jumlah hari prediksi (t+n), pilihan model (RF/XGBoost)<br>
+                            <strong>Output:</strong> Prediksi harga, metrik (MAPE, R², MAE), visualisasi grafik<br>
+                            <strong>Include:</strong> UC01 (Login)<br>
+                            <strong>Process:</strong> Load pre-trained model → inference → visualize
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge user">User</span>
+                            <span class="actor-badge admin">Admin (inherited)</span>
+                        </div>
+                    </div>
+
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC05</span>
+                            <h4>📰 Melihat Berita & Sentimen</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Menampilkan daftar berita MPOB dengan label sentimen FinBERT<br>
+                            <strong>Output:</strong> List berita, sentiment label (Positif/Negatif/Netral), sentiment score<br>
+                            <strong>Include:</strong> UC01 (Login)<br>
+                            <strong>Data Source:</strong> News_Sentiment DB<br>
+                            <strong>Interaction:</strong> User dapat klik berita untuk melihat detail lengkap
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge user">User</span>
+                            <span class="actor-badge admin">Admin (inherited)</span>
+                        </div>
+                    </div>
+
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC06</span>
+                            <h4>📁 Update Data Harga (Admin Only)</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Mengupload data harga CPO baru ke sistem<br>
+                            <strong>Input:</strong> CSV file dengan kolom (Date, Open, High, Low, Close)<br>
+                            <strong>Output:</strong> Database updated, HMM states recalculated<br>
+                            <strong>Include:</strong> UC01 (Login) + role check (Admin only)<br>
+                            <strong>Process:</strong> Parse CSV → validate → update DB → trigger HMM
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge admin">Admin Only</span>
+                        </div>
+                    </div>
+
+                    <div class="usecase-card">
+                        <div class="uc-header">
+                            <span class="uc-id">UC07</span>
+                            <h4>🤖 Scraping & Analisis Berita Otomatis</h4>
+                        </div>
+                        <p class="description">
+                            <strong>Tujuan:</strong> Mengambil berita MPOB secara otomatis dan menganalisis sentimen<br>
+                            <strong>Actor:</strong> Scheduler (Cron Job / Background Task)<br>
+                            <strong>Process:</strong> Scrape MPOB → preprocess text → FinBERT analysis → save to DB<br>
+                            <strong>Frequency:</strong> Daily (00:00 UTC)<br>
+                            <strong>Output:</strong> News_Sentiment DB updated dengan berita dan skor sentimen baru
+                        </p>
+                        <div class="actors-list">
+                            <span class="actor-badge system">Scheduler (System)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: Relationships -->
+            <div id="relationships" class="tab-content">
+                <div class="relationships-section">
+                    <h3>🔗 Association Relationships</h3>
+                    <div class="relationship-item">
+                        <strong>User → UC02 (Register):</strong><br>
+                        User dapat mendaftar akun baru. Ini adalah use case publik (tidak memerlukan login).
+                    </div>
+                    <div class="relationship-item">
+                        <strong>User → UC03 (Dashboard):</strong><br>
+                        User dapat melihat dashboard. Use case ini include UC01 (Login), artinya user harus login dulu.
+                    </div>
+                    <div class="relationship-item">
+                        <strong>User → UC04 (Prediksi):</strong><br>
+                        User dapat melakukan prediksi. Memerlukan login terlebih dahulu.
+                    </div>
+                    <div class="relationship-item">
+                        <strong>User → UC05 (Berita):</strong><br>
+                        User dapat melihat berita dengan sentimen. Memerlukan login.
+                    </div>
+                    <div class="relationship-item">
+                        <strong>Admin → UC06 (Update Data):</strong><br>
+                        Hanya Admin yang dapat mengupload data harga baru. Memerlukan login + role validation.
+                    </div>
+                    <div class="relationship-item">
+                        <strong>Scheduler → UC07 (Scraping Otomatis):</strong><br>
+                        Background process yang berjalan otomatis tanpa interaksi user. Tidak memerlukan login.
+                    </div>
+                </div>
+
+                <div class="relationships-section" style="background: #e8f5e9; border-left-color: #4CAF50;">
+                    <h3 style="color: #2e7d32;">⬅️ Generalization (Inheritance)</h3>
+                    <div class="relationship-item" style="border-color: #a5d6a7;">
+                        <strong>Admin -.-> User (inherits):</strong><br>
+                        Admin adalah spesialisasi dari User. Admin mewarisi semua hak akses User (UC03, UC04, UC05) PLUS memiliki hak akses tambahan (UC06).
+                    </div>
+                    <div class="relationship-item" style="border-color: #a5d6a7;">
+                        <strong>Notasi UML:</strong><br>
+                        Panah dengan kepala segitiga kosong (hollow triangle) menunjuk dari child (Admin) ke parent (User).
+                    </div>
+                    <div class="relationship-item" style="border-color: #a5d6a7;">
+                        <strong>Implementasi:</strong><br>
+                        Dalam sistem, role Admin memiliki permission level lebih tinggi. Saat Admin login, sistem memberikan akses ke semua fitur User + fitur admin (Update Data).
+                    </div>
+                </div>
+
+                <div class="relationships-section" style="background: #fff3e0; border-left-color: #ff9800;">
+                    <h3 style="color: #e65100;">📎 Include Relationships</h3>
+                    <div class="relationship-item" style="border-color: #ffcc80;">
+                        <strong>UC03, UC04, UC05, UC06 ..> UC01 (include):</strong><br>
+                        Semua use case utama (Dashboard, Prediksi, Berita, Update Data) WAJIB melakukan Login terlebih dahulu. Include adalah dependency yang mandatory.
+                    </div>
+                    <div class="relationship-item" style="border-color: #ffcc80;">
+                        <strong>Notasi:</strong><br>
+                        Panah putus-putus dengan stereotype <code>&lt;&lt;include&gt;&gt;</code> menunjuk dari use case yang memerlukan ke use case yang diperlukan (UC01).
+                    </div>
+                    <div class="relationship-item" style="border-color: #ffcc80;">
+                        <strong>Implementasi:</strong><br>
+                        Dalam kode, ini diimplementasikan sebagai middleware/guard yang mengecek autentikasi sebelum mengakses halaman/API tertentu.
+                    </div>
+                </div>
+
+                <div class="relationships-section" style="background: #f3e5f5; border-left-color: #9C27B0;">
+                    <h3 style="color: #6a1b9a;">📊 Summary Table</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <thead style="background: #ce93d8; color: white;">
+                            <tr>
+                                <th style="padding: 12px; text-align: left; border: 1px solid #ba68c8;">Actor</th>
+                                <th style="padding: 12px; text-align: left; border: 1px solid #ba68c8;">Use Cases</th>
+                                <th style="padding: 12px; text-align: left; border: 1px solid #ba68c8;">Dependencies</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="background: white;">
+                                <td style="padding: 12px; border: 1px solid #e1bee7;"><strong>User</strong></td>
+                                <td style="padding: 12px; border: 1px solid #e1bee7;">UC02, UC03, UC04, UC05</td>
+                                <td style="padding: 12px; border: 1px solid #e1bee7;">UC01 (untuk UC03-05)</td>
+                            </tr>
+                            <tr style="background: #f9f9f9;">
+                                <td style="padding: 12px; border: 1px solid #e1bee7;"><strong>Admin</strong></td>
+                                <td style="padding: 12px; border: 1px solid #e1bee7;">All User UCs + UC06</td>
+                                <td style="padding: 12px; border: 1px solid #e1bee7;">UC01 (inherited + UC06)</td>
+                            </tr>
+                            <tr style="background: white;">
+                                <td style="padding: 12px; border: 1px solid #e1bee7;"><strong>Scheduler</strong></td>
+                                <td style="padding: 12px; border: 1px solid #e1bee7;">UC07</td>
+                                <td style="padding: 12px; border: 1px solid #e1bee7;">None (automatic)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p><strong>Use Case Diagram</strong> | Unified Modeling Language (UML)</p>
+            <p>Sistem Web Prediksi Harga CPO dengan FinBERT & HMM | December 2025</p>
+            <p style="font-size: 12px; margin-top: 12px; color: #999;">
+                Generated by: System Analyst & UML Expert | For: Skripsi/Thesis Documentation
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 25
+            },
+            securityLevel: 'loose'
+        });
+
+        function switchTab(evt, tabName) {
+            // Hide all tabs
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(tab => tab.classList.remove('active'));
+
+            // Remove active class from all buttons
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab and mark button as active
+            document.getElementById(tabName).classList.add('active');
+            evt.currentTarget.classList.add('active');
+
+            // Reinitialize mermaid for the new tab
+            setTimeout(() => {
+                mermaid.contentLoaded();
+            }, 100);
+        }
+    </script>
+</body>
+</html>
