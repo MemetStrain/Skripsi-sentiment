@@ -57,32 +57,38 @@
     {% if news_page %}
         {% for news_item in news_page %}
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6 flex flex-col h-full">
-            <!-- Header: Badge & Date -->
-            <div class="flex justify-between items-start mb-3">
+            <!-- Top row: category + date -->
+            <div class="flex justify-between items-start mb-2">
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-700 truncate max-w-[60%]">
+                    {{ news_item.category|default:"General" }}
+                </span>
+                <span class="text-slate-400 text-xs shrink-0">{{ news_item.date }}</span>
+            </div>
+
+            <!-- Sentiment badge -->
+            <div class="mb-2">
                 {% if news_item.sentiment_label == 'Positive' %}
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Positive</span>
                 {% elif news_item.sentiment_label == 'Negative' %}
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Negative</span>
                 {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Neutral</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Neutral</span>
                 {% endif %}
-
-                <span class="text-slate-400 text-xs">{{ news_item.date|date:"d M Y" }}</span>
             </div>
 
             <!-- Title -->
-            <h5 class="text-base font-bold text-slate-800 mb-2 line-clamp-2">
-                <a href="{{ news_item.url }}" target="_blank" class="hover:text-primary transition-colors">{{ news_item.title }}</a>
+            <h5 class="text-sm font-bold text-slate-800 mb-2 line-clamp-2 flex-grow">
+                {{ news_item.title }}
             </h5>
 
-            <!-- Snippet -->
-            <p class="text-slate-500 text-sm mb-4 line-clamp-3 flex-grow">{{ news_item.snippet }}</p>
+            <!-- First paragraph / snippet -->
+            <p class="text-slate-500 text-xs mb-4 line-clamp-3">{{ news_item.snippet }}</p>
 
             <!-- Footer -->
-            <div class="flex justify-between items-center text-sm pt-3 border-t border-slate-100">
-                <span class="text-slate-400 text-xs">Score: {{ news_item.sentiment_score|floatformat:3 }}</span>
-                <a href="{{ news_item.url }}" target="_blank" class="text-primary hover:underline font-medium">
-                    Read Article &rarr;
+            <div class="pt-3 border-t border-slate-100">
+                <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer"
+                   class="text-primary hover:underline font-medium text-sm">
+                    Read original &rarr;
                 </a>
             </div>
         </div>
@@ -95,7 +101,7 @@
                     {% if current_filter %}
                         No {{ current_filter|lower }} news available. Try selecting a different filter.
                     {% else %}
-                        No news articles available yet. Add news via Django Admin.
+                        No news articles available yet. The scheduler will populate articles daily.
                     {% endif %}
                 </p>
             </div>

@@ -1,104 +1,110 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Page Header -->
-<div class="mb-8 text-center max-w-3xl mx-auto">
-    <h1 class="text-2xl font-bold text-slate-800 mb-2">About This Project</h1>
-    <p class="text-slate-500">CPO Price Prediction System - Skripsi Project</p>
+
+<!-- Hero -->
+<div class="text-center max-w-2xl mx-auto mb-12">
+    <h1 class="text-3xl font-bold text-slate-800 mb-3">About This Project</h1>
+    <p class="text-slate-500 leading-relaxed">
+        An automated system for monitoring and forecasting Crude Palm Oil (CPO) prices,
+        built as a thesis project at Universitas Bina Nusantara.
+    </p>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-    <!-- Left Column: Identity -->
-    <div class="lg:col-span-1">
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6 text-center">
-            <div class="w-20 h-20 bg-slate-100 rounded-full mx-auto mb-4 flex items-center justify-center text-slate-400 text-3xl font-bold">
-                ?
-            </div>
-            <h3 class="text-lg font-bold text-slate-800">Student Name</h3>
-            <p class="text-primary font-medium text-sm mb-1">NIM: 12345678</p>
-            <p class="text-slate-500 text-sm">Computer Science Department</p>
+<!-- What it does -->
+<div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
+        <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
         </div>
+        <h3 class="font-bold text-slate-800 mb-2">Price Monitoring</h3>
+        <p class="text-slate-500 text-sm leading-relaxed">
+            Tracks daily CPO prices from global commodity markets and displays trends over time with interactive charts.
+        </p>
     </div>
-
-    <!-- Right Column: Project Details -->
-    <div class="lg:col-span-2 space-y-6">
-
-        <!-- Overview -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <h3 class="text-lg font-bold text-slate-800 mb-3">Project Overview</h3>
-            <p class="text-slate-600 text-sm leading-relaxed mb-3">
-                This web application is a comprehensive system for predicting Crude Palm Oil (CPO) commodity prices
-                using advanced machine learning techniques. The system integrates <strong>Hidden Markov Models (HMM)</strong> for
-                market state prediction and <strong>FinBERT</strong> for news sentiment analysis.
-            </p>
-            <p class="text-slate-600 text-sm leading-relaxed">
-                The goal is to provide traders and analysts with a robust tool that not only forecasts prices but also
-                identifies the underlying market regime (Bullish, Bearish, or Neutral) to support better decision-making.
-            </p>
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
+        <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
         </div>
-
-        <!-- Methodology -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <h3 class="text-lg font-bold text-slate-800 mb-4">Methodology</h3>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="border border-slate-100 rounded-lg p-4">
-                    <h4 class="font-bold text-slate-800 mb-2">Hidden Markov Model</h4>
-                    <p class="text-sm text-slate-500">
-                        Used to model the hidden states of the market. It assumes that the market is always in one of several states (Bullish, Bearish, Neutral) which are not directly observable but can be inferred from price movements.
-                    </p>
-                </div>
-
-                <div class="border border-slate-100 rounded-lg p-4">
-                    <h4 class="font-bold text-slate-800 mb-2">FinBERT Sentiment</h4>
-                    <p class="text-sm text-slate-500">
-                        A BERT model pre-trained on financial texts. It analyzes news headlines and snippets to determine market sentiment, providing an additional layer of insight beyond technical analysis.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tech Stack -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <h3 class="text-lg font-bold text-slate-800 mb-4">Technologies Used</h3>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
-                <div>
-                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">Backend</h6>
-                    <ul class="space-y-1 text-slate-500">
-                        <li>Django 5.0</li>
-                        <li>SQLite</li>
-                        <li>Python 3.10</li>
-                    </ul>
-                </div>
-                <div>
-                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">Frontend</h6>
-                    <ul class="space-y-1 text-slate-500">
-                        <li>Tailwind CSS</li>
-                        <li>Chart.js</li>
-                    </ul>
-                </div>
-                <div>
-                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">ML / AI</h6>
-                    <ul class="space-y-1 text-slate-500">
-                        <li>HMM Learn</li>
-                        <li>FinBERT</li>
-                        <li>Scikit-learn</li>
-                    </ul>
-                </div>
-                <div>
-                    <h6 class="font-bold text-slate-700 mb-2 border-b border-slate-100 pb-1">Tools</h6>
-                    <ul class="space-y-1 text-slate-500">
-                        <li>Git</li>
-                        <li>VS Code</li>
-                        <li>Pandas</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
+        <h3 class="font-bold text-slate-800 mb-2">Market State Detection</h3>
+        <p class="text-slate-500 text-sm leading-relaxed">
+            Identifies whether the market is in a Bullish, Bearish, or Neutral state using statistical models trained on historical price data.
+        </p>
     </div>
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
+        <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+        </div>
+        <h3 class="font-bold text-slate-800 mb-2">Price Forecasting</h3>
+        <p class="text-slate-500 text-sm leading-relaxed">
+            Forecasts CPO prices 1–7 days ahead using multiple machine learning models that combine price history with news sentiment signals.
+        </p>
+    </div>
+</div>
+
+<!-- Data sources + automation -->
+<div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+        <h3 class="font-bold text-slate-800 mb-4">Data Sources</h3>
+        <ul class="space-y-3 text-sm text-slate-600">
+            <li class="flex gap-3">
+                <span class="mt-0.5 w-5 h-5 rounded-full bg-teal-100 text-primary flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                <div>
+                    <strong class="text-slate-700">CPO Price Data</strong> — Daily commodity prices fetched automatically from Investing.com, covering open, high, low, and close values.
+                </div>
+            </li>
+            <li class="flex gap-3">
+                <span class="mt-0.5 w-5 h-5 rounded-full bg-teal-100 text-primary flex items-center justify-center text-xs font-bold shrink-0">2</span>
+                <div>
+                    <strong class="text-slate-700">MPOB News</strong> — Articles from the Malaysian Palm Oil Board, automatically scraped daily and analyzed for market sentiment.
+                </div>
+            </li>
+        </ul>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+        <h3 class="font-bold text-slate-800 mb-4">Fully Automated Pipeline</h3>
+        <p class="text-slate-500 text-sm leading-relaxed mb-3">
+            No manual data uploads are needed. Every day, a scheduled cloud job:
+        </p>
+        <ul class="space-y-2 text-sm text-slate-600">
+            <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                Fetches the latest CPO closing price
+            </li>
+            <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                Scrapes new MPOB news articles
+            </li>
+            <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                Runs sentiment analysis on new articles
+            </li>
+            <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                Updates market state predictions
+            </li>
+            <li class="flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                Refreshes all price forecasts
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Author -->
+<div class="max-w-md mx-auto bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
+    <div class="w-16 h-16 bg-slate-100 rounded-full mx-auto mb-4 flex items-center justify-center text-slate-400 text-2xl font-bold">
+        M
+    </div>
+    <h3 class="text-lg font-bold text-slate-800">Matthew / ExMatter</h3>
+    <p class="text-primary text-sm font-medium mt-1">Universitas Bina Nusantara</p>
+    <p class="text-slate-500 text-sm mt-1">Computer Science — Skripsi Project, 2025</p>
 </div>
 
 {% endblock %}

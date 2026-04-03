@@ -1,0 +1,28 @@
+# Google Cloud / Firebase
+firebase-admin>=6.0
+google-cloud-firestore>=2.13
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+statsmodels>=0.14.0
+
+# HMM
+hmmlearn>=0.3.0
+
+# Sentiment analysis (FinBERT)
+transformers>=4.30.0
+torch>=2.1.0
+
+# News scraping
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# CPO price data
+investiny>=0.1.0
+
+# Utilities
+python-dateutil>=2.8.2
+tqdm>=4.66.0
