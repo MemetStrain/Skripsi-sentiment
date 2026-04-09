@@ -24,82 +24,24 @@ import json
 import time
 import argparse
 import warnings
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.preprocessing import RobustScaler
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
-from statsmodels.tsa.statespace.sarimax import SARIMAX as SM_SARIMAX
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from crow_search_optimizer import CrowSearchOptimizer, ParameterSpec, CSAResult
+from utils.forecast_utils import (
+    PROJECT_ROOT, HORIZONS, BASE_PARAMS,
+    prepare_train_test, create_sklearn_model, select_top_exog,
+    train_statsmodels, predict_statsmodels, calculate_metrics,
+    csa_objective_sklearn, csa_objective_arimax, csa_objective_sarimax, run_csa,
+)
 
 warnings.filterwarnings('ignore')
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (14, 8)
-
-RANDOM_STATE = 42
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Horizons per interval
-HORIZONS = {
-    'Daily': [1, 2, 3, 4, 5, 6, 7],
-    'Weekly': [1, 2, 3, 4],
-    'Monthly': [1, 2, 3, 4, 5, 6],
-}
-
-# Default hyperparameters
-BASE_PARAMS = {
-    'xgboost': {
-        'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.05,
-        'subsample': 0.9, 'colsample_bytree': 0.9, 'min_child_weight': 1,
-        'random_state': RANDOM_STATE,
-    },
-    'random_forest': {
-        'n_estimators': 200, 'max_depth': 15, 'min_samples_split': 5,
-        'min_samples_leaf': 2, 'max_features': 0.7, 'random_state': RANDOM_STATE,
-    },
-    'arimax': {'order': (2, 1, 2)},
-    'sarimax': {'order': (1, 1, 1), 'seasonal_order_pdq': (1, 0, 1)},
-}
-
-# CSA parameter spaces
-CSA_PARAM_SPACES = {
-    'xgboost': [
-        ParameterSpec('n_estimators', 50, 500, 'discrete'),
-        ParameterSpec('max_depth', 3, 15, 'discrete'),
-        ParameterSpec('learning_rate', 0.001, 0.3, 'continuous'),
-        ParameterSpec('subsample', 0.6, 1.0, 'continuous'),
-        ParameterSpec('colsample_bytree', 0.6, 1.0, 'continuous'),
-        ParameterSpec('min_child_weight', 1, 10, 'discrete'),
-    ],
-    'random_forest': [
-        ParameterSpec('n_estimators', 50, 500, 'discrete'),
-        ParameterSpec('max_depth', 5, 30, 'discrete'),
-        ParameterSpec('min_samples_split', 2, 20, 'discrete'),
-        ParameterSpec('min_samples_leaf', 1, 10, 'discrete'),
-        ParameterSpec('max_features', 0.3, 0.9, 'continuous'),
-    ],
-    'arimax': [
-        ParameterSpec('p', 0, 5, 'discrete'),
-        ParameterSpec('d', 0, 2, 'discrete'),
-        ParameterSpec('q', 0, 5, 'discrete'),
-    ],
-    'sarimax': [
-        ParameterSpec('p', 0, 3, 'discrete'),
-        ParameterSpec('d', 0, 2, 'discrete'),
-        ParameterSpec('q', 0, 3, 'discrete'),
-        ParameterSpec('P', 0, 2, 'discrete'),
-        ParameterSpec('D', 0, 1, 'discrete'),
-        ParameterSpec('Q', 0, 2, 'discrete'),
-    ],
-}
 
 # Interval configurations
 INTERVAL_CONFIGS = {
@@ -277,8 +219,8 @@ def engineer_features_for_horizon(df: pd.DataFrame, interval: str, horizon: int
     if 'HMM_Volatility' in df.columns and 'RSI' in df.columns:
         df['Volatility_x_RSI'] = df['HMM_Volatility'] * df['RSI']
 
-    # Target: Close price h steps ahead
-    df['Target'] = df['Close'].shift(-horizon)
+    # Target: h-step cumulative log return (stationary; inverse-transform for price-space errors)
+    df['Target'] = np.log(df['Close'].shift(-horizon) / df['Close'])
 
     # Drop rows with NaN (from lags and target shift)
     df = df.dropna().reset_index(drop=True)
@@ -290,177 +232,6 @@ def engineer_features_for_horizon(df: pd.DataFrame, interval: str, horizon: int
 
     return df, feature_cols
 
-
-def prepare_train_test(df: pd.DataFrame, feature_cols: List[str], test_ratio: float
-                       ) -> Dict:
-    """Chronological train/test split with RobustScaler."""
-    split_idx = int(len(df) * (1 - test_ratio))
-
-    X = df[feature_cols].values
-    y = df['Target'].values
-    dates = df['Date'].values
-
-    X_train, X_test = X[:split_idx], X[split_idx:]
-    y_train, y_test = y[:split_idx], y[split_idx:]
-    train_dates, test_dates = dates[:split_idx], dates[split_idx:]
-
-    scaler = RobustScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    return {
-        'X_train': X_train_scaled, 'X_test': X_test_scaled,
-        'y_train': y_train, 'y_test': y_test,
-        'train_dates': train_dates, 'test_dates': test_dates,
-        'scaler': scaler, 'feature_names': feature_cols,
-    }
-
-
-# =============================================================================
-# Model helpers
-# =============================================================================
-
-def create_sklearn_model(model_type: str, params: Optional[Dict] = None):
-    p = dict(params or BASE_PARAMS[model_type])
-    p.pop('random_state', None)
-    if model_type == 'xgboost':
-        valid_keys = set(XGBRegressor().get_params().keys())
-        filtered = {k: v for k, v in p.items() if k in valid_keys}
-        return XGBRegressor(**filtered, verbosity=0, random_state=RANDOM_STATE)
-    elif model_type == 'random_forest':
-        return RandomForestRegressor(**p, random_state=RANDOM_STATE)
-
-
-def select_top_exog(X, y, n=10):
-    correlations = np.array([abs(np.corrcoef(X[:, i], y)[0, 1])
-                             if np.std(X[:, i]) > 0 else 0
-                             for i in range(X.shape[1])])
-    top_indices = np.argsort(correlations)[-n:]
-    return X[:, top_indices], top_indices.tolist()
-
-
-def train_statsmodels(model_type, y_train, exog_train, order, seasonal_order):
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            model = SM_SARIMAX(
-                endog=y_train, exog=exog_train, order=order,
-                seasonal_order=seasonal_order,
-                enforce_stationarity=False, enforce_invertibility=False,
-            )
-            return model.fit(disp=False, maxiter=200)
-    except Exception:
-        return None
-
-
-def predict_statsmodels(fitted, exog_test):
-    try:
-        forecast = fitted.forecast(steps=len(exog_test), exog=exog_test)
-        return np.array(forecast)
-    except Exception:
-        return np.full(len(exog_test), np.nan)
-
-
-def calculate_metrics(y_true, y_pred):
-    mask = ~np.isnan(y_pred)
-    if mask.sum() < 2:
-        return {'MAPE': np.inf, 'RMSE': np.inf, 'Directional_Accuracy': 0.0, 'R2': -np.inf}
-    yt, yp = y_true[mask], y_pred[mask]
-    mape = np.mean(np.abs((yt - yp) / (np.abs(yt) + 1e-8))) * 100
-    rmse = np.sqrt(mean_squared_error(yt, yp))
-    r2 = r2_score(yt, yp)
-    if len(yt) > 1:
-        dir_acc = np.mean((np.diff(yt) > 0) == (np.diff(yp) > 0)) * 100
-    else:
-        dir_acc = 0.0
-    return {
-        'MAPE': round(mape, 4), 'RMSE': round(rmse, 4),
-        'Directional_Accuracy': round(dir_acc, 4), 'R2': round(r2, 4),
-    }
-
-
-# =============================================================================
-# CSA Optimization
-# =============================================================================
-
-def csa_objective_sklearn(model_type, X_train, y_train, cv_folds):
-    def objective(params):
-        tscv = TimeSeriesSplit(n_splits=cv_folds)
-        scores = []
-        model = create_sklearn_model(model_type, params)
-        for train_idx, val_idx in tscv.split(X_train):
-            try:
-                model.fit(X_train[train_idx], y_train[train_idx])
-                y_pred = model.predict(X_train[val_idx])
-                scores.append(np.sqrt(mean_squared_error(y_train[val_idx], y_pred)))
-            except Exception:
-                scores.append(np.inf)
-        return np.mean(scores)
-    return objective
-
-
-def csa_objective_arimax(y_train, exog_train, cv_folds):
-    def objective(params):
-        order = (int(params['p']), int(params['d']), int(params['q']))
-        tscv = TimeSeriesSplit(n_splits=cv_folds)
-        scores = []
-        for train_idx, val_idx in tscv.split(exog_train):
-            fitted = train_statsmodels('arimax', y_train[train_idx],
-                                       exog_train[train_idx], order, (0, 0, 0, 0))
-            if fitted is None:
-                scores.append(np.inf)
-                continue
-            preds = predict_statsmodels(fitted, exog_train[val_idx])
-            if np.any(np.isnan(preds)):
-                scores.append(np.inf)
-            else:
-                scores.append(np.sqrt(mean_squared_error(y_train[val_idx], preds)))
-        return np.mean(scores)
-    return objective
-
-
-def csa_objective_sarimax(y_train, exog_train, seasonal_period, cv_folds):
-    def objective(params):
-        order = (int(params['p']), int(params['d']), int(params['q']))
-        seasonal_order = (int(params['P']), int(params['D']),
-                          int(params['Q']), seasonal_period)
-        tscv = TimeSeriesSplit(n_splits=cv_folds)
-        scores = []
-        for train_idx, val_idx in tscv.split(exog_train):
-            if len(train_idx) < seasonal_period * 2:
-                scores.append(np.inf)
-                continue
-            fitted = train_statsmodels('sarimax', y_train[train_idx],
-                                       exog_train[train_idx], order, seasonal_order)
-            if fitted is None:
-                scores.append(np.inf)
-                continue
-            preds = predict_statsmodels(fitted, exog_train[val_idx])
-            if np.any(np.isnan(preds)):
-                scores.append(np.inf)
-            else:
-                scores.append(np.sqrt(mean_squared_error(y_train[val_idx], preds)))
-        return np.mean(scores)
-    return objective
-
-
-def run_csa(model_type, objective_fn, population_size, max_iterations):
-    if model_type in ('arimax', 'sarimax'):
-        max_iterations = min(max_iterations, 30)
-        population_size = min(population_size, 15)
-
-    optimizer = CrowSearchOptimizer(
-        objective_function=objective_fn,
-        parameter_specs=CSA_PARAM_SPACES[model_type],
-        population_size=population_size,
-        max_iterations=max_iterations,
-        awareness_probability=0.1,
-        flight_length=2.0,
-        early_stopping_patience=10,
-        random_state=RANDOM_STATE,
-        verbose=False,
-    )
-    return optimizer.optimize()
 
 
 # =============================================================================
@@ -518,12 +289,12 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
                 y_pred_base = np.full(len(data['y_test']), np.mean(data['y_train']))
             base_params = {'order': list(order), 'seasonal_order': list(seasonal_order)}
 
-        metrics_base = calculate_metrics(data['y_test'], y_pred_base)
+        metrics_base = calculate_metrics(data['y_test'], y_pred_base, data['close_test'])
         all_results[f'{model_type}_base'] = metrics_base
         all_predictions[f'{model_type}_base'] = y_pred_base
         all_params[f'{model_type}_base'] = base_params
         print(f"    BASE  - MAPE: {metrics_base['MAPE']:.2f}%  RMSE: {metrics_base['RMSE']:.2f}  "
-              f"R²: {metrics_base['R2']:.4f}  ({time.time()-t0:.1f}s)")
+              f"R²(price): {metrics_base['R2_Price']:.4f}  R²(lr): {metrics_base['R2_LogReturn']:.4f}  ({time.time()-t0:.1f}s)")
 
         # --- CSA ---
         t0 = time.time()
@@ -564,7 +335,7 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
                 y_pred_csa = y_pred_base.copy()
             csa_params = {'order': list(order), 'seasonal_order': list(seasonal_order)}
 
-        metrics_csa = calculate_metrics(data['y_test'], y_pred_csa)
+        metrics_csa = calculate_metrics(data['y_test'], y_pred_csa, data['close_test'])
         all_results[f'{model_type}_csa'] = metrics_csa
         all_predictions[f'{model_type}_csa'] = y_pred_csa
         all_params[f'{model_type}_csa'] = {
@@ -573,7 +344,7 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
             'csa_iterations': csa_result.total_iterations,
         }
         print(f"    CSA   - MAPE: {metrics_csa['MAPE']:.2f}%  RMSE: {metrics_csa['RMSE']:.2f}  "
-              f"R²: {metrics_csa['R2']:.4f}  ({time.time()-t0:.1f}s)")
+              f"R²(price): {metrics_csa['R2_Price']:.4f}  R²(lr): {metrics_csa['R2_LogReturn']:.4f}  ({time.time()-t0:.1f}s)")
 
     # --- Save outputs ---
     horizon_dir = os.path.join(output_dir, interval, f'horizon_{horizon}')
@@ -588,9 +359,16 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
     results_df.to_csv(os.path.join(horizon_dir, f'results_{interval}_h{horizon}.csv'), index=False)
 
     # Predictions CSV
-    pred_df = pd.DataFrame({'Date': data['test_dates'], 'Actual': data['y_test']})
+    pred_df = pd.DataFrame({
+        'Date':             data['test_dates'],
+        'Close_Anchor':     data['close_test'],                              # raw Close_t
+        'Actual_LogReturn': data['y_test'],
+        'Actual_Price':     data['close_test'] * np.exp(data['y_test']),     # unclipped — honest reporting
+    })
     for name, preds in all_predictions.items():
-        pred_df[name] = preds
+        pred_df[f'{name}_LogReturn'] = preds
+        safe = np.where(np.isnan(preds), np.nan, np.clip(preds, -10, 10))
+        pred_df[f'{name}_Price'] = data['close_test'] * np.exp(safe)
     pred_df.to_csv(os.path.join(horizon_dir, f'predictions_{interval}_h{horizon}.csv'), index=False)
 
     # Params JSON
@@ -612,15 +390,18 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
         'sarimax_base': '#2CA58D', 'sarimax_csa': '#1E7A68',
     }
 
+    actual_price = data['close_test'] * np.exp(data['y_test'])
     fig, ax = plt.subplots(figsize=(16, 8))
-    ax.plot(data['test_dates'], data['y_test'], label='Actual', color='black', linewidth=2)
+    ax.plot(data['test_dates'], actual_price, label='Actual', color='black', linewidth=2)
     for name, preds in all_predictions.items():
         ls = '--' if name.endswith('_base') else '-'
-        ax.plot(data['test_dates'], preds, label=name.replace('_', ' ').title(),
+        safe = np.where(np.isnan(preds), np.nan, np.clip(preds, -10, 10))
+        price_preds = data['close_test'] * np.exp(safe)
+        ax.plot(data['test_dates'], price_preds, label=name.replace('_', ' ').title(),
                 color=colors.get(name, '#999'), linewidth=1.1, linestyle=ls, alpha=0.8)
     ax.set_title(f'{interval} Forecast - Horizon {horizon}', fontsize=14, fontweight='bold')
     ax.set_xlabel('Date')
-    ax.set_ylabel('CPO Price')
+    ax.set_ylabel('CPO Price (MYR/tonne)')
     ax.legend(loc='best', fontsize=8, ncol=2)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -628,8 +409,8 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
     plt.close(fig)
 
     # Metrics bar chart
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    for ax, metric in zip(axes.flatten(), ['MAPE', 'RMSE', 'Directional_Accuracy', 'R2']):
+    fig, axes = plt.subplots(2, 3, figsize=(20, 12))
+    for ax, metric in zip(axes.flatten(), ['MAPE', 'sMAPE', 'RMSE', 'Directional_Accuracy', 'R2_Price', 'R2_LogReturn']):
         pivot = results_df.pivot(index='Model', columns='Optimization', values=metric)
         pivot.plot(kind='bar', ax=ax, color=['#5DA5DA', '#FAA43A'], edgecolor='white')
         ax.set_title(metric.replace('_', ' '), fontsize=12, fontweight='bold')
@@ -659,8 +440,9 @@ def generate_horizon_summary(interval: str, all_horizon_results: Dict[int, pd.Da
             summary_rows.append({
                 'Horizon': h, 'Model': row['Model'],
                 'Optimization': row['Optimization'],
-                'MAPE': row['MAPE'], 'RMSE': row['RMSE'],
-                'Directional_Accuracy': row['Directional_Accuracy'], 'R2': row['R2'],
+                'MAPE': row['MAPE'], 'sMAPE': row['sMAPE'], 'RMSE': row['RMSE'],
+                'Directional_Accuracy': row['Directional_Accuracy'],
+                'R2_Price': row['R2_Price'], 'R2_LogReturn': row['R2_LogReturn'],
             })
     summary_df = pd.DataFrame(summary_rows)
 
@@ -690,11 +472,11 @@ def generate_horizon_summary(interval: str, all_horizon_results: Dict[int, pd.Da
     fig, ax = plt.subplots(figsize=(14, 7))
     for (model, opt), grp in summary_df.groupby(['Model', 'Optimization']):
         ls = '--' if opt == 'BASE' else '-'
-        ax.plot(grp['Horizon'], grp['R2'], marker='o', linestyle=ls,
+        ax.plot(grp['Horizon'], grp['R2_Price'], marker='o', linestyle=ls,
                 label=f'{model} ({opt})', linewidth=1.5)
-    ax.set_title(f'{interval} - R² Across Horizons', fontsize=14, fontweight='bold')
+    ax.set_title(f'{interval} - R² (Price Space) Across Horizons', fontsize=14, fontweight='bold')
     ax.set_xlabel('Forecast Horizon')
-    ax.set_ylabel('R²')
+    ax.set_ylabel('R² (Price Space)')
     ax.set_xticks(sorted(all_horizon_results.keys()))
     ax.legend(loc='best', fontsize=8, ncol=2)
     ax.grid(True, alpha=0.3)
@@ -735,7 +517,7 @@ def main():
     parser.add_argument('--interval', type=str, required=True,
                         choices=['daily', 'weekly', 'monthly', 'all'],
                         help='Data interval (or "all" for all intervals)')
-    parser.add_argument('--csa-population', type=int, default=25)
+    parser.add_argument('--csa-population', type=int, default=50)
     parser.add_argument('--csa-iterations', type=int, default=50)
     parser.add_argument('--csa-cv-folds', type=int, default=3)
     args = parser.parse_args()

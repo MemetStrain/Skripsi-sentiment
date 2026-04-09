@@ -48,6 +48,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.cluster import KMeans
 
 warnings.filterwarnings("ignore")
 
@@ -90,17 +91,17 @@ COVARIANCE_TYPE = {
 }
 
 # BIC model-selection
-AUTO_OPTIMIZE  = True   # Set False to use N_STATES_MANUAL for every frequency
-N_STATES_MANUAL = 3
-MAX_STATES = {          # Upper bound kept lower for data-sparse frequencies
+AUTO_OPTIMIZE   = False  # Locked to N_STATES_MANUAL; set True to re-enable BIC search
+N_STATES_MANUAL = 3      # Exactly 3 states: Bullish | Neutral | Bearish
+MAX_STATES = {           # Upper bound (only used when AUTO_OPTIMIZE = True)
     "Daily":   10,
     "Weekly":  8,
     "Monthly": 6,
 }
 
 # HMM training
-N_ITER      = 1000   # Max EM iterations per restart
-N_RESTARTS  = 5      # Independent random restarts (best log-L is kept)
+N_ITER      = 1000   # Max EM iterations per restart (≥ 200 required)
+N_RESTARTS  = 50     # Independent K-Means-seeded restarts; best log-L is kept
 TOL         = 1e-4   # EM convergence tolerance
 RANDOM_SEED = 42
 
@@ -196,8 +197,52 @@ def prepare_features(df: pd.DataFrame, frequency: str):
 
 def _fit_single(X: np.ndarray, n_states: int, cov_type: str,
                 n_iter: int, tol: float, seed: int):
-    """Fit one GaussianHMM; returns (model, log_likelihood) or (None, -inf)."""
+    """
+    Fit one GaussianHMM with K-Means seeded initialisation.
+
+    Initialisation strategy:
+      - Means:       K-Means cluster centres (n_init=10 for stable centroids)
+      - Covariances: per-cluster sample covariance, diagonal floored at 1e-3
+      - Transition:  uniform + small random noise, renormalised row-wise
+      - π:           uniform + small random noise, renormalised
+
+    Numerical stability:
+      - init_params="" prevents hmmlearn from overwriting our seeded values
+      - min_covar=1e-3 floors every covariance diagonal, preventing log(0)
+        in the Baum-Welch E-step (hmmlearn uses log-scale / log-sum-exp internally)
+
+    Returns (model, log_likelihood) or (None, -inf) on failure.
+    """
     try:
+        rng = np.random.RandomState(seed)
+        D   = X.shape[1]
+
+        # ── K-Means seeding ──────────────────────────────────────────────────
+        km = KMeans(n_clusters=n_states, random_state=seed, n_init=10)
+        km.fit(X)
+        labels     = km.labels_
+        init_means = km.cluster_centers_.copy()
+
+        init_covars_full = []
+        for s in range(n_states):
+            cluster_X = X[labels == s]
+            cov = np.cov(cluster_X.T) if len(cluster_X) > 1 else np.eye(D)
+            cov += np.eye(D) * 1e-3   # diagonal floor
+            init_covars_full.append(cov)
+
+        # ── Transition matrix: uniform + small noise ─────────────────────────
+        transmat  = np.full((n_states, n_states), 1.0 / n_states)
+        transmat += rng.uniform(-0.05, 0.05, transmat.shape)
+        transmat  = np.abs(transmat)
+        transmat /= transmat.sum(axis=1, keepdims=True)
+
+        # ── Start probabilities: uniform + small noise ───────────────────────
+        startprob  = np.full(n_states, 1.0 / n_states)
+        startprob += rng.uniform(-0.05, 0.05, n_states)
+        startprob  = np.abs(startprob)
+        startprob /= startprob.sum()
+
+        # ── Build model with custom init ─────────────────────────────────────
         model = hmm.GaussianHMM(
             n_components=n_states,
             covariance_type=cov_type,
@@ -205,7 +250,27 @@ def _fit_single(X: np.ndarray, n_states: int, cov_type: str,
             tol=tol,
             random_state=seed,
             verbose=False,
+            init_params="",   # use our seeded values; skip hmmlearn's random init
+            params="stmc",    # optimise: startprob, transmat, means, covars
+            min_covar=1e-3,   # floor on covariance diagonal (prevents log(0))
         )
+        model.startprob_ = startprob
+        model.transmat_  = transmat
+        model.means_     = init_means
+
+        if cov_type == "full":
+            model.covars_ = np.array(init_covars_full)
+        elif cov_type == "diag":
+            model.covars_ = np.maximum(
+                np.array([np.diag(c) for c in init_covars_full]), 1e-3
+            )
+        elif cov_type == "tied":
+            model.covars_ = np.mean(init_covars_full, axis=0)
+        elif cov_type == "spherical":
+            model.covars_ = np.array(
+                [np.trace(c) / D for c in init_covars_full]
+            )
+
         model.fit(X)
         return model, model.score(X)
     except Exception:
@@ -259,6 +324,23 @@ def count_free_params(n_states: int, n_features: int, cov_type: str) -> int:
     else:
         raise ValueError(f"Unknown covariance type: {cov_type}")
     return k_trans + k_init + k_means + k_cov
+
+
+def compute_model_scores(model, X: np.ndarray, cov_type: str) -> dict:
+    """
+    Compute log-likelihood, AIC, and BIC for a fitted GaussianHMM.
+
+    AIC = -2·log L + 2·k
+    BIC = -2·log L + k·ln(N)
+
+    where k = number of free parameters (see count_free_params).
+    """
+    N, D  = X.shape
+    log_L = model.score(X)
+    k     = count_free_params(model.n_components, D, cov_type)
+    aic   = -2.0 * log_L + 2.0 * k
+    bic   = -2.0 * log_L + k * np.log(N)
+    return {"log_L": log_L, "k": k, "N": N, "AIC": aic, "BIC": bic}
 
 
 def optimize_states_bic(X: np.ndarray, max_states: int, cov_type: str,
@@ -417,6 +499,82 @@ def analyze_transition_matrix(model, state_stats: pd.DataFrame,
         )
 
     return trans_df
+
+
+def validate_model(model, X: np.ndarray, states: np.ndarray,
+                   feat_cols: list, cov_type: str, frequency: str) -> dict:
+    """
+    Post-fit diagnostic report:
+      a. Per-state means and covariance diagonals
+      b. State occupancy (% of timesteps assigned to each state)
+      c. Final log-likelihood, AIC, BIC
+      d. Warn if any state has < 5% occupancy (collapsed / degenerate)
+      e. Warn if any two state means are within 1 pooled-std (near-duplicate states)
+    """
+    n_states = model.n_components
+    N        = X.shape[0]
+    scores   = compute_model_scores(model, X, cov_type)
+
+    print(f"\n  {'─'*65}")
+    print(f"  MODEL VALIDATION REPORT — {frequency.upper()}")
+    print(f"  {'─'*65}")
+    print(f"  log-likelihood  : {scores['log_L']:.4f}")
+    print(f"  AIC             : {scores['AIC']:.4f}")
+    print(f"  BIC             : {scores['BIC']:.4f}")
+    print(f"  Free params (k) : {scores['k']}")
+    print(f"  Observations    : {N}")
+    print(f"  Converged       : {getattr(model.monitor_, 'converged', '?')}")
+
+    # ── a. Per-state means ───────────────────────────────────────────────────
+    print(f"\n  Per-state means  [{', '.join(feat_cols)}]:")
+    for s in range(n_states):
+        print(f"    State {s}: {np.round(model.means_[s], 4).tolist()}")
+
+    # ── a. Per-state covariance diagonals ────────────────────────────────────
+    print(f"\n  Per-state covariance diagonals:")
+    if cov_type == "full":
+        state_stds = np.array([np.sqrt(np.diag(model.covars_[s])) for s in range(n_states)])
+        for s in range(n_states):
+            print(f"    State {s}: {np.round(np.diag(model.covars_[s]), 4).tolist()}")
+    elif cov_type == "diag":
+        state_stds = np.sqrt(model.covars_)
+        for s in range(n_states):
+            print(f"    State {s}: {np.round(model.covars_[s], 4).tolist()}")
+    else:
+        state_stds = None
+
+    # ── b. State occupancy ───────────────────────────────────────────────────
+    counts    = np.bincount(states, minlength=n_states)
+    occupancy = counts / N * 100
+    print(f"\n  State occupancy:")
+    for s in range(n_states):
+        warn = "  ⚠  LOW OCCUPANCY (<5%)" if occupancy[s] < 5.0 else ""
+        print(f"    State {s}: {counts[s]:5d} obs  ({occupancy[s]:5.1f}%){warn}")
+
+    # ── d. Low-occupancy warning ─────────────────────────────────────────────
+    low_occ = [s for s in range(n_states) if occupancy[s] < 5.0]
+    if low_occ:
+        print(f"\n  ⚠  DEGENERATE STATE(S) {low_occ}: < 5% occupancy.")
+        print("     Model may be over-parameterised or data lacks variety.")
+
+    # ── e. Near-duplicate state warning ─────────────────────────────────────
+    if state_stds is not None:
+        pooled_std = state_stds.mean(axis=0)
+        for i in range(n_states):
+            for j in range(i + 1, n_states):
+                diff = np.abs(model.means_[i] - model.means_[j])
+                if np.all(diff < pooled_std):
+                    print(
+                        f"\n  ⚠  NEAR-DUPLICATE STATES {i} & {j}: means are within "
+                        f"1 pooled std on every feature — may represent the same regime."
+                    )
+
+    return {
+        "log_L":     scores["log_L"],
+        "AIC":       scores["AIC"],
+        "BIC":       scores["BIC"],
+        "occupancy": occupancy.tolist(),
+    }
 
 
 # ───────────────────────────── VISUALISATION ──────────────────────────────── #
@@ -622,9 +780,14 @@ def run_frequency(frequency: str) -> dict:
     else:
         n_opt      = N_STATES_MANUAL
         bic_scores = {}
-        print(f"\n  Using manual state count: {n_opt}")
+        print(f"\n  Using fixed state count: {n_opt}  ({N_RESTARTS} K-Means-seeded restarts)")
         best_model, log_L = fit_hmm_with_restarts(X, n_opt, cov_type)
-        print(f"  log-likelihood = {log_L:.2f}, "
+        if best_model is None:
+            raise RuntimeError(
+                f"All HMM fits failed for {frequency}. "
+                "Check your data or reduce N_STATES_MANUAL."
+            )
+        print(f"  Best restart log-likelihood = {log_L:.2f}  "
               f"converged = {getattr(best_model.monitor_, 'converged', '?')}")
 
     # 4. Decode states
@@ -633,6 +796,9 @@ def run_frequency(frequency: str) -> dict:
     # 5. Analyse
     state_stats = characterize_states(df, states, n_opt, frequency)
     trans_df    = analyze_transition_matrix(best_model, state_stats, frequency)
+
+    # 5b. Post-fit validation (means, covariances, occupancy, AIC/BIC, warnings)
+    val = validate_model(best_model, X, states, feat_cols, cov_type, frequency)
 
     # 6. Merge labels back into df
     state_to_label = dict(zip(state_stats["State"].astype(int),
@@ -671,12 +837,17 @@ def run_frequency(frequency: str) -> dict:
                            trans_df, bic_scores, frequency, out_plot)
 
     return {
-        "Frequency":     frequency.capitalize(),
-        "Records":       len(df),
-        "Optimal_States": n_opt,
-        "Covariance":    cov_type,
-        "Converged":     getattr(best_model.monitor_, "converged", "?"),
-        "Log_Likelihood": round(best_model.score(X), 2),
+        "Frequency":      frequency.capitalize(),
+        "Records":        len(df),
+        "N_States":       n_opt,
+        "Covariance":     cov_type,
+        "Converged":      getattr(best_model.monitor_, "converged", "?"),
+        "Log_Likelihood": round(val["log_L"], 2),
+        "AIC":            round(val["AIC"], 2),
+        "BIC":            round(val["BIC"], 2),
+        "Occupancy":      " | ".join(
+            f"S{s}:{v:.1f}%" for s, v in enumerate(val["occupancy"])
+        ),
     }
 
 
@@ -715,8 +886,10 @@ def main():
     print("  ✓ Look-ahead-free normalisation  (rolling Z-score, window = 1 year)")
     print("  ✓ Stationarity of inputs         (log returns + derived ratios)")
     print("  ✓ Parsimony for monthly data      (diagonal covariance)")
-    print("  ✓ Robust training                 (multiple random restarts)")
-    print("  ✓ Principled model selection      (BIC penalises over-parameterisation)")
+    print("  ✓ Stable initialisation           (K-Means seeding, 50 restarts)")
+    print("  ✓ Numerical stability             (min_covar floor, log-scale E-step)")
+    print("  ✓ Fixed 3-state model             (Bullish | Neutral | Bearish)")
+    print("  ✓ Post-fit validation             (AIC/BIC, occupancy, duplicate warnings)")
     print("  ✓ Absorbing-state detection        (flags degenerate solutions)")
     print("=" * 65)
 

@@ -1,0 +1,37 @@
+=== BASELINE: horizon_forecast_cpo_only.py  Weekly h=1  (CSA pop=5 iter=5 cv=2) ===
+  Loading CPO data...
+  Data: 582 rows, 2015-01-04 00:00:00 to 2026-02-22 00:00:00
+
+============================================================
+  Weekly - Horizon 1 (CPO Only)
+============================================================
+  Features: 32, Samples: 562
+  Train: 449, Test: 113
+
+  XGBOOST:
+    BASE  - MAPE: 3.00%  RMSE: 171.03  R²: 0.7511  (0.5s)
+    CSA   - MAPE: 3.85%  RMSE: 205.13  R²: 0.6420  (24.8s)
+
+  RANDOM_FOREST:
+    BASE  - MAPE: 3.03%  RMSE: 172.98  R²: 0.7454  (1.2s)
+    CSA   - MAPE: 3.00%  RMSE: 170.53  R²: 0.7526  (20.3s)
+
+  ARIMAX:
+    BASE  - MAPE: 11.06%  RMSE: 587.18  R²: -1.9335  (1.6s)
+    CSA   - MAPE: 10.95%  RMSE: 582.61  R²: -1.8880  (41.1s)
+
+  SARIMAX:
+    BASE  - MAPE: 10.99%  RMSE: 584.11  R²: -1.9029  (0.9s)
+    CSA   - MAPE: 3.26%  RMSE: 185.86  R²: 0.7061  (27.0s)
+  Outputs saved to prediction/output_horizons_cpo_only_baseline\Weekly\horizon_1
+
+Results DataFrame:
+        Model Optimization    MAPE     RMSE  Directional_Accuracy      R2
+      xgboost         BASE  2.9987 171.0341               38.3929  0.7511
+      xgboost          CSA  3.8485 205.1316               48.2143  0.6420
+random_forest         BASE  3.0285 172.9847               46.4286  0.7454
+random_forest          CSA  2.9986 170.5304               50.0000  0.7526
+       arimax         BASE 11.0613 587.1809               58.9286 -1.9335
+       arimax          CSA 10.9461 582.6103               57.1429 -1.8880
+      sarimax         BASE 10.9896 584.1111               58.9286 -1.9029
+      sarimax          CSA  3.2568 185.8616               47.3214  0.7061
