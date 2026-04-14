@@ -57,17 +57,11 @@
                     <label class="block text-xs font-medium text-slate-600 mb-1">Variant</label>
                     <select id="pred-variant" class="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary">
                         <option value="csa">CSA-Optimized</option>
+                        <option value="bayesian">Bayesian-Optimized</option>
                         <option value="base">Base</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-600 mb-1">Frequency</label>
-                    <select id="pred-frequency" class="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary">
-                        <option value="Daily">Daily</option>
-                        <option value="Weekly">Weekly</option>
-                        <option value="Monthly">Monthly</option>
-                    </select>
-                </div>
+                <input type="hidden" id="pred-frequency" value="Daily">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 mb-1">Horizon</label>
                     <select id="pred-horizon" class="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary">
@@ -252,27 +246,24 @@
     // -----------------------------------------------------------------------
     // Prediction panel
     // -----------------------------------------------------------------------
-    const horizonMap = { Daily: [1,2,3,4,5,6,7], Weekly: [1,2,3,4], Monthly: [1,2,3,4,5,6] };
+    const HORIZONS = [1, 2, 3, 4, 5, 6, 7];
 
-    function updateHorizonOptions() {
-        const freq = document.getElementById('pred-frequency').value;
+    function populateHorizons() {
         const sel = document.getElementById('pred-horizon');
         sel.innerHTML = '';
-        horizonMap[freq].forEach(h => {
+        HORIZONS.forEach(h => {
             const opt = document.createElement('option');
             opt.value = h;
-            opt.textContent = `${h} ${freq === 'Daily' ? 'day' : freq === 'Weekly' ? 'week' : 'month'}${h > 1 ? 's' : ''} ahead`;
+            opt.textContent = `${h} day${h > 1 ? 's' : ''} ahead`;
             sel.appendChild(opt);
         });
     }
 
-    updateHorizonOptions();
-    document.getElementById('pred-frequency').addEventListener('change', updateHorizonOptions);
+    populateHorizons();
 
     document.getElementById('run-prediction').addEventListener('click', async () => {
         const model = document.getElementById('pred-model').value;
         const variant = document.getElementById('pred-variant').value;
-        const frequency = document.getElementById('pred-frequency').value;
         const horizon = document.getElementById('pred-horizon').value;
 
         const resultEl = document.getElementById('prediction-result');
@@ -285,7 +276,7 @@
 
         try {
             const res = await fetch(
-                `/api/prediction/?model=${model}&variant=${variant}&frequency=${frequency}&horizon=${horizon}`
+                `/api/prediction/?model=${model}&variant=${variant}&frequency=Daily&horizon=${horizon}`
             );
             loadingEl.classList.add('hidden');
             const data = await res.json();

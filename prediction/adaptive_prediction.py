@@ -2,19 +2,17 @@
 Adaptive CPO Price Prediction with CSA Optimization
 =====================================================
 
-Unified prediction script supporting Daily, Weekly, and Monthly intervals.
+Daily CPO price prediction with CSA Optimization.
 Uses 4 model types (XGBoost, Random Forest, ARIMAX, SARIMAX), each as
 base and CSA-optimized variants.
 
 Data sources:
-- CPO technical variables (cpo/output/cpo_variables_{interval}.csv)
-- News sentiment aggregates (news/output/sentiment_aggregate_{interval}.csv)
-- HMM market states (markov/output/hmm_states_results_{interval}.csv)
+- CPO technical variables (cpo/output/cpo_variables_Daily.csv)
+- News sentiment aggregates (news/output/sentiment_aggregate_Daily.csv)
+- HMM market states (markov/output/hmm_states_results_Daily.csv)
 
 Usage:
     python adaptive_prediction.py --interval daily
-    python adaptive_prediction.py --interval weekly --csa-population 20
-    python adaptive_prediction.py --interval monthly --skip-models sarimax
 """
 
 import os
@@ -40,6 +38,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX as SM_SARIMAX
 # Add prediction directory to path for local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from crow_search_optimizer import CrowSearchOptimizer, ParameterSpec, CSAResult
+from bayesian_optimizer import BayesianTimeSeriesOptimizer
 
 warnings.filterwarnings('ignore')
 
@@ -80,27 +79,9 @@ class IntervalConfig:
                 lag_periods=[1, 2, 3, 5, 10, 20],
                 min_samples=100,
             ),
-            'Weekly': IntervalConfig(
-                name='Weekly',
-                cpo_file=os.path.join(PROJECT_ROOT, 'cpo', 'output', 'cpo_variables_Weekly.csv'),
-                sentiment_file=os.path.join(PROJECT_ROOT, 'news', 'output', 'sentiment_aggregate_Weekly.csv'),
-                hmm_file=os.path.join(PROJECT_ROOT, 'markov', 'output', 'hmm_states_results_Weekly.csv'),
-                seasonal_period=4,
-                lag_periods=[1, 2, 4, 8, 12],
-                min_samples=50,
-            ),
-            'Monthly': IntervalConfig(
-                name='Monthly',
-                cpo_file=os.path.join(PROJECT_ROOT, 'cpo', 'output', 'cpo_variables_Monthly.csv'),
-                sentiment_file=os.path.join(PROJECT_ROOT, 'news', 'output', 'sentiment_aggregate_Monthly.csv'),
-                hmm_file=os.path.join(PROJECT_ROOT, 'markov', 'output', 'hmm_states_results_Monthly.csv'),
-                seasonal_period=4,
-                lag_periods=[1, 2, 3, 6],
-                min_samples=30,
-            ),
         }
         if interval not in configs:
-            raise ValueError(f"Invalid interval '{interval}'. Choose from: {list(configs.keys())}")
+            raise ValueError(f"Invalid interval '{interval}'. Only 'Daily' is supported.")
         return configs[interval]
 
 
@@ -125,36 +106,14 @@ class DataLoader:
         print(f"  Loading sentiment data from {os.path.basename(self.config.sentiment_file)}...")
         df = pd.read_csv(self.config.sentiment_file)
 
-        # Normalize date column and sentiment column names based on interval
-        if self.config.name == 'Daily':
-            df['Date'] = pd.to_datetime(df['Date'])
-            rename_map = {
-                'Article_Count': 'Article_Count',
-                'Combined_Positive_Prob': 'Positive_Prob',
-                'Combined_Negative_Prob': 'Negative_Prob',
-                'Combined_Neutral_Prob': 'Neutral_Prob',
-                'Combined_Confidence': 'Confidence',
-            }
-        elif self.config.name == 'Monthly':
-            # Monthly has YearMonth (e.g., "2001-01"), no Date column
-            df['Date'] = pd.to_datetime(df['YearMonth'] + '-01')
-            rename_map = {
-                'Total_Articles': 'Article_Count',
-                'Combined_Avg_Positive_Prob': 'Positive_Prob',
-                'Combined_Avg_Negative_Prob': 'Negative_Prob',
-                'Combined_Avg_Neutral_Prob': 'Neutral_Prob',
-                'Combined_Avg_Confidence': 'Confidence',
-            }
-        elif self.config.name == 'Weekly':
-            # Weekly has Week_Start (e.g., "2001-01-03")
-            df['Date'] = pd.to_datetime(df['Week_Start'])
-            rename_map = {
-                'Total_Articles': 'Article_Count',
-                'Combined_Avg_Positive_Prob': 'Positive_Prob',
-                'Combined_Avg_Negative_Prob': 'Negative_Prob',
-                'Combined_Avg_Neutral_Prob': 'Neutral_Prob',
-                'Combined_Avg_Confidence': 'Confidence',
-            }
+        df['Date'] = pd.to_datetime(df['Date'])
+        rename_map = {
+            'Article_Count': 'Article_Count',
+            'Combined_Positive_Prob': 'Positive_Prob',
+            'Combined_Negative_Prob': 'Negative_Prob',
+            'Combined_Neutral_Prob': 'Neutral_Prob',
+            'Combined_Confidence': 'Confidence',
+        }
 
         df = df.rename(columns=rename_map)
         keep_cols = ['Date', 'Article_Count', 'Positive_Prob', 'Negative_Prob',
@@ -187,36 +146,6 @@ class DataLoader:
         merged = merged.merge(hmm, on='Date', how='inner', suffixes=('', '_hmm'))
         return merged
 
-    def _merge_by_yearmonth(self, cpo: pd.DataFrame, sentiment: pd.DataFrame,
-                            hmm: pd.DataFrame) -> pd.DataFrame:
-        """Merge using YYYY-MM key for monthly data."""
-        cpo['_ym'] = cpo['Date'].dt.to_period('M')
-        sentiment['_ym'] = sentiment['Date'].dt.to_period('M')
-        hmm['_ym'] = hmm['Date'].dt.to_period('M')
-
-        merged = cpo.merge(sentiment.drop(columns=['Date']), on='_ym', how='inner',
-                           suffixes=('', '_sent'))
-        merged = merged.merge(hmm.drop(columns=['Date']), on='_ym', how='inner',
-                              suffixes=('', '_hmm'))
-        merged = merged.drop(columns=['_ym'])
-        return merged
-
-    def _merge_by_week(self, cpo: pd.DataFrame, sentiment: pd.DataFrame,
-                       hmm: pd.DataFrame) -> pd.DataFrame:
-        """Merge using ISO year-week for weekly data."""
-        for df in [cpo, hmm]:
-            df['_yw'] = df['Date'].dt.isocalendar().year.astype(str) + '-W' + \
-                        df['Date'].dt.isocalendar().week.astype(str).str.zfill(2)
-        sentiment['_yw'] = sentiment['Date'].dt.isocalendar().year.astype(str) + '-W' + \
-                           sentiment['Date'].dt.isocalendar().week.astype(str).str.zfill(2)
-
-        merged = cpo.merge(sentiment.drop(columns=['Date']), on='_yw', how='inner',
-                           suffixes=('', '_sent'))
-        merged = merged.merge(hmm.drop(columns=['Date']), on='_yw', how='inner',
-                              suffixes=('', '_hmm'))
-        merged = merged.drop(columns=['_yw'])
-        return merged
-
     def _onehot_hmm_states(self, df: pd.DataFrame) -> pd.DataFrame:
         """One-hot encode HMM state labels, keeping top-5 most frequent."""
         if 'HMM_State_Label' not in df.columns:
@@ -239,12 +168,7 @@ class DataLoader:
         hmm = self.load_hmm()
 
         print(f"\n  Merging datasets...")
-        if self.config.name == 'Monthly':
-            merged = self._merge_by_yearmonth(cpo, sentiment, hmm)
-        elif self.config.name == 'Weekly':
-            merged = self._merge_by_week(cpo, sentiment, hmm)
-        else:
-            merged = self._merge_by_date(cpo, sentiment, hmm)
+        merged = self._merge_by_date(cpo, sentiment, hmm)
 
         merged = merged.sort_values('Date').reset_index(drop=True)
         merged = self._onehot_hmm_states(merged)
@@ -279,14 +203,10 @@ class FeatureEngineer:
         df['Month_Sin'] = np.sin(2 * np.pi * df['Date'].dt.month / 12)
         df['Month_Cos'] = np.cos(2 * np.pi * df['Date'].dt.month / 12)
 
-        if self.config.name == 'Daily':
-            df['DayOfWeek_Sin'] = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
-            df['DayOfWeek_Cos'] = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
-            df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
-            df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
-        elif self.config.name == 'Weekly':
-            df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
-            df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
+        df['DayOfWeek_Sin'] = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
+        df['DayOfWeek_Cos'] = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
+        df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
+        df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
 
         # --- Lag features ---
         lag_cols = ['Close', 'Sentiment_Score', 'HMM_State']
@@ -650,12 +570,16 @@ class VisualizationEngine:
     COLORS = {
         'xgboost_base': '#2E86AB',
         'xgboost_csa': '#1B4965',
+        'xgboost_bayesian': '#5BA4CF',
         'random_forest_base': '#A23B72',
         'random_forest_csa': '#7B2D5F',
+        'random_forest_bayesian': '#C96FA0',
         'arimax_base': '#F18F01',
         'arimax_csa': '#C67200',
+        'arimax_bayesian': '#FFB84D',
         'sarimax_base': '#2CA58D',
         'sarimax_csa': '#1E7A68',
+        'sarimax_bayesian': '#57C4A9',
     }
 
     def __init__(self, output_dir: str, interval: str):
@@ -725,25 +649,28 @@ class VisualizationEngine:
         self._save(fig, 'adaptive_metrics_comparison')
 
     def plot_csa_convergence(self, convergence_histories: Dict[str, List[float]]):
-        """Convergence plot for all CSA-optimized models."""
+        """Convergence plot for optimized models.
+
+        Keys may be '{model_type}' (legacy) or '{model_type}_{optimizer}'.
+        """
         if not convergence_histories:
             return
         fig, ax = plt.subplots(figsize=(12, 6))
-        model_colors = {
-            'xgboost': '#2E86AB', 'random_forest': '#A23B72',
-            'arimax': '#F18F01', 'sarimax': '#2CA58D',
-        }
-        for model_name, history in convergence_histories.items():
-            color = model_colors.get(model_name, '#999999')
-            ax.plot(history, label=model_name.replace('_', ' ').title(),
-                    linewidth=2, color=color)
-        ax.set_title(f'CSA Convergence History ({self.interval})', fontsize=14, fontweight='bold')
+        opt_styles = {'csa': '-', 'bayesian': '--'}
+        for key, history in convergence_histories.items():
+            color = self.COLORS.get(key, '#999999')
+            # Derive linestyle from optimizer suffix if present
+            parts = key.rsplit('_', 1)
+            ls = opt_styles.get(parts[-1], '-') if len(parts) == 2 else '-'
+            ax.plot(history, label=key.replace('_', ' ').title(),
+                    linewidth=2, color=color, linestyle=ls)
+        ax.set_title(f'Optimizer Convergence History ({self.interval})', fontsize=14, fontweight='bold')
         ax.set_xlabel('Iteration', fontsize=12)
         ax.set_ylabel('Best RMSE (CV)', fontsize=12)
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        self._save(fig, 'adaptive_csa_convergence')
+        self._save(fig, 'adaptive_convergence')
 
     def plot_dashboard(self, results_df: pd.DataFrame):
         """Summary dashboard with all metrics."""
@@ -815,7 +742,9 @@ class AdaptivePredictionPipeline:
     """Main orchestrator for the adaptive prediction workflow."""
 
     def __init__(self, interval: str, output_dir: str, csa_config: Dict,
-                 skip_models: List[str] = None, verbose: bool = True):
+                 skip_models: List[str] = None, verbose: bool = True,
+                 optimizer: str = 'csa', bayes_n_calls: int = 50,
+                 bayes_n_initial: int = 10):
         self.interval = interval.capitalize()
         self.config = IntervalConfig.get(self.interval)
         self.output_dir = output_dir
@@ -823,6 +752,14 @@ class AdaptivePredictionPipeline:
         self.skip_models = [m.lower() for m in (skip_models or [])]
         self.verbose = verbose
         self.model_types = ['xgboost', 'random_forest', 'arimax', 'sarimax']
+        # Which optimizers to run: 'csa', 'bayesian', or 'both'
+        valid_opts = {'csa', 'bayesian', 'both'}
+        if optimizer not in valid_opts:
+            raise ValueError(f"optimizer must be one of {valid_opts}, got '{optimizer}'")
+        self.optimizers = (['csa', 'bayesian'] if optimizer == 'both'
+                           else [optimizer])
+        self.bayes_n_calls = bayes_n_calls
+        self.bayes_n_initial = bayes_n_initial
 
     def run(self):
         """Execute the full prediction pipeline."""
@@ -903,72 +840,84 @@ class AdaptivePredictionPipeline:
             print(f"    MAPE: {metrics_base['MAPE']:.2f}%  RMSE: {metrics_base['RMSE']:.2f}  "
                   f"Dir.Acc: {metrics_base['Directional_Accuracy']:.1f}%  R²: {metrics_base['R2']:.4f}")
 
-            # ── CSA-OPTIMIZED MODEL ──
-            print(f"\n  [CSA] Optimizing {model_type}...")
-            t0 = time.time()
+            # ── OPTIMIZED VARIANTS ──
+            for opt_name in self.optimizers:
+                print(f"\n  [{opt_name.upper()}] Optimizing {model_type}...")
+                t0 = time.time()
 
-            csa_optimizer = CSATimeSeriesOptimizer(
-                model_type=model_type,
-                X_train=data['X_train'],
-                y_train=data['y_train'],
-                config=self.config,
-                cv_folds=self.csa_config['cv_folds'],
-                population_size=self.csa_config['population_size'],
-                max_iterations=self.csa_config['max_iterations'],
-            )
-            csa_result = csa_optimizer.optimize()
-            best_params = csa_result.best_params
-            all_convergence[model_type] = csa_result.convergence_history
+                if opt_name == 'csa':
+                    opt = CSATimeSeriesOptimizer(
+                        model_type=model_type,
+                        X_train=data['X_train'],
+                        y_train=data['y_train'],
+                        config=self.config,
+                        cv_folds=self.csa_config['cv_folds'],
+                        population_size=self.csa_config['population_size'],
+                        max_iterations=self.csa_config['max_iterations'],
+                    )
+                else:  # bayesian
+                    opt = BayesianTimeSeriesOptimizer(
+                        model_type=model_type,
+                        X_train=data['X_train'],
+                        y_train=data['y_train'],
+                        config=self.config,
+                        cv_folds=self.csa_config['cv_folds'],
+                        n_calls=self.bayes_n_calls,
+                        n_initial_points=self.bayes_n_initial,
+                    )
 
-            print(f"    CSA best score: {csa_result.best_score:.4f} "
-                  f"(converged at iter {csa_result.convergence_iteration})")
+                opt_result = opt.optimize()
+                best_params = opt_result.best_params
+                all_convergence[f'{model_type}_{opt_name}'] = opt_result.convergence_history
 
-            if model_type in ('xgboost', 'random_forest'):
-                model_csa = create_sklearn_model(model_type, best_params)
-                model_csa.fit(data['X_train'], data['y_train'])
-                y_pred_csa = model_csa.predict(data['X_test'])
-                csa_params = {k: v for k, v in best_params.items()}
-            else:
-                order = (int(best_params.get('p', 1)), int(best_params.get('d', 1)),
-                         int(best_params.get('q', 1)))
-                if model_type == 'sarimax':
-                    seasonal_order = (int(best_params.get('P', 1)),
-                                      int(best_params.get('D', 0)),
-                                      int(best_params.get('Q', 1)),
-                                      self.config.seasonal_period)
+                print(f"    Best score: {opt_result.best_score:.4f} "
+                      f"(converged at iter {opt_result.convergence_iteration})")
+
+                if model_type in ('xgboost', 'random_forest'):
+                    m_opt = create_sklearn_model(model_type, best_params)
+                    m_opt.fit(data['X_train'], data['y_train'])
+                    y_pred_opt = m_opt.predict(data['X_test'])
+                    opt_params = {k: v for k, v in best_params.items()}
                 else:
-                    seasonal_order = (0, 0, 0, 0)
+                    order = (int(best_params.get('p', 1)), int(best_params.get('d', 1)),
+                             int(best_params.get('q', 1)))
+                    if model_type == 'sarimax':
+                        seasonal_order = (int(best_params.get('P', 1)),
+                                          int(best_params.get('D', 0)),
+                                          int(best_params.get('Q', 1)),
+                                          self.config.seasonal_period)
+                    else:
+                        seasonal_order = (0, 0, 0, 0)
 
-                # Use same exog indices as determined earlier
-                fitted = train_statsmodels(model_type, data['y_train'], exog_train_full,
-                                           order, seasonal_order, verbose=self.verbose)
-                if fitted is not None:
-                    y_pred_csa = predict_statsmodels(fitted, exog_test_full)
-                else:
-                    print(f"    WARNING: {model_type} CSA model failed. Using base predictions.")
-                    y_pred_csa = y_pred_base.copy()
+                    fitted = train_statsmodels(model_type, data['y_train'], exog_train_full,
+                                               order, seasonal_order, verbose=self.verbose)
+                    if fitted is not None:
+                        y_pred_opt = predict_statsmodels(fitted, exog_test_full)
+                    else:
+                        print(f"    WARNING: {model_type} {opt_name} model failed. Using base predictions.")
+                        y_pred_opt = y_pred_base.copy()
 
-                csa_params = {'order': list(order), 'seasonal_order': list(seasonal_order)}
+                    opt_params = {'order': list(order), 'seasonal_order': list(seasonal_order)}
 
-            csa_time = time.time() - t0
-            metrics_csa = EvaluationEngine.calculate_all_metrics(data['y_test'], y_pred_csa)
-            all_results[f'{model_type}_csa'] = metrics_csa
-            all_predictions[f'{model_type}_csa'] = y_pred_csa
-            all_params[f'{model_type}_csa'] = {
-                **csa_params,
-                'csa_best_score': float(csa_result.best_score),
-                'csa_iterations': csa_result.total_iterations,
-            }
+                opt_time = time.time() - t0
+                metrics_opt = EvaluationEngine.calculate_all_metrics(data['y_test'], y_pred_opt)
+                variant_key = f'{model_type}_{opt_name}'
+                all_results[variant_key] = metrics_opt
+                all_predictions[variant_key] = y_pred_opt
+                all_params[variant_key] = {
+                    **opt_params,
+                    f'{opt_name}_best_score': float(opt_result.best_score),
+                    f'{opt_name}_iterations': opt_result.total_iterations,
+                }
 
-            print(f"    Time: {csa_time:.1f}s")
-            print(f"    MAPE: {metrics_csa['MAPE']:.2f}%  RMSE: {metrics_csa['RMSE']:.2f}  "
-                  f"Dir.Acc: {metrics_csa['Directional_Accuracy']:.1f}%  R²: {metrics_csa['R2']:.4f}")
+                print(f"    Time: {opt_time:.1f}s")
+                print(f"    MAPE: {metrics_opt['MAPE']:.2f}%  RMSE: {metrics_opt['RMSE']:.2f}  "
+                      f"Dir.Acc: {metrics_opt['Directional_Accuracy']:.1f}%  R²: {metrics_opt['R2']:.4f}")
 
-            # Improvement summary
-            if metrics_base['RMSE'] > 0 and metrics_base['RMSE'] != np.inf:
-                rmse_improvement = ((metrics_base['RMSE'] - metrics_csa['RMSE'])
-                                    / metrics_base['RMSE'] * 100)
-                print(f"    RMSE improvement: {rmse_improvement:+.2f}%")
+                if metrics_base['RMSE'] > 0 and metrics_base['RMSE'] != np.inf:
+                    improvement = ((metrics_base['RMSE'] - metrics_opt['RMSE'])
+                                   / metrics_base['RMSE'] * 100)
+                    print(f"    RMSE improvement vs base: {improvement:+.2f}%")
 
         # --- Step 4: Build comparison table ---
         results_df = EvaluationEngine.build_comparison_table(all_results)
@@ -1009,26 +958,33 @@ class AdaptivePredictionPipeline:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Adaptive CPO Price Prediction with CSA Optimization',
+        description='Adaptive CPO Price Prediction with optimizer comparison',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python adaptive_prediction.py --interval daily
-  python adaptive_prediction.py --interval weekly --csa-population 20
-  python adaptive_prediction.py --interval monthly --skip-models sarimax
+  python adaptive_prediction.py --optimizer bayesian --bayes-calls 40
+  python adaptive_prediction.py --optimizer both --skip-models sarimax
         """
     )
-    parser.add_argument('--interval', type=str, required=True,
-                        choices=['daily', 'weekly', 'monthly'],
+    parser.add_argument('--interval', type=str, default='daily',
+                        choices=['daily'],
                         help='Data interval to use')
     parser.add_argument('--output-dir', type=str, default=None,
                         help='Output directory (default: prediction/output/)')
+    parser.add_argument('--optimizer', type=str, default='csa',
+                        choices=['csa', 'bayesian', 'both'],
+                        help='Optimizer to use: csa, bayesian, or both (default: csa)')
     parser.add_argument('--csa-population', type=int, default=25,
                         help='CSA population size (default: 25)')
     parser.add_argument('--csa-iterations', type=int, default=50,
                         help='CSA max iterations (default: 50)')
     parser.add_argument('--csa-cv-folds', type=int, default=3,
                         help='Cross-validation folds (default: 3)')
+    parser.add_argument('--bayes-calls', type=int, default=50,
+                        help='Bayesian optimization total evaluations (default: 50)')
+    parser.add_argument('--bayes-init', type=int, default=10,
+                        help='Bayesian initial random points before GP guidance (default: 10)')
     parser.add_argument('--skip-models', type=str, nargs='*', default=[],
                         help='Models to skip (e.g., sarimax arimax)')
     parser.add_argument('--verbose', action='store_true', default=True,
@@ -1049,6 +1005,9 @@ Examples:
         },
         skip_models=args.skip_models,
         verbose=args.verbose,
+        optimizer=args.optimizer,
+        bayes_n_calls=args.bayes_calls,
+        bayes_n_initial=args.bayes_init,
     )
     pipeline.run()
 

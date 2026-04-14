@@ -10,10 +10,12 @@ Phase 2 modifications (log return target, price-space metrics) are applied
 to this file after the smoke test gate passes.
 """
 
+import json
 import os
 import warnings
 from typing import Dict, List, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -34,12 +36,9 @@ from crow_search_optimizer import CrowSearchOptimizer, ParameterSpec, CSAResult 
 
 RANDOM_STATE = 42
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODELS_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'saved_models')
 
-HORIZONS = {
-    'Daily': [1, 2, 3, 4, 5, 6, 7],
-    'Weekly': [1, 2, 3, 4],
-    'Monthly': [1, 2, 3, 4, 5, 6],
-}
+HORIZONS = [1, 2, 3, 4, 5, 6, 7]
 
 BASE_PARAMS = {
     'xgboost': {
@@ -87,12 +86,16 @@ CSA_PARAM_SPACES = {
 }
 
 
+# Hard cutoff: data before this date = train+test; from this date onwards = validation
+VAL_CUTOFF = pd.Timestamp('2026-01-01')
+
+
 # =============================================================================
 # Train/test split
 # =============================================================================
 
 def prepare_train_test(df: pd.DataFrame, feature_cols: List[str], test_ratio: float) -> Dict:
-    """Chronological train/test split with RobustScaler."""
+    """Chronological train/test split with RobustScaler. Kept for adaptive_prediction.py."""
     assert df['Close'].isna().sum() == 0, "Close has NaN — alignment broken"
     assert not df.isnull().values.any(), "NaN rows remain — check dropna()"
 
@@ -118,6 +121,56 @@ def prepare_train_test(df: pd.DataFrame, feature_cols: List[str], test_ratio: fl
         'train_dates': train_dates, 'test_dates': test_dates,
         'scaler': scaler, 'feature_names': feature_cols,
         'close_train': close_train, 'close_test': close_test,
+    }
+
+
+def prepare_train_test_val(df: pd.DataFrame, feature_cols: List[str],
+                           test_ratio: float,
+                           val_cutoff: pd.Timestamp = VAL_CUTOFF) -> Dict:
+    """Chronological train / test / validation split with RobustScaler.
+
+    - train + test : rows where Date < val_cutoff, split 80/20
+    - val          : rows where Date >= val_cutoff
+    Scaler is fit on train only (no leakage into test or val).
+    """
+    pre    = df[df['Date'] < val_cutoff].reset_index(drop=True)
+    val_df = df[df['Date'] >= val_cutoff].reset_index(drop=True)
+
+    assert len(pre) > 0, f"No pre-{val_cutoff.year} rows found — check the Date column"
+
+    split_idx = int(len(pre) * (1 - test_ratio))
+
+    X_pre      = pre[feature_cols].values
+    y_pre      = pre['Target'].values
+    dates_pre  = pre['Date'].values
+    close_pre  = pre['Close'].values
+
+    n_feat = len(feature_cols)
+    if len(val_df):
+        X_val     = val_df[feature_cols].values
+        y_val     = val_df['Target'].values
+        dates_val = val_df['Date'].values
+        close_val = val_df['Close'].values
+    else:
+        X_val = np.empty((0, n_feat), dtype=float)
+        y_val = dates_val = close_val = np.array([])
+
+    X_train, X_test = X_pre[:split_idx], X_pre[split_idx:]
+    y_train, y_test = y_pre[:split_idx], y_pre[split_idx:]
+    train_dates, test_dates = dates_pre[:split_idx], dates_pre[split_idx:]
+    close_train, close_test = close_pre[:split_idx], close_pre[split_idx:]
+
+    scaler        = RobustScaler()
+    X_train_s     = scaler.fit_transform(X_train)
+    X_test_s      = scaler.transform(X_test)
+    X_val_s       = scaler.transform(X_val) if len(X_val) else X_val
+
+    return {
+        'X_train': X_train_s,   'X_test': X_test_s,   'X_val': X_val_s,
+        'y_train': y_train,     'y_test': y_test,      'y_val': y_val,
+        'train_dates': train_dates, 'test_dates': test_dates, 'val_dates': dates_val,
+        'scaler': scaler,       'feature_names': feature_cols,
+        'close_train': close_train, 'close_test': close_test, 'close_val': close_val,
     }
 
 
@@ -307,3 +360,156 @@ def run_csa(model_type, objective_fn, population_size, max_iterations):
         verbose=False,
     )
     return optimizer.optimize()
+
+
+# =============================================================================
+# Model artifact persistence (save / load / GCS helpers)
+# =============================================================================
+
+def save_model_artifacts(
+    model,
+    model_type: str,
+    scaler,
+    feature_cols: List[str],
+    exog_indices: List[int],
+    params: dict,
+    save_dir: str,
+    gcs_bucket: Optional[str] = None,
+    gcs_prefix: str = 'models',
+) -> None:
+    """Save a trained model, its scaler, and metadata to *save_dir*.
+
+    Optionally uploads the files to GCS when *gcs_bucket* is provided.
+
+    Parameters
+    ----------
+    model        : fitted sklearn estimator OR fitted statsmodels result (None is OK)
+    model_type   : 'xgboost' | 'random_forest' | 'arimax' | 'sarimax'
+    scaler       : fitted RobustScaler (shared across model types per horizon)
+    feature_cols : ordered list of feature column names used during training
+    exog_indices : integer column indices selected for ARIMAX/SARIMAX exog
+    params       : hyperparameters dict (base / CSA best / Bayesian best)
+    save_dir     : local directory to write files into
+    gcs_bucket   : GCS bucket name — omit to skip upload
+    gcs_prefix   : object prefix inside the bucket
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    # model
+    if model is not None:
+        if model_type in ('xgboost', 'random_forest'):
+            joblib.dump(model, os.path.join(save_dir, 'model.pkl'))
+        else:
+            try:
+                model.save(os.path.join(save_dir, 'model_statsmodels.pkl'))
+            except Exception as exc:
+                warnings.warn(f'save_model_artifacts: statsmodels save failed: {exc}')
+
+    # scaler
+    if scaler is not None:
+        joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
+
+    # metadata
+    def _serialise(v):
+        if hasattr(v, 'tolist'):
+            return v.tolist()
+        return v
+
+    meta = {
+        'model_type':   model_type,
+        'feature_cols': list(feature_cols),
+        'exog_indices': [int(i) for i in exog_indices],
+        'params':       {k: _serialise(v) for k, v in params.items()},
+        'saved_at':     pd.Timestamp.now().isoformat(),
+    }
+    with open(os.path.join(save_dir, 'meta.json'), 'w') as fh:
+        json.dump(meta, fh, indent=2)
+
+    if gcs_bucket:
+        _gcs_upload_dir(save_dir, gcs_bucket, gcs_prefix)
+
+
+def load_model_artifacts(
+    load_dir: str,
+    gcs_bucket: Optional[str] = None,
+    gcs_prefix: str = 'models',
+) -> Optional[Dict]:
+    """Load artifacts previously saved by :func:`save_model_artifacts`.
+
+    Downloads from GCS first when *gcs_bucket* is supplied and local files
+    are absent.  Returns ``None`` if no artifacts are found.
+    """
+    meta_path = os.path.join(load_dir, 'meta.json')
+
+    if gcs_bucket and not os.path.exists(meta_path):
+        _gcs_download_dir(gcs_bucket, gcs_prefix, load_dir)
+
+    if not os.path.exists(meta_path):
+        return None
+
+    with open(meta_path) as fh:
+        meta = json.load(fh)
+
+    model_type = meta['model_type']
+
+    # model
+    model = None
+    if model_type in ('xgboost', 'random_forest'):
+        p = os.path.join(load_dir, 'model.pkl')
+        if os.path.exists(p):
+            model = joblib.load(p)
+    else:
+        p = os.path.join(load_dir, 'model_statsmodels.pkl')
+        if os.path.exists(p):
+            try:
+                from statsmodels.tsa.statespace.sarimax import SARIMAXResultsWrapper
+                model = SARIMAXResultsWrapper.load(p)
+            except Exception:
+                model = None
+
+    # scaler
+    scaler = None
+    sp = os.path.join(load_dir, 'scaler.pkl')
+    if os.path.exists(sp):
+        scaler = joblib.load(sp)
+
+    return {
+        'model':        model,
+        'scaler':       scaler,
+        'model_type':   model_type,
+        'feature_cols': meta['feature_cols'],
+        'exog_indices': meta['exog_indices'],
+        'params':       meta['params'],
+        'saved_at':     meta.get('saved_at'),
+    }
+
+
+def _gcs_upload_dir(local_dir: str, bucket_name: str, gcs_prefix: str) -> None:
+    """Upload every file in *local_dir* to GCS under *gcs_prefix*."""
+    try:
+        from google.cloud import storage  # type: ignore
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        for fname in os.listdir(local_dir):
+            fpath = os.path.join(local_dir, fname)
+            if os.path.isfile(fpath):
+                blob = bucket.blob(f'{gcs_prefix}/{fname}')
+                blob.upload_from_filename(fpath)
+    except Exception as exc:
+        warnings.warn(f'GCS upload failed ({gcs_prefix}): {exc}')
+
+
+def _gcs_download_dir(bucket_name: str, gcs_prefix: str, local_dir: str) -> None:
+    """Download all blobs under *gcs_prefix* from GCS into *local_dir*."""
+    try:
+        from google.cloud import storage  # type: ignore
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        os.makedirs(local_dir, exist_ok=True)
+        prefix = gcs_prefix.rstrip('/') + '/'
+        for blob in bucket.list_blobs(prefix=prefix):
+            fname = blob.name[len(prefix):]
+            if fname:
+                blob.download_to_filename(os.path.join(local_dir, fname))
+    except Exception as exc:
+        warnings.warn(f'GCS download failed ({gcs_prefix}): {exc}')

@@ -7,6 +7,7 @@ News deduplication uses md5(url) as document ID so set() is idempotent.
 
 import hashlib
 import logging
+import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 
@@ -14,7 +15,7 @@ from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 
-_BATCH_SIZE = 400  # stay safely below the 500 Firestore limit
+_BATCH_SIZE = 100  # smaller batches to avoid quota exhaustion
 
 
 def _now_iso() -> str:
@@ -37,6 +38,8 @@ def _batch_write(db, operations: List[tuple]) -> int:
                 batch.set(doc_ref, data)
         batch.commit()
         total += len(chunk)
+        logger.info(f'  Batch committed: {total} docs so far...')
+        time.sleep(1)  # 1s pause between batches to stay within quota
     return total
 
 

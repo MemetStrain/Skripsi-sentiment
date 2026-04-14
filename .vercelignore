@@ -1,0 +1,14 @@
+website/venv
+website/db.sqlite3
+prediction/
+news/
+cpo/
+markov/
+output/
+diagrams/
+scheduler/
+*.csv
+*.pkl
+*.h5
+*.pt
+*.pth

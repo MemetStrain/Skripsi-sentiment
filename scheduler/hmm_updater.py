@@ -1,7 +1,7 @@
 """
 hmm_updater.py — Fit Gaussian HMM on CPO price data and write states to Firestore.
 
-Runs for Daily, Weekly, and Monthly frequencies.
+Runs for Daily frequency only.
 Uses BIC to select the optimal number of hidden states (2–4).
 Mirrors the logic in markov/cpo_hmm_states.py.
 """
@@ -16,7 +16,7 @@ from hmmlearn import hmm
 
 logger = logging.getLogger(__name__)
 
-FREQUENCIES = ['Daily', 'Weekly', 'Monthly']
+FREQUENCIES = ['Daily']
 N_STATES_RANGE = range(2, 5)   # try 2, 3, 4 states
 N_ITER = 200
 N_INIT = 10                    # random restarts for Baum-Welch
@@ -151,37 +151,13 @@ def _label_states(model, n_states: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Resample price data for different frequencies
-# ---------------------------------------------------------------------------
-
-def _resample(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
-    df = df.copy()
-    df['date'] = pd.to_datetime(df['date'])
-    df = df.set_index('date').sort_index()
-
-    rule = {'Daily': None, 'Weekly': 'W-FRI', 'Monthly': 'ME'}.get(frequency)
-    if rule is None:
-        return df.reset_index()
-
-    agg_funcs = {
-        'open': 'first', 'high': 'max', 'low': 'min',
-        'close': 'last', 'volume': 'sum',
-    }
-    present = {k: v for k, v in agg_funcs.items() if k in df.columns}
-    resampled = df.resample(rule).agg(present).dropna(subset=['close'])
-    resampled.index = resampled.index.strftime('%Y-%m-%d')
-    resampled.index.name = 'date'
-    return resampled.reset_index()
-
-
-# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
 def update_hmm_states(db) -> None:
     """
-    Fetch all price data from `daily_prices`, compute HMM states for
-    Daily / Weekly / Monthly frequencies, and write to `hmm_states`.
+    Fetch all price data from `daily_prices`, compute Daily HMM states,
+    and write to `hmm_states`.
     """
     from firestore_writer import write_hmm_states_batch
 
@@ -209,7 +185,7 @@ def update_hmm_states(db) -> None:
     for freq in FREQUENCIES:
         logger.info(f'Computing HMM states for frequency={freq}')
         try:
-            df = _resample(base_df, freq)
+            df = base_df.copy()
             feat_df = _compute_features(df)
             if len(feat_df) < 30:
                 logger.warning(f'Skipping {freq}: too few samples ({len(feat_df)})')

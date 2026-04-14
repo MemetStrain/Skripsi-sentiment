@@ -53,8 +53,54 @@ def init_firebase():
         cred = credentials.Certificate(gac)
         return firebase_admin.initialize_app(cred)
 
+    # Local fallback — firebase-credentials.json next to main.py or in website/
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for candidate in [
+        os.path.join(script_dir, 'firebase-credentials.json'),
+        os.path.join(script_dir, '..', 'website', 'firebase-credentials.json'),
+    ]:
+        if os.path.exists(candidate):
+            cred = credentials.Certificate(os.path.abspath(candidate))
+            return firebase_admin.initialize_app(cred)
+
     # Application Default Credentials (e.g., on GCP Compute/Cloud Run)
     return firebase_admin.initialize_app()
+
+
+# ---------------------------------------------------------------------------
+# Initial load
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Step checkpoint helpers  (initial load only)
+# ---------------------------------------------------------------------------
+
+_PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'initial_load_progress.json')
+
+
+def _load_progress() -> dict:
+    """Return dict of completed steps, e.g. {'step1': True, 'step2': True}."""
+    if os.path.exists(_PROGRESS_FILE):
+        try:
+            with open(_PROGRESS_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _mark_done(progress: dict, step: str) -> None:
+    """Mark a step as done and persist to disk."""
+    progress[step] = True
+    with open(_PROGRESS_FILE, 'w') as f:
+        json.dump(progress, f, indent=2)
+
+
+def _reset_progress() -> None:
+    """Delete the progress file so all steps re-run next time."""
+    if os.path.exists(_PROGRESS_FILE):
+        os.remove(_PROGRESS_FILE)
+        logger.info(f'Progress file removed: {_PROGRESS_FILE}')
 
 
 # ---------------------------------------------------------------------------
@@ -67,57 +113,90 @@ def run_initial_load(db):
     1. CPO prices from CSV → daily_prices
     2. MPOB news (with sentiment if available) → news_articles
     3. Sentiment aggregates → sentiment_aggregates
-    4. HMM states for all frequencies → hmm_states
-    5. All 136 predictions → predictions
+    4. HMM states → hmm_states
+    5. All 56 predictions → predictions
+
+    Each step is checkpointed to initial_load_progress.json next to main.py.
+    Re-running the script skips any already-completed steps.
+    Delete that file (or run with --reset-progress) to start fresh.
     """
     logger.info('=== INITIAL LOAD START ===')
+    progress = _load_progress()
+    if progress:
+        done = [k for k, v in progress.items() if v]
+        logger.info(f'  Resuming — already done: {done}')
 
-    cpo_csv = os.environ.get('CPO_CSV_PATH', '/cpo/Data_CPO_Daily.csv')
-    news_csv = os.environ.get('NEWS_CSV_PATH', '/news/mpob_news_fast.csv')
-    news_sent_csv = os.environ.get('NEWS_SENT_CSV_PATH', '/news/mpob_news_with_sentiment.csv')
+    _base = os.path.dirname(os.path.abspath(__file__))
+    cpo_csv = os.environ.get('CPO_CSV_PATH', os.path.join(_base, '..', 'cpo', 'Data_CPO_Daily.csv'))
+    news_csv = os.environ.get('NEWS_CSV_PATH', os.path.join(_base, '..', 'news', 'mpob_news_fast.csv'))
+    news_sent_csv = os.environ.get('NEWS_SENT_CSV_PATH', os.path.join(_base, '..', 'news', 'mpob_news_with_sentiment.csv'))
 
     # Step 1: CPO prices
-    logger.info('Step 1: Loading CPO price data from CSV...')
-    from price_fetcher import load_prices_from_csv
-    from firestore_writer import write_prices_batch
-    prices = load_prices_from_csv(cpo_csv)
-    if prices:
-        write_prices_batch(db, prices)
-        logger.info(f'  {len(prices)} price records written.')
+    if progress.get('step1'):
+        logger.info('Step 1: SKIPPED (already done)')
     else:
-        logger.warning('  No price data loaded.')
+        logger.info('Step 1: Loading CPO price data from CSV...')
+        from price_fetcher import load_prices_from_csv
+        from firestore_writer import write_prices_batch
+        prices = load_prices_from_csv(cpo_csv)
+        if prices:
+            write_prices_batch(db, prices)
+            logger.info(f'  {len(prices)} price records written.')
+        else:
+            logger.warning('  No price data loaded.')
+        _mark_done(progress, 'step1')
 
     # Step 2: News articles (use pre-computed sentiment CSV to skip FinBERT)
-    logger.info('Step 2: Loading MPOB news from CSV...')
-    from news_extractor import load_news_from_csv
-    from firestore_writer import write_news_articles
-    articles = load_news_from_csv(news_csv, news_sent_csv)
-    if articles:
-        write_news_articles(db, articles)
-        logger.info(f'  {len(articles)} articles written.')
+    if progress.get('step2'):
+        logger.info('Step 2: SKIPPED (already done)')
+        # Re-load articles in memory so Step 3 can use them if needed
+        from news_extractor import load_news_from_csv
+        articles = load_news_from_csv(news_csv, news_sent_csv)
     else:
-        logger.warning('  No articles loaded.')
+        logger.info('Step 2: Loading MPOB news from CSV...')
+        from news_extractor import load_news_from_csv
+        from firestore_writer import write_news_articles
+        articles = load_news_from_csv(news_csv, news_sent_csv)
+        if articles:
+            write_news_articles(db, articles)
+            logger.info(f'  {len(articles)} articles written.')
+        else:
+            logger.warning('  No articles loaded.')
+        _mark_done(progress, 'step2')
 
-    # Step 3: Sentiment aggregates from all loaded articles
-    logger.info('Step 3: Computing sentiment aggregates...')
-    from sentiment_runner import compute_sentiment_aggregates
-    from firestore_writer import write_sentiment_aggregates
-    aggregates = compute_sentiment_aggregates(articles)
-    if aggregates:
-        write_sentiment_aggregates(db, aggregates)
-        logger.info(f'  {len(aggregates)} aggregate records written.')
+    # Step 3: Sentiment aggregates
+    if progress.get('step3'):
+        logger.info('Step 3: SKIPPED (already done)')
+    else:
+        logger.info('Step 3: Computing sentiment aggregates...')
+        from sentiment_runner import compute_sentiment_aggregates
+        from firestore_writer import write_sentiment_aggregates
+        aggregates = compute_sentiment_aggregates(articles)
+        if aggregates:
+            write_sentiment_aggregates(db, aggregates)
+            logger.info(f'  {len(aggregates)} aggregate records written.')
+        _mark_done(progress, 'step3')
 
     # Step 4: HMM states
-    logger.info('Step 4: Computing HMM states...')
-    from hmm_updater import update_hmm_states
-    update_hmm_states(db)
+    if progress.get('step4'):
+        logger.info('Step 4: SKIPPED (already done)')
+    else:
+        logger.info('Step 4: Computing HMM states...')
+        from hmm_updater import update_hmm_states
+        update_hmm_states(db)
+        _mark_done(progress, 'step4')
 
     # Step 5: Predictions
-    logger.info('Step 5: Computing all 136 predictions...')
-    from prediction_updater import run_all_predictions
-    run_all_predictions(db)
+    if progress.get('step5'):
+        logger.info('Step 5: SKIPPED (already done)')
+    else:
+        logger.info('Step 5: Computing all 56 predictions...')
+        from prediction_updater import run_all_predictions
+        run_all_predictions(db)
+        _mark_done(progress, 'step5')
 
     logger.info('=== INITIAL LOAD COMPLETE ===')
+    logger.info(f'  (Progress file: {_PROGRESS_FILE} — delete it to re-run from scratch)')
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +262,7 @@ def run_daily_update(db):
     update_hmm_states(db)
 
     # Step 6: Predictions
-    logger.info('Step 6: Recomputing all 136 predictions...')
+    logger.info('Step 6: Recomputing all 56 predictions...')
     from prediction_updater import run_all_predictions
     run_all_predictions(db)
 
@@ -202,7 +281,16 @@ def main():
         default='daily',
         help='initial = first-run historical load; daily = incremental update',
     )
+    parser.add_argument(
+        '--reset-progress',
+        action='store_true',
+        help='Delete the initial load checkpoint file and exit (next --mode initial runs all steps)',
+    )
     args = parser.parse_args()
+
+    if args.reset_progress:
+        _reset_progress()
+        return
 
     try:
         init_firebase()

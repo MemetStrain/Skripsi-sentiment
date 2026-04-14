@@ -1,0 +1,66 @@
+{
+  "model_type": "arimax",
+  "feature_cols": [
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "Change_Pct",
+    "Price_t-1",
+    "Price_t-2",
+    "Price_t-3",
+    "Return_t-1",
+    "Return_t-2",
+    "Volume_t-1",
+    "Log_Return",
+    "High_Low_Spread",
+    "Open_Close_Spread",
+    "SMA_3",
+    "SMA_6",
+    "EMA_3",
+    "EMA_6",
+    "RSI",
+    "MACD",
+    "MACD_Signal",
+    "Bollinger_Band_Width",
+    "Month_Sin",
+    "Month_Cos",
+    "DayOfWeek_Sin",
+    "DayOfWeek_Cos",
+    "WeekOfYear_Sin",
+    "WeekOfYear_Cos",
+    "Close_lag1",
+    "Close_lag2",
+    "Close_lag3",
+    "Close_lag5",
+    "Close_lag10",
+    "Close_lag20"
+  ],
+  "exog_indices": [
+    34,
+    12,
+    5,
+    13,
+    9,
+    28,
+    19,
+    22,
+    24,
+    10
+  ],
+  "params": {
+    "order": [
+      0,
+      0,
+      0
+    ],
+    "seasonal_order": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "saved_at": "2026-04-13T04:10:32.115094"
+}

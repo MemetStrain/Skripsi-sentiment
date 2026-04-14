@@ -61,43 +61,25 @@ except ImportError:
 
 # ─────────────────────────────── CONFIGURATION ────────────────────────────── #
 
-FREQUENCIES = ["Daily", "Weekly", "Monthly"]
+FREQUENCIES = ["Daily"]
 
 INPUT_FILES = {
-    "Daily":   "../cpo/output/cpo_variables_Daily.csv",
-    "Weekly":  "../cpo/output/cpo_variables_Weekly.csv",
-    "Monthly": "../cpo/output/cpo_variables_Monthly.csv",
+    "Daily": "../cpo/output/cpo_variables_Daily.csv",
 }
 
 # Rolling window for computing intra-period volatility (std of log returns)
-VOLATILITY_WINDOW = {
-    "Daily":   20,   # ≈ 1 trading month
-    "Weekly":  4,    # ≈ 1 month
-    "Monthly": 3,    # ≈ 1 quarter
-}
+VOLATILITY_WINDOW = 20   # ≈ 1 trading month
 
-# Rolling window for Z-score normalisation (≈ 1 trading year per frequency)
-NORM_WINDOW = {
-    "Daily":   252,
-    "Weekly":  52,
-    "Monthly": 12,
-}
+# Rolling window for Z-score normalisation (≈ 1 trading year)
+NORM_WINDOW = 252
 
-# GaussianHMM covariance type per frequency
-COVARIANCE_TYPE = {
-    "Daily":   "full",
-    "Weekly":  "full",
-    "Monthly": "diag",   # Parsimony: monthly has ≈115 usable observations
-}
+# GaussianHMM covariance type
+COVARIANCE_TYPE = "full"
 
 # BIC model-selection
 AUTO_OPTIMIZE   = False  # Locked to N_STATES_MANUAL; set True to re-enable BIC search
 N_STATES_MANUAL = 3      # Exactly 3 states: Bullish | Neutral | Bearish
-MAX_STATES = {           # Upper bound (only used when AUTO_OPTIMIZE = True)
-    "Daily":   10,
-    "Weekly":  8,
-    "Monthly": 6,
-}
+MAX_STATES      = 10     # Upper bound (only used when AUTO_OPTIMIZE = True)
 
 # HMM training
 N_ITER      = 1000   # Max EM iterations per restart (≥ 200 required)
@@ -162,8 +144,8 @@ def prepare_features(df: pd.DataFrame, frequency: str):
     feat_cols : list of 5 feature column names
     """
     df = df.copy()
-    vol_win  = VOLATILITY_WINDOW[frequency]
-    norm_win = NORM_WINDOW[frequency]
+    vol_win  = VOLATILITY_WINDOW
+    norm_win = NORM_WINDOW
 
     # 1. Intra-period volatility (rolling std of log returns)
     df["Volatility"] = df["Log_Return"].rolling(vol_win, min_periods=2).std()
@@ -761,14 +743,14 @@ def run_frequency(frequency: str) -> dict:
     # 2. Features
     df, feat_cols = prepare_features(df_raw, frequency)
     X = df[feat_cols].values.astype(np.float64)
-    cov_type = COVARIANCE_TYPE[frequency]
+    cov_type = COVARIANCE_TYPE
 
     # 3. Model selection or manual
     if AUTO_OPTIMIZE:
         print(f"\n  Searching for optimal states via BIC…")
         n_opt, bic_scores, best_model = optimize_states_bic(
             X,
-            max_states=MAX_STATES[frequency],
+            max_states=MAX_STATES,
             cov_type=cov_type,
             frequency=frequency,
         )

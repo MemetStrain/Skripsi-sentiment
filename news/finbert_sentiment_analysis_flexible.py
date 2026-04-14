@@ -15,7 +15,7 @@ USE_HALF_PRECISION = True  # Use float16 for faster GPU inference (recommended f
 FORCE_CPU = False  # Set to True to force CPU even if CUDA is available
 
 # Aggregation Configuration
-AGGREGATION_MODE = 'Daily'  # Options: 'Daily', 'Weekly', 'Monthly', or None to skip aggregation
+AGGREGATION_MODE = 'Daily'  # Daily aggregation only
 AGGREGATION_OUTPUT_CSV = f'output/sentiment_aggregate_{AGGREGATION_MODE}.csv'  # Output file for aggregation
 
 # CUDA Configuration
@@ -261,42 +261,34 @@ def get_default_sentiment_results():
         'Combined_Positive_Prob': 0.0, 'Combined_Negative_Prob': 0.0, 'Combined_Neutral_Prob': 1.0
     }
 
-def aggregate_sentiment(df, mode='Daily'):
+def aggregate_sentiment(df):
     """
-    Aggregate sentiment scores by Daily, Weekly, or Monthly periods.
-    
+    Aggregate sentiment scores by daily periods.
+
     Parameters:
     - df: DataFrame with sentiment scores
-    - mode: 'Daily', 'Weekly', or 'Monthly'
-    
+    - mode: must be 'Daily'
+
     Returns: DataFrame with aggregated sentiment
     """
     print("\n" + "=" * 70)
-    print(f"AGGREGATING {mode.upper()} SENTIMENT SCORES")
+    print(f"AGGREGATING DAILY SENTIMENT SCORES")
     print("=" * 70)
-    
+
     # Parse dates
     df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y', errors='coerce')
-    
+
     # Remove rows with invalid dates
     df_valid = df[df['Date'].notna()].copy()
-    
+
     if len(df_valid) == 0:
-        print(f"Warning: No valid dates found. Cannot aggregate by {mode}.")
+        print(f"Warning: No valid dates found. Cannot aggregate.")
         return None
-    
+
     # Sort by date
     df_valid = df_valid.sort_values('Date').reset_index(drop=True)
-    
-    if mode == 'Daily':
-        return aggregate_Daily_sentiment(df_valid)
-    elif mode == 'Weekly':
-        return aggregate_Weekly_sentiment(df_valid)
-    elif mode == 'Monthly':
-        return aggregate_Monthly_sentiment(df_valid)
-    else:
-        print(f"Warning: Unknown aggregation mode '{mode}'. Skipping aggregation.")
-        return None
+
+    return aggregate_Daily_sentiment(df_valid)
 
 def aggregate_Daily_sentiment(df):
     """
@@ -383,83 +375,8 @@ def aggregate_Daily_sentiment(df):
     
     return complete_df
 
-def aggregate_Weekly_sentiment(df):
-    """
-    Aggregate sentiment scores by week.
-    """
-    # Add week information
-    df['Year'] = df['Date'].dt.isocalendar().year
-    df['Week'] = df['Date'].dt.isocalendar().week
-    df['YearWeek'] = df['Year'].astype(str) + '-W' + df['Week'].astype(str).str.zfill(2)
-    
-    # Group by Year-Week
-    Weekly_data = []
-    
-    for year_week, group in df.groupby('YearWeek'):
-        year = group['Year'].iloc[0]
-        week = group['Week'].iloc[0]
-        total_articles = len(group)
-        week_start = group['Date'].min()
-        week_end = group['Date'].max()
-        
-        agg = {
-            'Year': year,
-            'Week': week,
-            'YearWeek': year_week,
-            'Week_Start': week_start.strftime('%Y-%m-%d'),
-            'Week_End': week_end.strftime('%Y-%m-%d'),
-            'Total_Articles': total_articles,
-            # Title metrics
-            'Title_Avg_Positive_Prob': group['Title_Positive_Prob'].mean(),
-            'Title_Avg_Negative_Prob': group['Title_Negative_Prob'].mean(),
-            'Title_Avg_Neutral_Prob': group['Title_Neutral_Prob'].mean(),
-            'Title_Avg_Confidence': group['Title_Confidence'].mean(),
-            # Content metrics
-            'Content_Avg_Positive_Prob': group['Content_Positive_Prob'].mean(),
-            'Content_Avg_Negative_Prob': group['Content_Negative_Prob'].mean(),
-            'Content_Avg_Neutral_Prob': group['Content_Neutral_Prob'].mean(),
-            'Content_Avg_Confidence': group['Content_Confidence'].mean(),
-            # Combined metrics
-            'Combined_Avg_Positive_Prob': group['Combined_Positive_Prob'].mean(),
-            'Combined_Avg_Negative_Prob': group['Combined_Negative_Prob'].mean(),
-            'Combined_Avg_Neutral_Prob': group['Combined_Neutral_Prob'].mean(),
-            'Combined_Avg_Confidence': group['Combined_Confidence'].mean(),
-        }
-        
-        # Calculate sentiment score
-        agg['Sentiment_Score'] = (
-            agg['Combined_Avg_Positive_Prob'] - agg['Combined_Avg_Negative_Prob']
-        )
-        
-        # Dominant sentiment
-        probs = {
-            'Positive': agg['Combined_Avg_Positive_Prob'],
-            'Negative': agg['Combined_Avg_Negative_Prob'],
-            'Neutral': agg['Combined_Avg_Neutral_Prob']
-        }
-        agg['Dominant_Sentiment'] = max(probs, key=probs.get)
-        
-        Weekly_data.append(agg)
-    
-    # Create DataFrame
-    Weekly_df = pd.DataFrame(Weekly_data)
-    Weekly_df = Weekly_df.sort_values(['Year', 'Week']).reset_index(drop=True)
-    
-    # Round numeric columns
-    numeric_cols = Weekly_df.select_dtypes(include=[np.number]).columns
-    numeric_cols = [col for col in numeric_cols if col not in ['Year', 'Week', 'Total_Articles']]
-    Weekly_df[numeric_cols] = Weekly_df[numeric_cols].round(4)
-    
-    print(f"Aggregated sentiment for {len(Weekly_df)} weeks")
-    print(f"Date range: {Weekly_df['Week_Start'].min()} to {Weekly_df['Week_End'].max()}")
-    
-    return Weekly_df
-
-def aggregate_Monthly_sentiment(df):
-    """
-    Aggregate sentiment scores by month.
-    """
-    # Create Year-Month column
+def _aggregate_Monthly_sentiment_UNUSED(df):
+    # kept for reference only — not called
     df['YearMonth'] = df['Date'].dt.to_period('M')
     df['Year'] = df['Date'].dt.year
     df['Month'] = df['Date'].dt.month
@@ -563,7 +480,7 @@ def main():
             
             # Perform aggregation if requested
             if AGGREGATION_MODE:
-                agg_df = aggregate_sentiment(df_final, mode=AGGREGATION_MODE)
+                agg_df = aggregate_sentiment(df_final)
                 if agg_df is not None and len(agg_df) > 0:
                     print(f"\nSaving {AGGREGATION_MODE} aggregation to {AGGREGATION_OUTPUT_CSV}...")
                     agg_df.to_csv(AGGREGATION_OUTPUT_CSV, index=False)
@@ -571,21 +488,12 @@ def main():
                     
                     # Display sample
                     print("\n" + "=" * 70)
-                    print(f"{AGGREGATION_MODE.upper()} SENTIMENT AGGREGATION SAMPLE")
+                    print("DAILY SENTIMENT AGGREGATION SAMPLE")
                     print("=" * 70)
-                    if AGGREGATION_MODE == 'Daily':
-                        display_cols = ['Date_Str', 'Article_Count', 'Sentiment_Score', 
-                                      'Combined_Positive_Prob', 'Combined_Negative_Prob', 'Dominant_Sentiment']
-                    elif AGGREGATION_MODE == 'Weekly':
-                        display_cols = ['YearWeek', 'Total_Articles', 'Sentiment_Score',
-                                      'Combined_Avg_Positive_Prob', 'Combined_Avg_Negative_Prob', 'Dominant_Sentiment']
-                    else:  # Monthly
-                        display_cols = ['YearMonth', 'Total_Articles', 'Sentiment_Score',
-                                      'Combined_Avg_Positive_Prob', 'Combined_Avg_Negative_Prob', 'Dominant_Sentiment']
-                    
-                    sample_df = agg_df[display_cols].tail(10) if AGGREGATION_MODE == 'Daily' else agg_df[display_cols].tail(5)
-                    print(sample_df.to_string(index=False))
-            
+                    display_cols = ['Date_Str', 'Article_Count', 'Sentiment_Score',
+                                    'Combined_Positive_Prob', 'Combined_Negative_Prob', 'Dominant_Sentiment']
+                    print(agg_df[display_cols].tail(10).to_string(index=False))
+
             return
         
         print(f"Processing {len(df_to_process)} remaining articles...")
@@ -639,7 +547,7 @@ def main():
     
     # Perform aggregation if requested
     if AGGREGATION_MODE:
-        agg_df = aggregate_sentiment(df_final, mode=AGGREGATION_MODE)
+        agg_df = aggregate_sentiment(df_final)
         if agg_df is not None and len(agg_df) > 0:
             print(f"\nSaving {AGGREGATION_MODE} aggregation to {AGGREGATION_OUTPUT_CSV}...")
             agg_df.to_csv(AGGREGATION_OUTPUT_CSV, index=False)
@@ -647,20 +555,11 @@ def main():
             
             # Display sample
             print("\n" + "=" * 70)
-            print(f"{AGGREGATION_MODE.upper()} SENTIMENT AGGREGATION SAMPLE")
+            print("DAILY SENTIMENT AGGREGATION SAMPLE")
             print("=" * 70)
-            if AGGREGATION_MODE == 'Daily':
-                display_cols = ['Date_Str', 'Article_Count', 'Sentiment_Score', 
-                              'Combined_Positive_Prob', 'Combined_Negative_Prob', 'Dominant_Sentiment']
-            elif AGGREGATION_MODE == 'Weekly':
-                display_cols = ['YearWeek', 'Total_Articles', 'Sentiment_Score',
-                              'Combined_Avg_Positive_Prob', 'Combined_Avg_Negative_Prob', 'Dominant_Sentiment']
-            else:  # Monthly
-                display_cols = ['YearMonth', 'Total_Articles', 'Sentiment_Score',
-                              'Combined_Avg_Positive_Prob', 'Combined_Avg_Negative_Prob', 'Dominant_Sentiment']
-            
-            sample_df = agg_df[display_cols].tail(10) if AGGREGATION_MODE == 'Daily' else agg_df[display_cols].tail(5)
-            print(sample_df.to_string(index=False))
+            display_cols = ['Date_Str', 'Article_Count', 'Sentiment_Score',
+                            'Combined_Positive_Prob', 'Combined_Negative_Prob', 'Dominant_Sentiment']
+            print(agg_df[display_cols].tail(10).to_string(index=False))
     
     # Print summary statistics
     print("\n" + "=" * 70)

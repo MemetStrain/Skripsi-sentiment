@@ -36,3 +36,5 @@ Thumbs.db
 
 # Claude Code internal
 .claude/
+
+.vercel

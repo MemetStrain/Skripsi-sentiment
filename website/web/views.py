@@ -67,7 +67,7 @@ def dashboard(request):
     state_dict = {}
     for doc in state_docs:
         d = doc.to_dict()
-        if d.get('frequency', 'Daily') != 'Daily':
+        if d.get('frequency') not in (None, 'Daily'):
             continue
         state_dict[d.get('date')] = {
             'state_label': d.get('state_label', 'Neutral'),
@@ -114,7 +114,7 @@ def dashboard(request):
     try:
         best_mape = float('inf')
         for model in ('xgboost', 'random_forest', 'arimax', 'sarimax'):
-            for variant in ('base', 'csa'):
+            for variant in ('base', 'csa', 'bayesian'):
                 doc_id = f'{model}_{variant}_Daily_h1'
                 doc = db.collection('predictions').document(doc_id).get()
                 if not doc.exists:
@@ -171,8 +171,8 @@ def prediction_api(request):
         return JsonResponse({'error': 'Invalid horizon'}, status=400)
 
     valid_models = {'xgboost', 'random_forest', 'arimax', 'sarimax'}
-    valid_variants = {'base', 'csa'}
-    valid_freqs = {'Daily', 'Weekly', 'Monthly'}
+    valid_variants = {'base', 'csa', 'bayesian'}
+    valid_freqs = {'Daily'}
     if model not in valid_models or variant not in valid_variants or frequency not in valid_freqs:
         return JsonResponse({'error': 'Invalid parameters'}, status=400)
 

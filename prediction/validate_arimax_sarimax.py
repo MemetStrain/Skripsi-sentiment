@@ -11,9 +11,6 @@ Performs comprehensive diagnostics:
 
 Usage:
     python validate_arimax_sarimax.py --interval daily
-    python validate_arimax_sarimax.py --interval weekly
-    python validate_arimax_sarimax.py --interval monthly
-    python validate_arimax_sarimax.py --interval all
     python validate_arimax_sarimax.py --interval daily --horizon 1 --no-plots
 """
 
@@ -59,24 +56,6 @@ INTERVAL_CONFIGS = {
         'min_samples': 100,
         'test_ratio': 0.2,
     },
-    'Weekly': {
-        'cpo_file':       os.path.join(PROJECT_ROOT, 'cpo', 'output', 'cpo_variables_Weekly.csv'),
-        'sentiment_file': os.path.join(PROJECT_ROOT, 'news', 'output', 'sentiment_aggregate_Weekly.csv'),
-        'hmm_file':       os.path.join(PROJECT_ROOT, 'markov', 'output', 'hmm_states_results_Weekly.csv'),
-        'seasonal_period': 4,
-        'base_lag_periods': [1, 2, 4, 8, 12],
-        'min_samples': 50,
-        'test_ratio': 0.2,
-    },
-    'Monthly': {
-        'cpo_file':       os.path.join(PROJECT_ROOT, 'cpo', 'output', 'cpo_variables_Monthly.csv'),
-        'sentiment_file': os.path.join(PROJECT_ROOT, 'news', 'output', 'sentiment_aggregate_Monthly.csv'),
-        'hmm_file':       os.path.join(PROJECT_ROOT, 'markov', 'output', 'hmm_states_results_Monthly.csv'),
-        'seasonal_period': 4,
-        'base_lag_periods': [1, 2, 3, 6],
-        'min_samples': 30,
-        'test_ratio': 0.2,
-    },
 }
 
 BASE_PARAMS = {
@@ -100,33 +79,14 @@ def load_and_merge(interval: str) -> pd.DataFrame:
     cpo['Date'] = pd.to_datetime(cpo['Date'])
 
     sent = pd.read_csv(cfg['sentiment_file'])
-    if interval == 'Daily':
-        sent['Date'] = pd.to_datetime(sent['Date'])
-        rename = {
-            'Article_Count': 'Article_Count',
-            'Combined_Positive_Prob': 'Positive_Prob',
-            'Combined_Negative_Prob': 'Negative_Prob',
-            'Combined_Neutral_Prob':  'Neutral_Prob',
-            'Combined_Confidence':    'Confidence',
-        }
-    elif interval == 'Monthly':
-        sent['Date'] = pd.to_datetime(sent['YearMonth'] + '-01')
-        rename = {
-            'Total_Articles':              'Article_Count',
-            'Combined_Avg_Positive_Prob':  'Positive_Prob',
-            'Combined_Avg_Negative_Prob':  'Negative_Prob',
-            'Combined_Avg_Neutral_Prob':   'Neutral_Prob',
-            'Combined_Avg_Confidence':     'Confidence',
-        }
-    else:  # Weekly
-        sent['Date'] = pd.to_datetime(sent['Week_Start'])
-        rename = {
-            'Total_Articles':              'Article_Count',
-            'Combined_Avg_Positive_Prob':  'Positive_Prob',
-            'Combined_Avg_Negative_Prob':  'Negative_Prob',
-            'Combined_Avg_Neutral_Prob':   'Neutral_Prob',
-            'Combined_Avg_Confidence':     'Confidence',
-        }
+    sent['Date'] = pd.to_datetime(sent['Date'])
+    rename = {
+        'Article_Count': 'Article_Count',
+        'Combined_Positive_Prob': 'Positive_Prob',
+        'Combined_Negative_Prob': 'Negative_Prob',
+        'Combined_Neutral_Prob':  'Neutral_Prob',
+        'Combined_Confidence':    'Confidence',
+    }
     sent = sent.rename(columns=rename)
     keep = ['Date', 'Article_Count', 'Positive_Prob', 'Negative_Prob',
             'Neutral_Prob', 'Confidence', 'Sentiment_Score']
@@ -141,28 +101,9 @@ def load_and_merge(interval: str) -> pd.DataFrame:
         'State_Label': 'HMM_State_Label',
     })
 
-    if interval == 'Monthly':
-        cpo['_k'] = cpo['Date'].dt.to_period('M')
-        sent['_k'] = sent['Date'].dt.to_period('M')
-        hmm['_k']  = hmm['Date'].dt.to_period('M')
-        merged = (cpo
-                  .merge(sent.drop(columns=['Date']), on='_k', how='inner', suffixes=('', '_s'))
-                  .merge(hmm.drop(columns=['Date']),  on='_k', how='inner', suffixes=('', '_h'))
-                  .drop(columns=['_k']))
-    elif interval == 'Weekly':
-        for df in [cpo, hmm]:
-            df['_k'] = (df['Date'].dt.isocalendar().year.astype(str)
-                        + '-W' + df['Date'].dt.isocalendar().week.astype(str).str.zfill(2))
-        sent['_k'] = (sent['Date'].dt.isocalendar().year.astype(str)
-                      + '-W' + sent['Date'].dt.isocalendar().week.astype(str).str.zfill(2))
-        merged = (cpo
-                  .merge(sent.drop(columns=['Date']), on='_k', how='inner', suffixes=('', '_s'))
-                  .merge(hmm.drop(columns=['Date']),  on='_k', how='inner', suffixes=('', '_h'))
-                  .drop(columns=['_k']))
-    else:
-        merged = (cpo
-                  .merge(sent, on='Date', how='inner', suffixes=('', '_s'))
-                  .merge(hmm,  on='Date', how='inner', suffixes=('', '_h')))
+    merged = (cpo
+              .merge(sent, on='Date', how='inner', suffixes=('', '_s'))
+              .merge(hmm,  on='Date', how='inner', suffixes=('', '_h')))
 
     merged = merged.sort_values('Date').reset_index(drop=True)
 
@@ -182,12 +123,10 @@ def build_features(df: pd.DataFrame, interval: str, horizon: int
 
     df['Month_Sin'] = np.sin(2 * np.pi * df['Date'].dt.month / 12)
     df['Month_Cos'] = np.cos(2 * np.pi * df['Date'].dt.month / 12)
-    if interval in ('Daily', 'Weekly'):
-        df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
-        df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
-    if interval == 'Daily':
-        df['DayOfWeek_Sin'] = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
-        df['DayOfWeek_Cos'] = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
+    df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
+    df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
+    df['DayOfWeek_Sin'] = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
+    df['DayOfWeek_Cos'] = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
 
     safe_lags = [lag for lag in cfg['base_lag_periods'] if lag >= horizon] or [horizon]
     for col in ['Close', 'Sentiment_Score', 'HMM_State']:
@@ -690,7 +629,7 @@ def build_summary_table(all_results: List[Dict]) -> pd.DataFrame:
 def main():
     parser = argparse.ArgumentParser(description='Validate ARIMAX & SARIMAX models')
     parser.add_argument('--interval', default='daily',
-                        choices=['daily', 'weekly', 'monthly', 'all'],
+                        choices=['daily'],
                         help='Interval to validate (default: daily)')
     parser.add_argument('--horizon', type=int, default=None,
                         help='Specific horizon to validate (default: all for interval)')
@@ -701,35 +640,26 @@ def main():
                         help='Skip generating plot files')
     args = parser.parse_args()
 
-    HORIZONS_MAP = {
-        'Daily':   [1, 2, 3, 4, 5, 6, 7],
-        'Weekly':  [1, 2, 3, 4],
-        'Monthly': [1, 2, 3, 4, 5, 6],
-    }
-
-    intervals = ['Daily', 'Weekly', 'Monthly'] if args.interval == 'all' \
-                else [args.interval.capitalize()]
+    interval = args.interval.capitalize()
     models = ['arimax', 'sarimax'] if args.model == 'all' else [args.model]
 
+    horizons = [args.horizon] if args.horizon else [1, 2, 3, 4, 5, 6, 7]
     all_results = []
-    for interval in intervals:
-        horizons = ([args.horizon] if args.horizon
-                    else HORIZONS_MAP[interval])
-        for horizon in horizons:
-            for model_type in models:
-                tag = _tag(interval, horizon, model_type)
-                try:
-                    result = validate_model(
-                        model_type, interval, horizon,
-                        save_plots=not args.no_plots,
-                    )
-                    result.update({'interval': interval, 'horizon': horizon,
-                                   'model': model_type})
-                    all_results.append(result)
-                except Exception as e:
-                    print(f"\n  [ERROR] {tag}: {e}")
-                    all_results.append({'interval': interval, 'horizon': horizon,
-                                        'model': model_type, 'error': str(e)})
+    for horizon in horizons:
+        for model_type in models:
+            tag = _tag(interval, horizon, model_type)
+            try:
+                result = validate_model(
+                    model_type, interval, horizon,
+                    save_plots=not args.no_plots,
+                )
+                result.update({'interval': interval, 'horizon': horizon,
+                               'model': model_type})
+                all_results.append(result)
+            except Exception as e:
+                print(f"\n  [ERROR] {tag}: {e}")
+                all_results.append({'interval': interval, 'horizon': horizon,
+                                    'model': model_type, 'error': str(e)})
 
     # ── Save summary ──────────────────────────────────────────────
     if all_results:

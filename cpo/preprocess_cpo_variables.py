@@ -1,6 +1,6 @@
 """
 CPO Data Preprocessing Script
-Loads Data_CPO_{Daily,Weekly,Monthly}.csv, engineers features, and saves to cpo/output/
+Loads Data_CPO_Daily.csv, engineers features, and saves to cpo/output/
 """
 
 import pandas as pd
@@ -9,9 +9,7 @@ import os
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'output')
 DATA_FILES = {
-    'Daily':   os.path.join(os.path.dirname(__file__), 'Data_CPO_Daily.csv'),
-    'Weekly':  os.path.join(os.path.dirname(__file__), 'Data_CPO_Weekly.csv'),
-    'Monthly': os.path.join(os.path.dirname(__file__), 'Data_CPO_Monthly.csv'),
+    'Daily': os.path.join(os.path.dirname(__file__), 'Data_CPO_Daily.csv'),
 }
 
 
