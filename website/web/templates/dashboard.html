@@ -113,10 +113,13 @@
                 <canvas id="priceChart"></canvas>
             </div>
             <!-- State legend -->
-            <div class="flex gap-5 mt-3 text-xs text-slate-500">
+            <div class="flex flex-wrap gap-5 mt-3 text-xs text-slate-500">
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-green-200 inline-block"></span> Bullish</span>
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-red-200 inline-block"></span> Bearish</span>
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-slate-200 inline-block"></span> Neutral</span>
+                <span id="pred-legend" class="hidden flex items-center gap-1">
+                    <span class="inline-block w-5 h-0 border-t-2 border-dashed border-amber-400"></span> Prediction
+                </span>
             </div>
         </div>
 
@@ -185,7 +188,7 @@
     }
 
     const ctx = document.getElementById('priceChart').getContext('2d');
-    new Chart(ctx, {
+    const priceChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels,
@@ -212,11 +215,20 @@
                     callbacks: {
                         title: (ctx) => {
                             const d = chartData[ctx[0].dataIndex];
+                            if (!d) return ctx[0].label + '  |  Forecast';
                             return `${d.date}  |  ${d.state_label}`;
                         },
-                        label: (ctx) => `Close: Rp ${ctx.parsed.y.toLocaleString('id-ID')}`,
+                        label: (ctx) => {
+                            const v = ctx.parsed.y;
+                            if (v == null) return null;
+                            if (ctx.dataset.label === 'Prediction') {
+                                return `Predicted: Rp ${v.toLocaleString('id-ID')}`;
+                            }
+                            return `Close: Rp ${v.toLocaleString('id-ID')}`;
+                        },
                         afterBody: (ctx) => {
                             const d = chartData[ctx[0].dataIndex];
+                            if (!d) return [];
                             return [
                                 `Open: Rp ${d.open.toLocaleString('id-ID')}`,
                                 `High: Rp ${d.high.toLocaleString('id-ID')}`,
@@ -246,6 +258,61 @@
     // -----------------------------------------------------------------------
     // Prediction panel
     // -----------------------------------------------------------------------
+    const originalLabels = [...labels];
+    const originalPrices = [...prices];
+
+    function clearPredictionDataset() {
+        priceChart.data.labels = [...originalLabels];
+        priceChart.data.datasets[0].data = [...originalPrices];
+        if (priceChart.data.datasets.length > 1) {
+            priceChart.data.datasets.splice(1);
+        }
+        document.getElementById('pred-legend').classList.add('hidden');
+        priceChart.update();
+    }
+
+    function plotPrediction(lastActualDate, lastActualPrice, predictedDate, predictedPrice) {
+        const extLabels = [...originalLabels];
+        if (!extLabels.includes(predictedDate)) extLabels.push(predictedDate);
+
+        const lastIdx = extLabels.indexOf(lastActualDate);
+        const predIdx = extLabels.indexOf(predictedDate);
+        const predData = new Array(extLabels.length).fill(null);
+        if (lastIdx !== -1) predData[lastIdx] = lastActualPrice;
+        if (predIdx !== -1) predData[predIdx] = predictedPrice;
+
+        const pointRadii = new Array(extLabels.length).fill(0);
+        if (predIdx !== -1) pointRadii[predIdx] = 6;
+
+        priceChart.data.labels = extLabels;
+        priceChart.data.datasets[0].data = [...originalPrices, ...(extLabels.length > originalLabels.length ? [null] : [])];
+
+        const predDataset = {
+            label: 'Prediction',
+            data: predData,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.08)',
+            borderWidth: 2,
+            borderDash: [6, 3],
+            fill: false,
+            tension: 0,
+            pointRadius: pointRadii,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#f59e0b',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        };
+
+        if (priceChart.data.datasets.length > 1) {
+            priceChart.data.datasets[1] = predDataset;
+        } else {
+            priceChart.data.datasets.push(predDataset);
+        }
+
+        document.getElementById('pred-legend').classList.remove('hidden');
+        priceChart.update();
+    }
+
     const HORIZONS = [1, 2, 3, 4, 5, 6, 7];
 
     function populateHorizons() {
@@ -299,6 +366,15 @@
                     ? `${parseFloat(data.metrics.directional_accuracy).toFixed(1)}%` : '—';
 
             resultEl.classList.remove('hidden');
+
+            if (data.last_actual_date && data.predicted_date && data.predicted_price != null) {
+                plotPrediction(
+                    data.last_actual_date,
+                    parseFloat(data.last_actual_price),
+                    data.predicted_date,
+                    parseFloat(data.predicted_price)
+                );
+            }
         } catch (e) {
             loadingEl.classList.add('hidden');
             errorEl.textContent = 'Network error. Please try again.';
