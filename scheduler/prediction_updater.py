@@ -340,7 +340,7 @@ def _predict_price_arimax(df: pd.DataFrame, horizon: int, params: dict) -> float
             warnings.simplefilter('ignore')
             model = SARIMAX(endog, exog=exog, order=order).fit(disp=False)
         fc = model.forecast(steps=horizon, exog=exog[-horizon:] if exog is not None else None)
-        return float(fc.iloc[-1])
+        return float(fc[-1] if hasattr(fc, '__len__') else fc)
     except Exception as e:
         logger.warning(f'ARIMAX failed: {e}')
         return float(df['close'].iloc[-1])
@@ -361,7 +361,7 @@ def _predict_price_sarimax(df: pd.DataFrame, horizon: int, params: dict) -> floa
                             order=order,
                             seasonal_order=seasonal_order).fit(disp=False)
         fc = model.forecast(steps=horizon, exog=exog[-horizon:] if exog is not None else None)
-        return float(fc.iloc[-1])
+        return float(fc[-1] if hasattr(fc, '__len__') else fc)
     except Exception as e:
         logger.warning(f'SARIMAX failed: {e}')
         return float(df['close'].iloc[-1])

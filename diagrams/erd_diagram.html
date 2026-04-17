@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ERD — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+        attributeBackgroundColorEven: '#f8fafc',
+        attributeBackgroundColorOdd: '#f0fdfa',
+      },
+      er: { diagramPadding: 30 }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">CPO Price Prediction System · Thesis Documentation</p>
+      <h1 class="text-2xl font-bold mt-1">Entity Relationship Diagram (ERD)</h1>
+      <p class="text-teal-100 text-sm mt-1">Data model for all Firestore collections and their relationships</p>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <!-- Diagram -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+erDiagram
+    USER {
+        string uid PK
+        string username
+        string email
+        string password_hash
+        string created_at
+        string last_login
+        boolean is_active
+    }
+
+    DAILY_PRICE {
+        string date PK
+        float open
+        float high
+        float low
+        float close
+        float volume
+        string updated_at
+    }
+
+    HMM_STATE {
+        string id PK
+        string date FK
+        string frequency
+        int state
+        string state_label
+        string updated_at
+    }
+
+    NEWS_ARTICLE {
+        string id PK
+        string date FK
+        string title
+        string category
+        string content
+        string snippet
+        string url
+        string sentiment_label
+        float sentiment_score
+        string scraped_at
+    }
+
+    SENTIMENT_AGGREGATE {
+        string id PK
+        string date FK
+        string frequency
+        int article_count
+        float positive_prob
+        float negative_prob
+        float neutral_prob
+        float sentiment_score
+        float combined_confidence
+    }
+
+    PREDICTION {
+        string id PK
+        string last_actual_date FK
+        string model
+        string variant
+        string frequency
+        int horizon
+        float last_actual_price
+        string predicted_date
+        float predicted_price
+        float mape
+        float r2
+        float rmse
+        float directional_accuracy
+        string computed_at
+    }
+
+    DAILY_PRICE ||--o{ HMM_STATE : "has market state"
+    DAILY_PRICE ||--o{ SENTIMENT_AGGREGATE : "has sentiment summary"
+    DAILY_PRICE ||--o{ PREDICTION : "is last actual for"
+    NEWS_ARTICLE }o--|| SENTIMENT_AGGREGATE : "aggregated into"
+        </pre>
+      </div>
+    </section>
+
+    <!-- Entity Descriptions -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Entity Descriptions</h2>
+
+      <div class="space-y-8">
+
+        <!-- USER -->
+        <div>
+          <h3 class="text-base font-semibold text-teal-700 mb-1">USER</h3>
+          <p class="text-sm text-slate-600 mb-2">Firestore collection: <code class="bg-slate-100 px-1 rounded">users</code> · Document ID: auto-generated UID</p>
+          <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="w-full border-collapse">
+              <thead><tr><th class="text-left">Field</th><th class="text-left">Type</th><th class="text-left">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>uid</code></td><td>string</td><td>Primary key — auto-generated Firestore document ID</td></tr>
+                <tr><td><code>username</code></td><td>string</td><td>Display name chosen at registration</td></tr>
+                <tr><td><code>email</code></td><td>string</td><td>Lowercased email address; enforced unique at application level</td></tr>
+                <tr><td><code>password_hash</code></td><td>string</td><td>Django <code>make_password()</code> hash (PBKDF2-SHA256)</td></tr>
+                <tr><td><code>created_at</code></td><td>ISO timestamp</td><td>Account creation time</td></tr>
+                <tr><td><code>last_login</code></td><td>ISO timestamp</td><td>Updated on each successful login</td></tr>
+                <tr><td><code>is_active</code></td><td>boolean</td><td>Account status flag; inactive users cannot log in</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- DAILY_PRICE -->
+        <div>
+          <h3 class="text-base font-semibold text-teal-700 mb-1">DAILY_PRICE</h3>
+          <p class="text-sm text-slate-600 mb-2">Firestore collection: <code class="bg-slate-100 px-1 rounded">daily_prices</code> · Document ID: <code class="bg-slate-100 px-1 rounded">YYYY-MM-DD</code></p>
+          <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="w-full border-collapse">
+              <thead><tr><th class="text-left">Field</th><th class="text-left">Type</th><th class="text-left">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>date</code></td><td>string</td><td>Primary key — the trading day (YYYY-MM-DD)</td></tr>
+                <tr><td><code>open</code></td><td>float</td><td>Opening price (MYR/tonne)</td></tr>
+                <tr><td><code>high</code></td><td>float</td><td>Intraday high price</td></tr>
+                <tr><td><code>low</code></td><td>float</td><td>Intraday low price</td></tr>
+                <tr><td><code>close</code></td><td>float</td><td>Closing price — primary target variable for prediction</td></tr>
+                <tr><td><code>volume</code></td><td>float</td><td>Traded volume</td></tr>
+                <tr><td><code>updated_at</code></td><td>ISO timestamp</td><td>Last write time</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- HMM_STATE -->
+        <div>
+          <h3 class="text-base font-semibold text-teal-700 mb-1">HMM_STATE</h3>
+          <p class="text-sm text-slate-600 mb-2">Firestore collection: <code class="bg-slate-100 px-1 rounded">hmm_states</code> · Document ID: <code class="bg-slate-100 px-1 rounded">{frequency}_{YYYY-MM-DD}</code></p>
+          <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="w-full border-collapse">
+              <thead><tr><th class="text-left">Field</th><th class="text-left">Type</th><th class="text-left">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code></td><td>string</td><td>Composite PK: <code>{frequency}_{date}</code></td></tr>
+                <tr><td><code>date</code></td><td>string</td><td>Foreign key to DAILY_PRICE.date</td></tr>
+                <tr><td><code>frequency</code></td><td>string</td><td>Temporal resolution — currently "Daily"</td></tr>
+                <tr><td><code>state</code></td><td>int</td><td>Discrete market regime: 0 = Bearish, 1 = Bullish, 2 = Neutral</td></tr>
+                <tr><td><code>state_label</code></td><td>string</td><td>Human-readable label: "Bearish", "Bullish", "Neutral"</td></tr>
+                <tr><td><code>updated_at</code></td><td>ISO timestamp</td><td>Last HMM re-fit time</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- NEWS_ARTICLE -->
+        <div>
+          <h3 class="text-base font-semibold text-teal-700 mb-1">NEWS_ARTICLE</h3>
+          <p class="text-sm text-slate-600 mb-2">Firestore collection: <code class="bg-slate-100 px-1 rounded">news_articles</code> · Document ID: <code class="bg-slate-100 px-1 rounded">md5(url)</code></p>
+          <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="w-full border-collapse">
+              <thead><tr><th class="text-left">Field</th><th class="text-left">Type</th><th class="text-left">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code></td><td>string</td><td>MD5 hash of article URL — deduplication key</td></tr>
+                <tr><td><code>date</code></td><td>string</td><td>Publication date — FK to DAILY_PRICE.date</td></tr>
+                <tr><td><code>title</code></td><td>string</td><td>Article headline</td></tr>
+                <tr><td><code>category</code></td><td>string</td><td>MPOB category (e.g. Market, Production, Export)</td></tr>
+                <tr><td><code>content</code></td><td>string</td><td>Full article body text</td></tr>
+                <tr><td><code>snippet</code></td><td>string</td><td>First ~200 characters for news-card preview</td></tr>
+                <tr><td><code>url</code></td><td>string</td><td>Canonical article URL from MPOB website</td></tr>
+                <tr><td><code>sentiment_label</code></td><td>string</td><td>FinBERT output: "Positive", "Negative", "Neutral"</td></tr>
+                <tr><td><code>sentiment_score</code></td><td>float</td><td>FinBERT confidence-weighted sentiment score [−1, +1]</td></tr>
+                <tr><td><code>scraped_at</code></td><td>ISO timestamp</td><td>When the article was scraped</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SENTIMENT_AGGREGATE -->
+        <div>
+          <h3 class="text-base font-semibold text-teal-700 mb-1">SENTIMENT_AGGREGATE</h3>
+          <p class="text-sm text-slate-600 mb-2">Firestore collection: <code class="bg-slate-100 px-1 rounded">sentiment_aggregates</code> · Document ID: <code class="bg-slate-100 px-1 rounded">{frequency}_{YYYY-MM-DD}</code></p>
+          <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="w-full border-collapse">
+              <thead><tr><th class="text-left">Field</th><th class="text-left">Type</th><th class="text-left">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code></td><td>string</td><td>Composite PK: <code>{frequency}_{date}</code></td></tr>
+                <tr><td><code>date</code></td><td>string</td><td>FK to DAILY_PRICE.date</td></tr>
+                <tr><td><code>frequency</code></td><td>string</td><td>Temporal resolution — "Daily"</td></tr>
+                <tr><td><code>article_count</code></td><td>int</td><td>Number of news articles for this date</td></tr>
+                <tr><td><code>positive_prob</code></td><td>float</td><td>Fraction of articles labeled Positive</td></tr>
+                <tr><td><code>negative_prob</code></td><td>float</td><td>Fraction of articles labeled Negative</td></tr>
+                <tr><td><code>neutral_prob</code></td><td>float</td><td>Fraction of articles labeled Neutral</td></tr>
+                <tr><td><code>sentiment_score</code></td><td>float</td><td>Weighted aggregate sentiment score</td></tr>
+                <tr><td><code>combined_confidence</code></td><td>float</td><td>Mean FinBERT confidence across all articles</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PREDICTION -->
+        <div>
+          <h3 class="text-base font-semibold text-teal-700 mb-1">PREDICTION</h3>
+          <p class="text-sm text-slate-600 mb-2">Firestore collection: <code class="bg-slate-100 px-1 rounded">predictions</code> · Document ID: <code class="bg-slate-100 px-1 rounded">{model}_{variant}_{frequency}_h{horizon}</code></p>
+          <div class="overflow-x-auto rounded-lg border border-slate-200">
+            <table class="w-full border-collapse">
+              <thead><tr><th class="text-left">Field</th><th class="text-left">Type</th><th class="text-left">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code></td><td>string</td><td>Composite PK encoding model config and horizon</td></tr>
+                <tr><td><code>last_actual_date</code></td><td>string</td><td>FK — last known price date used as input</td></tr>
+                <tr><td><code>model</code></td><td>string</td><td>ML algorithm: "xgboost", "random_forest", "arimax", "sarimax"</td></tr>
+                <tr><td><code>variant</code></td><td>string</td><td>Optimization method: "base", "csa", "bayesian"</td></tr>
+                <tr><td><code>frequency</code></td><td>string</td><td>Data frequency: "Daily"</td></tr>
+                <tr><td><code>horizon</code></td><td>int</td><td>Forecast steps ahead: 1 to 7</td></tr>
+                <tr><td><code>last_actual_price</code></td><td>float</td><td>Most recent known CPO closing price (MYR/tonne)</td></tr>
+                <tr><td><code>predicted_date</code></td><td>string</td><td>Date of the forecasted price</td></tr>
+                <tr><td><code>predicted_price</code></td><td>float</td><td>Forecasted CPO closing price (MYR/tonne)</td></tr>
+                <tr><td><code>mape</code></td><td>float</td><td>Mean Absolute Percentage Error (%) on test set</td></tr>
+                <tr><td><code>r2</code></td><td>float</td><td>R² coefficient of determination on test set</td></tr>
+                <tr><td><code>rmse</code></td><td>float</td><td>Root Mean Squared Error on test set</td></tr>
+                <tr><td><code>directional_accuracy</code></td><td>float</td><td>% of correct up/down movement predictions</td></tr>
+                <tr><td><code>computed_at</code></td><td>ISO timestamp</td><td>When the prediction was generated by the scheduler</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Relationships -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Relationship Descriptions</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th class="text-left">Relationship</th><th class="text-left">Cardinality</th><th class="text-left">Description</th></tr></thead>
+          <tbody>
+            <tr><td>DAILY_PRICE → HMM_STATE</td><td>One-to-Many</td><td>One price date maps to one HMM state per frequency. Currently only Daily frequency gives a 1:1 effective mapping.</td></tr>
+            <tr><td>DAILY_PRICE → SENTIMENT_AGGREGATE</td><td>One-to-Many</td><td>One price date has one sentiment aggregate per frequency, aggregated from all news articles on that date.</td></tr>
+            <tr><td>NEWS_ARTICLE → SENTIMENT_AGGREGATE</td><td>Many-to-One</td><td>Multiple news articles published on the same date are folded into a single aggregate feature row.</td></tr>
+            <tr><td>DAILY_PRICE → PREDICTION</td><td>One-to-Many</td><td>One price date can be last_actual_date for up to 84 different model configuration predictions.</td></tr>
+            <tr><td>USER (self)</td><td>N/A</td><td>Users are independent; no ownership or foreign key links to price/prediction data. All data is shared once logged in.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-slate-500 mt-3">
+        <strong>Note:</strong> Firestore is a document-oriented NoSQL database. There are no enforced foreign keys — relationships are maintained by matching <code>date</code> strings across collections.
+        Document IDs are designed as idempotent keys: re-running the scheduler overwrites rather than duplicates documents.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    CPO Price Prediction System · Universitas Bina Nusantara · Thesis Documentation
+  </footer>
+
+</body>
+</html>

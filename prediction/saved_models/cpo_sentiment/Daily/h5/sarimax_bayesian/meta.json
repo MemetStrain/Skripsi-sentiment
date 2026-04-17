@@ -1,0 +1,73 @@
+{
+  "model_type": "sarimax",
+  "feature_cols": [
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "Change_Pct",
+    "Price_t-1",
+    "Price_t-2",
+    "Price_t-3",
+    "Return_t-1",
+    "Return_t-2",
+    "Volume_t-1",
+    "Log_Return",
+    "High_Low_Spread",
+    "Open_Close_Spread",
+    "SMA_3",
+    "SMA_6",
+    "EMA_3",
+    "EMA_6",
+    "RSI",
+    "MACD",
+    "MACD_Signal",
+    "Bollinger_Band_Width",
+    "Article_Count",
+    "Positive_Prob",
+    "Negative_Prob",
+    "Neutral_Prob",
+    "Confidence",
+    "Sentiment_Score",
+    "Month_Sin",
+    "Month_Cos",
+    "DayOfWeek_Sin",
+    "DayOfWeek_Cos",
+    "WeekOfYear_Sin",
+    "WeekOfYear_Cos",
+    "Close_lag5",
+    "Close_lag10",
+    "Close_lag20",
+    "Sentiment_Score_lag5",
+    "Sentiment_Score_lag10",
+    "Sentiment_Score_lag20",
+    "Sentiment_x_Return"
+  ],
+  "exog_indices": [
+    17,
+    6,
+    35,
+    33,
+    18,
+    34,
+    36,
+    37,
+    30,
+    22
+  ],
+  "params": {
+    "order": [
+      0,
+      0,
+      0
+    ],
+    "seasonal_order": [
+      1,
+      0,
+      2,
+      5
+    ]
+  },
+  "saved_at": "2026-04-14T15:28:43.385551"
+}

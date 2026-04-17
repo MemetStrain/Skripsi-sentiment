@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Activity Diagrams — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20 }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">CPO Price Prediction System · Thesis Documentation</p>
+      <h1 class="text-2xl font-bold mt-1">Activity Diagrams</h1>
+      <p class="text-teal-100 text-sm mt-1">Four process flows: authentication, dashboard load, prediction request, and daily scheduler pipeline</p>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="#auth" class="nav-pill">1. User Authentication</a>
+    <a href="#dashboard" class="nav-pill">2. Dashboard Load</a>
+    <a href="#prediction" class="nav-pill">3. Prediction Request</a>
+    <a href="#scheduler" class="nav-pill">4. Daily Scheduler Pipeline</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-16">
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 1. User Authentication Flow -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="auth">
+      <h2 class="text-xl font-semibold section-heading">1. User Authentication Flow</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Covers registration, login, session management, and logout. The system uses a custom Firestore auth backend — there is no Django ORM or SQL database for users.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    A([Start]) --> B{User has\nan account?}
+
+    B -->|No| REG1[Navigate to /register/]
+    B -->|Yes| LOG1[Navigate to /login/]
+
+    REG1 --> REG2[Fill in username,\nemail, password]
+    REG2 --> REG3{Validate input}
+    REG3 -->|Email already exists| REG4[Show error:\nEmail taken]
+    REG4 --> REG2
+    REG3 -->|Password too short| REG5[Show error:\nPassword less than 8 chars]
+    REG5 --> REG2
+    REG3 -->|Valid| REG6[Hash password\nmake_password PBKDF2-SHA256]
+    REG6 --> REG7[Create document\nin Firestore users collection]
+    REG7 --> LOG1
+
+    LOG1 --> LOG2[Fill in email, password]
+    LOG2 --> LOG3[POST /login/]
+    LOG3 --> LOG4{Query Firestore\nfor email match}
+    LOG4 -->|No user found| LOG5[Show error:\nInvalid credentials]
+    LOG5 --> LOG2
+    LOG4 -->|User found| LOG6{check_password\nagainst hash}
+    LOG6 -->|Mismatch| LOG5
+    LOG6 -->|Match| LOG7[Write uid, username, email\nto signed session cookie]
+    LOG7 --> LOG8[Update last_login\nin Firestore]
+    LOG8 --> LOG9[Redirect to /dashboard/\nor next param]
+
+    LOG9 --> DASH([Dashboard])
+    DASH --> LOGOUT{User clicks\nLogout?}
+    LOGOUT -->|No| DASH
+    LOGOUT -->|Yes| OUT1[POST /logout/]
+    OUT1 --> OUT2[Flush session cookie]
+    OUT2 --> LOG1
+        </pre>
+      </div>
+
+      <div class="sub-heading">Activity Step Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Step</th><th>Actor</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>User has an account?</td><td>User</td><td>Branch point directing to register or login path</td></tr>
+            <tr><td>Fill registration form</td><td>User</td><td>Enters username, email, and password on <code>/register/</code></td></tr>
+            <tr><td>Validate input</td><td>System</td><td>Checks for duplicate email (Firestore query) and password length ≥ 8</td></tr>
+            <tr><td>Show error: Email taken</td><td>System</td><td>Re-renders <code>/register/</code> with validation error; no Firestore write</td></tr>
+            <tr><td>Hash password</td><td>System</td><td>Calls Django <code>make_password()</code> → PBKDF2-SHA256 hash string</td></tr>
+            <tr><td>Create user in Firestore</td><td>System</td><td>Writes new document to <code>users</code> collection with <code>is_active=True</code></td></tr>
+            <tr><td>Fill login form</td><td>User</td><td>Enters email and password on <code>/login/</code></td></tr>
+            <tr><td>Query Firestore for email</td><td>System</td><td><code>users.where("email", "==", email_lower).limit(1)</code></td></tr>
+            <tr><td>check_password</td><td>System</td><td>Django <code>check_password(submitted, stored_hash)</code></td></tr>
+            <tr><td>Write session cookie</td><td>System</td><td>Stores <code>_uid</code>, <code>_username</code>, <code>_email</code> in signed Django session</td></tr>
+            <tr><td>Update last_login</td><td>System</td><td>Updates Firestore <code>users</code> document with current timestamp</td></tr>
+            <tr><td>Redirect to dashboard</td><td>System</td><td>HTTP 302 to <code>/</code> or to <code>?next=</code> destination</td></tr>
+            <tr><td>Flush session cookie</td><td>System</td><td><code>request.session.flush()</code> — invalidates the signed cookie</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Key files: <code>website/web/views.py</code> (login_view, register_view, logout_view) · <code>website/web/auth_backend.py</code></p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 2. Dashboard Load Flow -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="dashboard" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">2. Dashboard Load Flow</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        What happens when an authenticated user navigates to <code>/</code>: authentication check, two Firestore queries, statistics computation, JSON serialisation, template rendering, and client-side chart initialisation.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    A([User navigates to /]) --> B{Session cookie\nvalid?}
+    B -->|No| C[Redirect to /login/]
+    B -->|Yes| D[FirestoreAuthMiddleware\nsets request.user from cookie]
+
+    D --> E[Query Firestore daily_prices\nlast 90 days ordered by date desc]
+    E --> F[Query Firestore hmm_states\nfor same date range]
+
+    F --> G[Compute price statistics\nfrom price list]
+    G --> G1[current_price = prices 0 close]
+    G --> G2[max_price = max of all closes]
+    G --> G3[min_price = min of all closes]
+    G --> G4[avg_price = mean of all closes]
+
+    G1 & G2 & G3 & G4 --> H[Serialize to JSON\nfor Chart.js]
+
+    H --> H1[dates array\nYYYY-MM-DD strings]
+    H --> H2[close_prices array\nfloats]
+    H --> H3[hmm_states dict\ndate to state label]
+
+    H1 & H2 & H3 --> I[Render dashboard.html\nwith template context]
+
+    I --> J[Browser receives HTML + inline JSON]
+    J --> K[Chart.js initialises\nline chart from close_prices]
+    K --> L[Annotation plugin draws\nHMM state background bands]
+
+    L --> M[User views dashboard]
+
+    M --> N{User selects\nmodel, variant,\nhorizon}
+    N -->|Clicks Get Prediction| O[JS calls GET /api/prediction/\nwith query params]
+    O --> P[Update prediction panel\nwith returned JSON]
+    P --> M
+
+    M --> Q{User navigates\nto /news/}
+    Q -->|Yes| R([News Page])
+    Q -->|No| M
+        </pre>
+      </div>
+
+      <div class="sub-heading">Activity Step Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Step</th><th>Actor</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>Session cookie valid?</td><td>System</td><td><code>FirestoreAuthMiddleware</code> checks signed cookie on every request</td></tr>
+            <tr><td>Redirect to /login/</td><td>System</td><td>302 redirect; <code>?next=/</code> appended so user returns after login</td></tr>
+            <tr><td>Set request.user</td><td>System</td><td>Builds <code>FirestoreUser</code> from cookie values; uses in-memory UID cache</td></tr>
+            <tr><td>Query daily_prices</td><td>System</td><td>Firestore <code>daily_prices</code> ordered by <code>date</code> descending, limit 90</td></tr>
+            <tr><td>Query hmm_states</td><td>System</td><td>Firestore <code>hmm_states</code> where <code>frequency == "Daily"</code> and <code>date in [date_list]</code></td></tr>
+            <tr><td>Compute price statistics</td><td>System</td><td>Python list comprehension over the 90 price documents</td></tr>
+            <tr><td>Serialize to JSON</td><td>System</td><td><code>json.dumps()</code> of arrays; injected as <code>{{ chart_data|safe }}</code> in template</td></tr>
+            <tr><td>Render dashboard.html</td><td>System</td><td>Django template engine renders with full context dict</td></tr>
+            <tr><td>Chart.js initialises</td><td>Browser</td><td>Parses inline JSON, builds <code>Chart</code> instance with line dataset</td></tr>
+            <tr><td>Annotation plugin draws bands</td><td>Browser</td><td>Groups consecutive same-state dates; draws colored background rectangles</td></tr>
+            <tr><td>User selects prediction params</td><td>User</td><td>Dropdown selectors in the prediction control panel</td></tr>
+            <tr><td>JS calls /api/prediction/</td><td>Browser</td><td><code>fetch()</code> with query string parameters</td></tr>
+            <tr><td>Update prediction panel</td><td>Browser</td><td>DOM manipulation to show price, date, and metrics</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Key files: <code>website/web/views.py</code> (dashboard) · <code>website/web/auth_backend.py</code> · <code>website/web/templates/dashboard.html</code></p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 3. Prediction Request Flow -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="prediction" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">3. Prediction Request Flow</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        The user interaction on the dashboard that triggers an API call to fetch a pre-computed prediction from Firestore. No ML inference happens at request time — results are always pre-computed by the scheduler.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    A([User on Dashboard]) --> B[User selects:\nModel, Variant, Horizon]
+
+    B --> C{Validates\nselection}
+    C -->|Horizon not selected| D[Show warning:\nPlease select all options]
+    D --> B
+
+    C -->|All selected| E[JavaScript calls\nGET /api/prediction/\nmodel=X and variant=Y and frequency=Daily and horizon=N]
+
+    E --> F[Show loading spinner]
+    F --> G[Django prediction_api view\nreceives GET request]
+
+    G --> H[Extract query params:\nmodel, variant, frequency, horizon]
+    H --> I[Build Firestore document ID:\nmodel_variant_frequency_hN]
+    I --> J[Query Firestore predictions collection\nfor that document ID]
+
+    J --> K{Document\nfound?}
+    K -->|Not found| L[Return JSON:\nsuccess=false error=No prediction available]
+    L --> M[Dashboard shows error message]
+    M --> A
+
+    K -->|Found| N[Extract fields:\npredicted_price, predicted_date,\nmape, r2, directional_accuracy,\ncomputed_at]
+    N --> O[Return JSON:\nsuccess=true with all fields]
+
+    O --> P[Hide loading spinner]
+    P --> Q[Update prediction result card:\nPredicted Price\nPredicted Date\nMAPE\nDirectional Accuracy]
+    Q --> R[Update model info card:\nModel name, Variant, Horizon\nComputed at timestamp]
+
+    R --> S([User views prediction result])
+        </pre>
+      </div>
+
+      <div class="sub-heading">Activity Step Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Step</th><th>Actor</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>User selects model/variant/horizon</td><td>User</td><td>Three dropdowns in the prediction control panel on the dashboard</td></tr>
+            <tr><td>Validates selection</td><td>Browser JS</td><td>Checks all three dropdowns have a non-empty value before calling API</td></tr>
+            <tr><td>Show warning</td><td>Browser JS</td><td>Inline validation message; no API call made until all fields selected</td></tr>
+            <tr><td>Call /api/prediction/</td><td>Browser JS</td><td><code>fetch()</code> GET request with <code>URLSearchParams</code></td></tr>
+            <tr><td>Show loading spinner</td><td>Browser JS</td><td>CSS spinner displayed while awaiting network response</td></tr>
+            <tr><td>Django receives request</td><td>System</td><td><code>prediction_api()</code> view decorated with <code>@firestore_login_required</code></td></tr>
+            <tr><td>Extract query params</td><td>System</td><td><code>request.GET.get("model")</code> for each parameter</td></tr>
+            <tr><td>Build document ID</td><td>System</td><td>String concatenation: <code>f"{model}_{variant}_{frequency}_h{horizon}"</code></td></tr>
+            <tr><td>Query Firestore predictions</td><td>System</td><td><code>.collection("predictions").document(doc_id).get()</code> — single-document O(1) read</td></tr>
+            <tr><td>Document not found</td><td>System</td><td>Returns <code>{"success": false, "error": "..."}</code> with HTTP 200</td></tr>
+            <tr><td>Extract fields</td><td>System</td><td><code>doc.to_dict()</code> then pick required keys</td></tr>
+            <tr><td>Return JSON</td><td>System</td><td><code>JsonResponse({"success": True, ...})</code></td></tr>
+            <tr><td>Update prediction card</td><td>Browser JS</td><td>DOM manipulation using returned field values; spinner hidden</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Key files: <code>website/web/views.py</code> (prediction_api) · <code>website/web/templates/dashboard.html</code> JS section</p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 4. Daily Scheduler Pipeline -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="scheduler" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">4. Daily Scheduler Pipeline</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        The automated 6-step pipeline that runs once per day via Cloud Run. Covers price fetching, news scraping, FinBERT sentiment analysis, HMM state updates, 56-combination ML prediction generation, and Firestore writes.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    A([Cloud Scheduler Trigger\ndaily cron]) --> B[scheduler/main.py\n--mode daily]
+
+    B --> C{Mode?}
+    C -->|initial| INIT[Load all CSVs\nCheckpointed bulk load]
+    C -->|daily| D
+
+    INIT --> D
+
+    D --> E[Step 1: Fetch Prices\nscheduler/price_fetcher.py]
+    E --> E1{New data\nfrom API?}
+    E1 -->|Yes| E2[Write new daily_prices\ndocuments to Firestore]
+    E1 -->|No| E3[Log: prices up to date]
+    E2 --> F
+    E3 --> F
+
+    F[Step 2: Scrape News\nscheduler/news_extractor.py] --> F1[GET MPOB website\nBeautifulSoup parsing]
+    F1 --> F2{New articles\nfound?}
+    F2 -->|Yes| F3[Deduplicate by MD5 url]
+    F3 --> F4[Write new news_articles\nto Firestore]
+    F2 -->|No| F5[Log: news up to date]
+    F4 --> G
+    F5 --> G
+
+    G[Step 3: Sentiment Analysis\nscheduler/sentiment_runner.py] --> G1[Find articles without\nsentiment_label]
+    G1 --> G2{Unlabelled\narticles?}
+    G2 -->|Yes| G3[Run FinBERT inference\nGPU-accelerated batches]
+    G3 --> G4[Update news_articles\nwith labels and scores]
+    G4 --> G5[Recompute sentiment_aggregates\nfor affected dates]
+    G5 --> G6[Write to Firestore]
+    G2 -->|No| G7[Log: sentiment up to date]
+    G6 --> H
+    G7 --> H
+
+    H[Step 4: Update HMM States\nscheduler/hmm_updater.py] --> H1[Load all daily_prices\nfrom Firestore]
+    H1 --> H2[Compute log-returns]
+    H2 --> H3[Fit GaussianHMM\n2-5 states BIC selection]
+    H3 --> H4[Label states:\nBullish Bearish Neutral\nbased on mean return]
+    H4 --> H5[Write all hmm_states\nto Firestore]
+    H5 --> I
+
+    I[Step 5: Compute Predictions\nscheduler/prediction_updater.py] --> I1[Build feature dataset\ncreate_prediction_dataset.py]
+    I1 --> I2[Merge price and HMM and sentiment\n60+ engineered features]
+
+    I2 --> I3[For each of 56 combinations\n4 models x 3 variants x 7 horizons]
+
+    I3 --> I4{Model type?}
+    I4 -->|XGBoost or\nRandom Forest| I5[Load cached model\nfrom GCS or retrain]
+    I4 -->|ARIMAX or\nSARIMAX| I6[Fit statsmodels\non latest data window]
+
+    I5 --> I7{Variant?}
+    I6 --> I7
+
+    I7 -->|base| I8[Use default\nhyperparameters]
+    I7 -->|csa| I9[Run Crow Search Algorithm\ncsa_hyperparameter_optimizer.py]
+    I7 -->|bayesian| I10[Run Bayesian Optimisation\nbayesian_optimizer.py]
+
+    I8 --> I11[Generate h-step\nahead prediction]
+    I9 --> I11
+    I10 --> I11
+
+    I11 --> I12[Compute test set metrics\nMAPE R2 RMSE DA]
+    I12 --> I13{More combinations?}
+    I13 -->|Yes| I3
+    I13 -->|No| I14[56 predictions complete]
+
+    I14 --> J[Step 6: Write to Firestore\nscheduler/firestore_writer.py]
+    J --> J1[Chunk into 500-doc batches\nFirestore batch limit]
+    J1 --> J2[Commit batches\nidempotent overwrite]
+    J2 --> K([Pipeline complete\nDashboard data refreshed])
+        </pre>
+      </div>
+
+      <div class="sub-heading">Activity Step Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Step</th><th>Actor</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>Cloud Scheduler Trigger</td><td>GCP</td><td>GCP Cloud Scheduler fires HTTP request to Cloud Run endpoint once per day</td></tr>
+            <tr><td>scheduler/main.py</td><td>System</td><td>Entry point; parses <code>--mode</code> argument; dispatches to each step sequentially</td></tr>
+            <tr><td>Fetch Prices</td><td>System</td><td>Calls Investing.com API for latest CPO close; writes only new date documents</td></tr>
+            <tr><td>Scrape News</td><td>System</td><td>Multi-threaded BeautifulSoup scraper against MPOB website</td></tr>
+            <tr><td>Deduplicate by MD5(url)</td><td>System</td><td><code>hashlib.md5(url.encode()).hexdigest()</code> used as Firestore doc ID — prevents duplicates</td></tr>
+            <tr><td>FinBERT Sentiment</td><td>System</td><td><code>AutoModelForSequenceClassification</code> (ProsusAI/finbert); batched GPU inference on article titles + content</td></tr>
+            <tr><td>Recompute aggregates</td><td>System</td><td>Groups news by date; computes <code>positive_prob</code>, <code>negative_prob</code>, <code>neutral_prob</code>, weighted <code>sentiment_score</code></td></tr>
+            <tr><td>Fit GaussianHMM</td><td>System</td><td><code>hmmlearn.GaussianHMM</code>; number of states selected by BIC criterion across 2–5 candidates</td></tr>
+            <tr><td>Label states</td><td>System</td><td>States relabeled post-fit: highest mean-return state = Bullish, lowest = Bearish</td></tr>
+            <tr><td>Build feature dataset</td><td>System</td><td><code>create_prediction_dataset.py</code> merges three sources; engineers lag features, sin/cos cyclical features, technical returns</td></tr>
+            <tr><td>56 combinations loop</td><td>System</td><td>Outer loop: 4 models × 3 variants × 7 horizons</td></tr>
+            <tr><td>CSA optimization</td><td>System</td><td>Stochastic Crow Search metaheuristic (<code>prediction/csa_hyperparameter_optimizer.py</code>)</td></tr>
+            <tr><td>Bayesian optimization</td><td>System</td><td>Gaussian Process surrogate model (<code>prediction/bayesian_optimizer.py</code>)</td></tr>
+            <tr><td>Compute metrics</td><td>System</td><td>Evaluated on held-out test split (15% of historical data, newest dates): MAPE, R², RMSE, Directional Accuracy</td></tr>
+            <tr><td>Write to Firestore</td><td>System</td><td><code>firestore_writer.py</code>; uses <code>batch.set()</code>; document ID is deterministic string → idempotent overwrite</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">
+        Key files: <code>scheduler/main.py</code> · <code>scheduler/price_fetcher.py</code> · <code>scheduler/news_extractor.py</code> · <code>scheduler/sentiment_runner.py</code> · <code>scheduler/hmm_updater.py</code> · <code>scheduler/prediction_updater.py</code> · <code>scheduler/firestore_writer.py</code> · <code>prediction/horizon_forecast.py</code>
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    CPO Price Prediction System · Universitas Bina Nusantara · Thesis Documentation
+  </footer>
+
+</body>
+</html>

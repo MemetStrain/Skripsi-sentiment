@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sequence Diagrams — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        noteBkgColor: '#fefce8',
+        noteTextColor: '#78350f',
+        noteBorderColor: '#fde68a',
+        activationBkgColor: '#ccfbf1',
+        activationBorderColor: '#0d9488',
+        sequenceNumberColor: '#0f766e',
+        actorBkg: '#f0fdfa',
+        actorBorder: '#0d9488',
+        actorTextColor: '#134e4a',
+        actorLineColor: '#94a3b8',
+        labelBoxBkgColor: '#f0fdfa',
+        labelBoxBorderColor: '#0d9488',
+        labelTextColor: '#134e4a',
+        loopTextColor: '#134e4a',
+        signalColor: '#475569',
+        signalTextColor: '#1e293b',
+      },
+      sequence: { diagramMarginX: 20, diagramMarginY: 20, actorMargin: 50, width: 160, height: 50, boxMargin: 10, messageMargin: 35, mirrorActors: false, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">CPO Price Prediction System · Thesis Documentation</p>
+      <h1 class="text-2xl font-bold mt-1">Sequence Diagrams</h1>
+      <p class="text-teal-100 text-sm mt-1">Four interaction flows: registration, login + dashboard load, prediction API call, and daily scheduler run</p>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="#registration" class="nav-pill">1. User Registration</a>
+    <a href="#login" class="nav-pill">2. Login + Dashboard Load</a>
+    <a href="#prediction" class="nav-pill">3. Prediction API Call</a>
+    <a href="#scheduler" class="nav-pill">4. Daily Scheduler Run</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-16">
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 1. User Registration -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="registration">
+      <h2 class="text-xl font-semibold section-heading">1. User Registration</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        The full message exchange between the browser, Django view, and Firestore when a visitor creates a new account. Covers both the happy path and the two error alternatives (duplicate email, weak password).
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+sequenceDiagram
+    actor U as User (Browser)
+    participant DV as Django View
+    participant FS as Firestore users
+
+    U->>DV: GET /register/
+    DV-->>U: Render register.html (empty form)
+
+    U->>DV: POST /register/ username, email, password
+
+    DV->>DV: Validate password length >= 8
+
+    alt Password too short
+        DV-->>U: Re-render form with error Password must be at least 8 characters
+    end
+
+    DV->>FS: Query where email == submitted_email
+
+    alt Email already registered
+        FS-->>DV: Returns existing document
+        DV-->>U: Re-render form with error Email already registered
+    else Email available
+        FS-->>DV: Returns empty result
+
+        DV->>DV: make_password hashes to PBKDF2-SHA256
+
+        DV->>FS: collection users add uid username email password_hash created_at is_active true
+
+        FS-->>DV: Document reference auto UID
+
+        DV-->>U: HTTP 302 redirect to /login/
+    end
+        </pre>
+      </div>
+
+      <div class="sub-heading">Message Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>From</th><th>To</th><th>Message</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>User</td><td>Django View</td><td>GET /register/</td><td>User navigates to registration page</td></tr>
+            <tr><td>2</td><td>Django View</td><td>User</td><td>render register.html</td><td>Empty form rendered from <code>website/web/templates/register.html</code></td></tr>
+            <tr><td>3</td><td>User</td><td>Django View</td><td>POST /register/</td><td>Form submission with <code>username</code>, <code>email</code>, <code>password</code> fields</td></tr>
+            <tr><td>4</td><td>Django View</td><td>Django View</td><td>validate password length</td><td>Local check: <code>len(password) &lt; 8</code> → error; no Firestore read needed</td></tr>
+            <tr><td>5</td><td>Django View</td><td>Firestore</td><td>query email</td><td><code>users.where("email", "==", email.lower()).limit(1)</code></td></tr>
+            <tr><td>6</td><td>Firestore</td><td>Django View</td><td>existing doc</td><td>If a document is returned, the email is already taken</td></tr>
+            <tr><td>7</td><td>Django View</td><td>User</td><td>re-render with error</td><td>Template re-rendered with <code>{"error": "Email already registered"}</code> in context</td></tr>
+            <tr><td>8</td><td>Django View</td><td>Django View</td><td>make_password()</td><td>Django's <code>hashers.make_password()</code> → PBKDF2-SHA256 hash string</td></tr>
+            <tr><td>9</td><td>Django View</td><td>Firestore</td><td>.add({...})</td><td>New <code>users</code> document written with all required fields</td></tr>
+            <tr><td>10</td><td>Firestore</td><td>Django View</td><td>document reference</td><td>Returns the auto-generated UID for the new document</td></tr>
+            <tr><td>11</td><td>Django View</td><td>User</td><td>302 /login/</td><td>Redirect to login page after successful registration</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Key files: <code>website/web/views.py</code> (register_view) · <code>website/web/auth_backend.py</code></p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 2. Login + Dashboard Load -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="login" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">2. User Login and Dashboard Load</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        A combined flow covering login (with its Firestore credential check and session cookie creation) followed immediately by the dashboard page load (two Firestore queries, stats computation, template render, and client-side Chart.js initialisation).
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+sequenceDiagram
+    actor U as User (Browser)
+    participant MW as Auth Middleware
+    participant DV as Django View
+    participant FS as Firestore
+    participant TM as Template Engine
+
+    U->>DV: POST /login/ email, password
+
+    DV->>FS: Query users where email == submitted_email
+
+    alt User not found
+        FS-->>DV: Empty result
+        DV-->>U: Re-render login.html with error Invalid credentials
+    else User found
+        FS-->>DV: User document uid username password_hash is_active
+
+        DV->>DV: check_password(submitted, hash)
+
+        alt Password mismatch
+            DV-->>U: Re-render login.html with error
+        else Password correct
+            DV->>DV: Write _uid _username _email to signed session cookie
+
+            DV->>FS: Update users uid last_login = now()
+
+            DV-->>U: HTTP 302 redirect to /dashboard/
+        end
+    end
+
+    U->>MW: GET /dashboard/ with session cookie
+
+    MW->>MW: Decode signed cookie extract _uid _username _email
+
+    MW->>MW: Check in-memory UID cache
+
+    alt UID not in cache
+        MW->>FS: users uid .get()
+        FS-->>MW: User document
+        MW->>MW: Add UID to in-memory cache
+    end
+
+    MW->>MW: Build FirestoreUser set request.user
+
+    MW->>DV: Pass request to dashboard()
+
+    DV->>FS: daily_prices order_by date desc limit 90
+    FS-->>DV: 90 price documents
+
+    DV->>FS: hmm_states where frequency==Daily and date in date_list
+    FS-->>DV: HMM state documents
+
+    DV->>DV: Compute current max min avg price
+
+    DV->>DV: Serialize prices and HMM states to JSON arrays
+
+    DV->>TM: render dashboard.html with context
+    TM-->>U: Full HTML page with inline JSON
+
+    U->>U: Chart.js parses inline JSON draws price line chart
+
+    U->>U: Annotation plugin draws HMM state colored bands
+        </pre>
+      </div>
+
+      <div class="sub-heading">Message Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>From</th><th>To</th><th>Message</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>User</td><td>Django View</td><td>POST /login/</td><td>Email + password submitted from login form</td></tr>
+            <tr><td>2</td><td>Django View</td><td>Firestore</td><td>query users by email</td><td>Exact-match query on lowercased email field</td></tr>
+            <tr><td>3</td><td>Firestore</td><td>Django View</td><td>user document</td><td>Returns dict with <code>password_hash</code>, <code>uid</code>, <code>is_active</code></td></tr>
+            <tr><td>4</td><td>Django View</td><td>Django View</td><td>check_password()</td><td>Django's <code>hashers.check_password(submitted, hash)</code></td></tr>
+            <tr><td>5</td><td>Django View</td><td>Django View</td><td>write session cookie</td><td><code>request.session["_uid"] = uid</code> etc; Django signs the cookie via <code>SECRET_KEY</code></td></tr>
+            <tr><td>6</td><td>Django View</td><td>Firestore</td><td>update last_login</td><td><code>users.document(uid).update({"last_login": now()})</code></td></tr>
+            <tr><td>7</td><td>Django View</td><td>User</td><td>302 /dashboard/</td><td>Redirect with <code>Set-Cookie</code> header for the session</td></tr>
+            <tr><td>8</td><td>User</td><td>Auth Middleware</td><td>GET /dashboard/</td><td>Browser automatically sends the session cookie</td></tr>
+            <tr><td>9</td><td>Auth Middleware</td><td>Auth Middleware</td><td>decode cookie</td><td><code>request.session.get("_uid")</code></td></tr>
+            <tr><td>10</td><td>Auth Middleware</td><td>Auth Middleware</td><td>check UID cache</td><td>Module-level dict <code>{uid: FirestoreUser}</code> — avoids Firestore read on every request</td></tr>
+            <tr><td>11</td><td>Auth Middleware</td><td>Firestore</td><td>users/{uid}.get()</td><td>Only on cache miss — fetches user document to build <code>FirestoreUser</code></td></tr>
+            <tr><td>12</td><td>Auth Middleware</td><td>Auth Middleware</td><td>set request.user</td><td>Attaches <code>FirestoreUser</code> instance to request; view can then access <code>request.user.username</code> etc</td></tr>
+            <tr><td>13</td><td>Auth Middleware</td><td>Django View</td><td>pass request</td><td>Middleware chain continues to the <code>dashboard()</code> view</td></tr>
+            <tr><td>14</td><td>Django View</td><td>Firestore</td><td>daily_prices query</td><td><code>.order_by("date", direction=DESCENDING).limit(90)</code></td></tr>
+            <tr><td>15</td><td>Django View</td><td>Firestore</td><td>hmm_states query</td><td><code>.where("date", "in", date_list)</code> — parallel read to price query</td></tr>
+            <tr><td>16</td><td>Django View</td><td>Django View</td><td>compute stats</td><td>Python <code>max()</code>, <code>min()</code>, <code>sum()/len()</code> over 90-doc list</td></tr>
+            <tr><td>17</td><td>Django View</td><td>Django View</td><td>serialize to JSON</td><td><code>json.dumps({"dates": [...], "prices": [...], "states": {...}})</code></td></tr>
+            <tr><td>18</td><td>Django View</td><td>Template Engine</td><td>render dashboard.html</td><td>Django <code>render(request, "dashboard.html", context)</code></td></tr>
+            <tr><td>19</td><td>Template Engine</td><td>User</td><td>HTML with inline JSON</td><td><code>{{ chart_data|safe }}</code> outputs the JSON directly into a <code>&lt;script&gt;</code> tag</td></tr>
+            <tr><td>20</td><td>Browser</td><td>Browser</td><td>Chart.js init</td><td>JavaScript parses inline JSON and instantiates a Chart.js line chart</td></tr>
+            <tr><td>21</td><td>Browser</td><td>Browser</td><td>draw HMM bands</td><td>Annotation plugin groups consecutive same-state dates into colored background rectangles</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Key files: <code>website/web/views.py</code> · <code>website/web/auth_backend.py</code> · <code>website/web/templates/dashboard.html</code></p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 3. Prediction API Call -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="prediction" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">3. Prediction API Call</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        The interaction when a logged-in user requests a prediction from the dashboard. The web server never runs ML inference — it performs a single Firestore document read and returns the pre-computed result as JSON.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+sequenceDiagram
+    actor U as User (Browser)
+    participant JS as Dashboard JavaScript
+    participant MW as Auth Middleware
+    participant DV as Django View prediction_api
+    participant FS as Firestore predictions
+
+    U->>JS: Selects Model Variant Horizon and clicks Get Prediction
+
+    JS->>JS: Validate all dropdowns selected
+
+    alt Missing selection
+        JS-->>U: Show inline warning Please select all options
+    else All selected
+        JS->>JS: Show loading spinner
+
+        JS->>DV: GET /api/prediction/ model=xgboost variant=csa frequency=Daily horizon=3
+
+        MW->>MW: Verify session cookie set request.user
+
+        alt Unauthenticated
+            DV-->>JS: HTTP 302 redirect to /login/
+        else Authenticated
+            DV->>DV: Extract query params model variant frequency horizon
+
+            DV->>DV: Build document ID xgboost_csa_Daily_h3
+
+            DV->>FS: predictions.document xgboost_csa_Daily_h3 .get()
+
+            alt Document not found
+                FS-->>DV: DocumentSnapshot exists=False
+                DV-->>JS: JSON success false error No prediction available
+                JS-->>U: Show error card
+            else Document found
+                FS-->>DV: DocumentSnapshot with all fields
+
+                DV->>DV: Extract predicted_price predicted_date mape r2 directional_accuracy computed_at
+
+                DV-->>JS: JSON success true model xgboost variant csa horizon 3 predicted_price 3842.50 predicted_date 2025-04-18 mape 2.14 r2 0.91 directional_accuracy 68.5 computed_at timestamp
+
+                JS->>JS: Hide loading spinner
+
+                JS->>U: Update DOM prediction result card model info card metrics display
+            end
+        end
+    end
+        </pre>
+      </div>
+
+      <div class="sub-heading">Message Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>From</th><th>To</th><th>Message</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>User</td><td>JS</td><td>selects + clicks</td><td>User interaction with three dropdowns and the "Get Prediction" button</td></tr>
+            <tr><td>2</td><td>JS</td><td>JS</td><td>validate dropdowns</td><td>Checks <code>select.value !== ""</code> for all three selectors</td></tr>
+            <tr><td>3</td><td>JS</td><td>JS</td><td>show spinner</td><td>CSS class toggled to display loading indicator</td></tr>
+            <tr><td>4</td><td>JS</td><td>Django View</td><td>GET /api/prediction/</td><td><code>fetch("/api/prediction/?" + new URLSearchParams({...}))</code></td></tr>
+            <tr><td>5</td><td>Auth Middleware</td><td>Auth Middleware</td><td>verify cookie</td><td><code>FirestoreAuthMiddleware</code> populates <code>request.user</code> before the view runs</td></tr>
+            <tr><td>6</td><td>Auth Middleware</td><td>JS</td><td>302 redirect</td><td>If cookie invalid/missing; JS <code>fetch()</code> follows redirect to login page</td></tr>
+            <tr><td>7</td><td>Django View</td><td>Django View</td><td>extract params</td><td><code>request.GET.get("model", "")</code> for each parameter</td></tr>
+            <tr><td>8</td><td>Django View</td><td>Django View</td><td>build doc ID</td><td><code>f"{model}_{variant}_{frequency}_h{horizon}"</code></td></tr>
+            <tr><td>9</td><td>Django View</td><td>Firestore</td><td>.document(id).get()</td><td>Single-document read — O(1) latency regardless of collection size</td></tr>
+            <tr><td>10</td><td>Firestore</td><td>Django View</td><td>DocumentSnapshot</td><td><code>.exists</code> is <code>False</code> if no such document</td></tr>
+            <tr><td>11</td><td>Django View</td><td>JS</td><td>{success: false}</td><td><code>JsonResponse({"success": False, "error": "..."})</code>; HTTP 200</td></tr>
+            <tr><td>12</td><td>Django View</td><td>Django View</td><td>extract fields</td><td><code>doc.to_dict()</code> then pick required keys</td></tr>
+            <tr><td>13</td><td>Django View</td><td>JS</td><td>{success: true, ...}</td><td><code>JsonResponse({...})</code> with all prediction fields as flat JSON</td></tr>
+            <tr><td>14</td><td>JS</td><td>JS</td><td>hide spinner</td><td>CSS class removed; loading indicator hidden</td></tr>
+            <tr><td>15</td><td>JS</td><td>User</td><td>update DOM</td><td><code>document.getElementById("predicted-price").textContent = ...</code> for each result field</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Key files: <code>website/web/views.py</code> (prediction_api) · <code>website/web/templates/dashboard.html</code> JavaScript section</p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <!-- 4. Daily Scheduler Pipeline Run -->
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="scheduler" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">4. Daily Scheduler Pipeline Run</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        The complete message sequence for the automated daily pipeline: from Cloud Scheduler trigger through six steps (price fetch, news scrape, sentiment analysis, HMM update, 56-prediction ML loop, and Firestore writes) to completion.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+sequenceDiagram
+    participant GCS as Cloud Scheduler
+    participant CR as Cloud Run scheduler/main.py
+    participant API as External APIs
+    participant ML as ML Models
+    participant FS as Firestore
+
+    GCS->>CR: HTTP POST trigger daily cron
+
+    CR->>CR: Parse --mode daily and initialise Firestore client
+
+    Note over CR,FS: Step 1 Prices
+
+    CR->>FS: daily_prices get latest date
+    FS-->>CR: Last stored date
+
+    CR->>API: Fetch CPO prices since last date Investing.com API
+    API-->>CR: New OHLCV rows
+
+    CR->>FS: Batch write new daily_prices documents doc ID = date
+    FS-->>CR: Batch commit ACK
+
+    Note over CR,FS: Step 2 News
+
+    CR->>API: Scrape MPOB news website BeautifulSoup requests
+    API-->>CR: HTML article list
+
+    CR->>CR: Parse articles and deduplicate by MD5 url
+
+    CR->>FS: Batch write new news_articles documents doc ID = MD5
+    FS-->>CR: Batch commit ACK
+
+    Note over CR,ML: Step 3 Sentiment
+
+    CR->>FS: Query news_articles where sentiment_label == null
+    FS-->>CR: Unlabelled articles
+
+    CR->>ML: Run FinBERT inference batched GPU
+    ML-->>CR: sentiment_label and sentiment_score per article
+
+    CR->>FS: Update news_articles with labels
+    CR->>FS: Batch write sentiment_aggregates grouped by date
+    FS-->>CR: Batch commit ACK
+
+    Note over CR,ML: Step 4 HMM States
+
+    CR->>FS: Load all daily_prices full history
+    FS-->>CR: All price documents
+
+    CR->>ML: Compute log-returns and fit GaussianHMM BIC selection and label states
+    ML-->>CR: date to state mapping
+
+    CR->>FS: Batch write all hmm_states doc ID = Daily_YYYY-MM-DD
+    FS-->>CR: Batch commit ACK
+
+    Note over CR,ML: Step 5 Predictions 56 combinations
+
+    CR->>FS: Load prices and HMM and sentiment for feature engineering
+    FS-->>CR: All required documents
+
+    CR->>CR: Build prediction feature dataset create_prediction_dataset.py
+
+    loop For each of 56 model combinations
+        CR->>ML: Train or load model XGBoost RF ARIMAX SARIMAX
+        CR->>ML: Run hyperparameter optimisation CSA or Bayesian if not base
+        ML-->>CR: Optimised model
+
+        CR->>ML: Generate h-step ahead prediction
+        ML-->>CR: predicted_price and predicted_date
+
+        CR->>ML: Evaluate on test split
+        ML-->>CR: mape r2 rmse directional_accuracy
+
+        CR->>FS: Write predictions document doc ID = model_variant_freq_hN
+        FS-->>CR: Write ACK
+    end
+
+    CR-->>GCS: Pipeline complete HTTP 200 response
+        </pre>
+      </div>
+
+      <div class="sub-heading">Message Descriptions</div>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>From</th><th>To</th><th>Message</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Cloud Scheduler</td><td>Cloud Run</td><td>HTTP POST trigger</td><td>GCP Cloud Scheduler fires the daily job via HTTP endpoint</td></tr>
+            <tr><td>2</td><td>Cloud Run</td><td>Cloud Run</td><td>parse args + init</td><td><code>argparse</code> reads <code>--mode daily</code>; Firestore client created with service account credentials</td></tr>
+            <tr><td>3</td><td>Cloud Run</td><td>Firestore</td><td>get latest price date</td><td>Finds most recent <code>daily_prices</code> document date to determine what's missing</td></tr>
+            <tr><td>4</td><td>Cloud Run</td><td>Investing.com API</td><td>fetch prices</td><td>HTTP request for CPO futures OHLCV data since last stored date</td></tr>
+            <tr><td>5</td><td>Cloud Run</td><td>Firestore</td><td>batch write daily_prices</td><td>Uses <code>scheduler/firestore_writer.py</code>; 500-doc batch limit enforced by chunking</td></tr>
+            <tr><td>6</td><td>Cloud Run</td><td>MPOB website</td><td>scrape news</td><td><code>requests.get()</code> + BeautifulSoup; multi-threaded via <code>ThreadPoolExecutor</code></td></tr>
+            <tr><td>7</td><td>Cloud Run</td><td>Cloud Run</td><td>deduplicate</td><td>MD5 hash of URL compared against already-stored document IDs to prevent duplicates</td></tr>
+            <tr><td>8</td><td>Cloud Run</td><td>Firestore</td><td>batch write news_articles</td><td>Document ID = <code>md5(url)</code> ensures idempotent writes</td></tr>
+            <tr><td>9</td><td>Cloud Run</td><td>Firestore</td><td>query unlabelled articles</td><td><code>news_articles.where("sentiment_label", "==", None)</code></td></tr>
+            <tr><td>10</td><td>Cloud Run</td><td>FinBERT (ML)</td><td>run inference</td><td><code>AutoModelForSequenceClassification</code> from HuggingFace; GPU-batched on article text</td></tr>
+            <tr><td>11</td><td>Cloud Run</td><td>Firestore</td><td>update articles + aggregates</td><td>Article-level labels written; then per-date aggregates computed and written to <code>sentiment_aggregates</code></td></tr>
+            <tr><td>12</td><td>Cloud Run</td><td>Firestore</td><td>load all prices</td><td>Full price history needed for GaussianHMM fitting (stateful model)</td></tr>
+            <tr><td>13</td><td>Cloud Run</td><td>HMM (ML)</td><td>fit GaussianHMM</td><td><code>hmmlearn.GaussianHMM</code>; BIC criterion tests 2–5 states; best model selected</td></tr>
+            <tr><td>14</td><td>Cloud Run</td><td>Firestore</td><td>batch write hmm_states</td><td>All states rewritten (entire history) because HMM state labels can shift when re-fitted</td></tr>
+            <tr><td>15</td><td>Cloud Run</td><td>Firestore</td><td>load feature data</td><td>Prices + HMM + sentiment all loaded for <code>create_prediction_dataset.py</code></td></tr>
+            <tr><td>16</td><td>Cloud Run</td><td>Cloud Run</td><td>build feature dataset</td><td>Merges three sources; engineers 60+ lag, return, cyclical, and technical indicator features</td></tr>
+            <tr><td>17</td><td>Cloud Run</td><td>ML Models</td><td>train/load model</td><td>XGBoost/RF: load from GCS cache or retrain; ARIMAX/SARIMAX: always refit on latest window</td></tr>
+            <tr><td>18</td><td>Cloud Run</td><td>ML Models</td><td>hyperparameter opt</td><td>CSA (<code>prediction/csa_hyperparameter_optimizer.py</code>) or Bayesian (<code>prediction/bayesian_optimizer.py</code>)</td></tr>
+            <tr><td>19</td><td>Cloud Run</td><td>ML Models</td><td>generate prediction</td><td>Single h-step-ahead forecast for the next <code>horizon</code> trading days</td></tr>
+            <tr><td>20</td><td>Cloud Run</td><td>ML Models</td><td>evaluate on test split</td><td>15% most-recent data held out; MAPE, R², RMSE, directional accuracy computed</td></tr>
+            <tr><td>21</td><td>Cloud Run</td><td>Firestore</td><td>write predictions doc</td><td><code>predictions.document(f"{model}_{variant}_{freq}_h{h}").set({...})</code> — idempotent overwrite</td></tr>
+            <tr><td>22</td><td>Cloud Run</td><td>Cloud Scheduler</td><td>200 OK</td><td>HTTP 200 response signals job success to Cloud Scheduler for monitoring/alerting</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">
+        Key files: <code>scheduler/main.py</code> · <code>scheduler/price_fetcher.py</code> · <code>scheduler/news_extractor.py</code> · <code>scheduler/sentiment_runner.py</code> · <code>scheduler/hmm_updater.py</code> · <code>scheduler/prediction_updater.py</code> · <code>scheduler/firestore_writer.py</code> · <code>prediction/horizon_forecast.py</code> · <code>prediction/bayesian_optimizer.py</code> · <code>prediction/csa_hyperparameter_optimizer.py</code>
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    CPO Price Prediction System · Universitas Bina Nusantara · Thesis Documentation
+  </footer>
+
+</body>
+</html>

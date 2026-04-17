@@ -28,9 +28,9 @@ DEFAULT_TO    = datetime.today().strftime("%m/%d/%Y")
 CPO_INVESTING_ID = None
 
 INTERVALS = {
-    "Daily":   "D",
-    "Weekly":  "W",
-    "Monthly": "M",
+    "Daily":   "D"
+    # "Weekly":  "W",
+    # "Monthly": "M",
 }
 
 
