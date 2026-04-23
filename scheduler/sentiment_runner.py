@@ -110,13 +110,14 @@ def compute_sentiment_aggregates(articles: list[dict]) -> list[dict]:
 
     for a in articles:
         d = a.get('date', '')
-        if not d:
+        # Skip articles that have no real sentiment data
+        if not d or 'sentiment_score' not in a or 'positive_prob' not in a:
             continue
         bucket = daily[d]
-        bucket['positive_sum'] += a.get('positive_prob', 0.33)
-        bucket['negative_sum'] += a.get('negative_prob', 0.33)
-        bucket['neutral_sum'] += a.get('neutral_prob', 0.34)
-        bucket['score_sum'] += a.get('sentiment_score', 0.0)
+        bucket['positive_sum'] += a['positive_prob']
+        bucket['negative_sum'] += a['negative_prob']
+        bucket['neutral_sum'] += a['neutral_prob']
+        bucket['score_sum'] += a['sentiment_score']
         bucket['count'] += 1
 
     aggregates = []

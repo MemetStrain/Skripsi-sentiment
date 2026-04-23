@@ -51,7 +51,7 @@ def load_news_from_csv(csv_path: str, sentiment_csv_path: Optional[str] = None) 
                 # Normalise date to YYYY-MM-DD
                 raw_date = row.get('Date', row.get('date', ''))
                 norm_date = _normalise_date(raw_date)
-                if not norm_date:
+                if not norm_date or norm_date < '2014-01-01':
                     continue
 
                 content = row.get('Content', row.get('content', ''))
@@ -68,14 +68,39 @@ def load_news_from_csv(csv_path: str, sentiment_csv_path: Optional[str] = None) 
                     'url': row.get('URL', row.get('url', '')).strip(),
                 }
 
-                # Attach pre-computed sentiment if available
-                for col in ('sentiment_label', 'sentiment_score',
-                            'positive_prob', 'negative_prob', 'neutral_prob'):
-                    if col in row:
+                # Attach pre-computed sentiment if available.
+                # The sentiment CSV uses Combined_* column names; map them to
+                # the same field names the daily pipeline produces so Firestore
+                # documents are consistent regardless of load mode.
+                _csv_col_map = {
+                    'Combined_Sentiment':     'sentiment_label',
+                    'Combined_Positive_Prob': 'positive_prob',
+                    'Combined_Negative_Prob': 'negative_prob',
+                    'Combined_Neutral_Prob':  'neutral_prob',
+                    # Also accept already-normalised names (e.g. reprocessed CSVs)
+                    'sentiment_label':        'sentiment_label',
+                    'positive_prob':          'positive_prob',
+                    'negative_prob':          'negative_prob',
+                    'neutral_prob':           'neutral_prob',
+                }
+                for csv_col, field in _csv_col_map.items():
+                    if csv_col not in row:
+                        continue
+                    val = row[csv_col].strip() if isinstance(row[csv_col], str) else row[csv_col]
+                    if field == 'sentiment_label':
+                        article[field] = val
+                    else:
                         try:
-                            article[col] = float(row[col]) if col != 'sentiment_label' else row[col]
+                            article[field] = round(float(val), 4)
                         except (ValueError, TypeError):
-                            article[col] = row[col]
+                            pass
+
+                # Compute sentiment_score consistent with the daily pipeline:
+                # score = positive_prob - negative_prob  (range -1 to +1)
+                if 'positive_prob' in article and 'negative_prob' in article:
+                    article['sentiment_score'] = round(
+                        article['positive_prob'] - article['negative_prob'], 4
+                    )
 
                 if article['url']:
                     articles.append(article)
