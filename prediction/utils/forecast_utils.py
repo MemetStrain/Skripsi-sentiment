@@ -1,13 +1,10 @@
 """
 Shared utilities for multi-horizon CPO price forecasting.
 
-Contains constants and functions that are identical across all four
-horizon forecast files (horizon_forecast.py, horizon_forecast_cpo_hmm.py,
-horizon_forecast_cpo_only.py, horizon_forecast_cpo_sentiment.py).
-
-Phase 1: original function signatures extracted verbatim.
-Phase 2 modifications (log return target, price-space metrics) are applied
-to this file after the smoke test gate passes.
+Used by all four ablation horizon-forecast files
+(horizon_forecast_C{1..4}_*.py). Scope-trimmed to XGBoost-only after the
+2026-04-26 thesis-scope-reduction sweep — Random Forest, ARIMAX, SARIMAX
+helpers and Bayesian optimisation hooks are no longer present.
 """
 
 import json
@@ -18,11 +15,9 @@ from typing import Dict, List, Optional
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import RobustScaler
-from statsmodels.tsa.statespace.sarimax import SARIMAX as SM_SARIMAX
 from xgboost import XGBRegressor
 
 # crow_search_optimizer lives in the prediction/ directory
@@ -46,12 +41,6 @@ BASE_PARAMS = {
         'subsample': 0.9, 'colsample_bytree': 0.9, 'min_child_weight': 1,
         'random_state': RANDOM_STATE,
     },
-    'random_forest': {
-        'n_estimators': 200, 'max_depth': 15, 'min_samples_split': 5,
-        'min_samples_leaf': 2, 'max_features': 0.7, 'random_state': RANDOM_STATE,
-    },
-    'arimax': {'order': (2, 1, 2)},
-    'sarimax': {'order': (1, 1, 1), 'seasonal_order_pdq': (1, 0, 1)},
 }
 
 CSA_PARAM_SPACES = {
@@ -62,26 +51,6 @@ CSA_PARAM_SPACES = {
         ParameterSpec('subsample', 0.6, 1.0, 'continuous'),
         ParameterSpec('colsample_bytree', 0.6, 1.0, 'continuous'),
         ParameterSpec('min_child_weight', 1, 10, 'discrete'),
-    ],
-    'random_forest': [
-        ParameterSpec('n_estimators', 50, 500, 'discrete'),
-        ParameterSpec('max_depth', 5, 30, 'discrete'),
-        ParameterSpec('min_samples_split', 2, 20, 'discrete'),
-        ParameterSpec('min_samples_leaf', 1, 10, 'discrete'),
-        ParameterSpec('max_features', 0.3, 0.9, 'continuous'),
-    ],
-    'arimax': [
-        ParameterSpec('p', 0, 5, 'discrete'),
-        ParameterSpec('d', 0, 2, 'discrete'),
-        ParameterSpec('q', 0, 5, 'discrete'),
-    ],
-    'sarimax': [
-        ParameterSpec('p', 0, 3, 'discrete'),
-        ParameterSpec('d', 0, 2, 'discrete'),
-        ParameterSpec('q', 0, 3, 'discrete'),
-        ParameterSpec('P', 0, 2, 'discrete'),
-        ParameterSpec('D', 0, 1, 'discrete'),
-        ParameterSpec('Q', 0, 2, 'discrete'),
     ],
 }
 
@@ -95,7 +64,7 @@ VAL_CUTOFF = pd.Timestamp('2026-01-01')
 # =============================================================================
 
 def prepare_train_test(df: pd.DataFrame, feature_cols: List[str], test_ratio: float) -> Dict:
-    """Chronological train/test split with RobustScaler. Kept for adaptive_prediction.py."""
+    """Chronological train/test split with RobustScaler."""
     assert df['Close'].isna().sum() == 0, "Close has NaN — alignment broken"
     assert not df.isnull().values.any(), "NaN rows remain — check dropna()"
 
@@ -179,44 +148,13 @@ def prepare_train_test_val(df: pd.DataFrame, feature_cols: List[str],
 # =============================================================================
 
 def create_sklearn_model(model_type: str, params: Optional[Dict] = None):
+    if model_type != 'xgboost':
+        raise ValueError(f"Unsupported model_type '{model_type}' — only 'xgboost' is in scope.")
     p = dict(params or BASE_PARAMS[model_type])
     p.pop('random_state', None)
-    if model_type == 'xgboost':
-        valid_keys = set(XGBRegressor().get_params().keys())
-        filtered = {k: v for k, v in p.items() if k in valid_keys}
-        return XGBRegressor(**filtered, verbosity=0, random_state=RANDOM_STATE)
-    elif model_type == 'random_forest':
-        return RandomForestRegressor(**p, random_state=RANDOM_STATE)
-
-
-def select_top_exog(X, y, n=10):
-    correlations = np.array([abs(np.corrcoef(X[:, i], y)[0, 1])
-                             if np.std(X[:, i]) > 0 else 0
-                             for i in range(X.shape[1])])
-    top_indices = np.argsort(correlations)[-n:]
-    return X[:, top_indices], top_indices.tolist()
-
-
-def train_statsmodels(model_type, y_train, exog_train, order, seasonal_order):
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            model = SM_SARIMAX(
-                endog=y_train, exog=exog_train, order=order,
-                seasonal_order=seasonal_order,
-                enforce_stationarity=False, enforce_invertibility=False,
-            )
-            return model.fit(disp=False, maxiter=200)
-    except Exception:
-        return None
-
-
-def predict_statsmodels(fitted, exog_test):
-    try:
-        forecast = fitted.forecast(steps=len(exog_test), exog=exog_test)
-        return np.array(forecast)
-    except Exception:
-        return np.full(len(exog_test), np.nan)
+    valid_keys = set(XGBRegressor().get_params().keys())
+    filtered = {k: v for k, v in p.items() if k in valid_keys}
+    return XGBRegressor(**filtered, verbosity=0, random_state=RANDOM_STATE)
 
 
 def calculate_metrics(y_true_lr, y_pred_lr, close_anchor):
@@ -253,10 +191,8 @@ def calculate_metrics(y_true_lr, y_pred_lr, close_anchor):
     price_actual    = anchor * np.exp(lr_true_clipped)
     price_predicted = anchor * np.exp(lr_clipped)
 
-    # MAPE in price space
     mape = np.mean(np.abs((price_actual - price_predicted)
                           / (np.abs(price_actual) + 1e-8))) * 100
-    # sMAPE in price space
     smape = np.mean(200 * np.abs(price_actual - price_predicted)
                     / (np.abs(price_actual) + np.abs(price_predicted) + 1e-8))
 
@@ -298,56 +234,7 @@ def csa_objective_sklearn(model_type, X_train, y_train, cv_folds):
     return objective
 
 
-def csa_objective_arimax(y_train, exog_train, cv_folds):
-    def objective(params):
-        order = (int(params['p']), int(params['d']), int(params['q']))
-        tscv = TimeSeriesSplit(n_splits=cv_folds)
-        scores = []
-        for train_idx, val_idx in tscv.split(exog_train):
-            fitted = train_statsmodels('arimax', y_train[train_idx],
-                                       exog_train[train_idx], order, (0, 0, 0, 0))
-            if fitted is None:
-                scores.append(np.inf)
-                continue
-            preds = predict_statsmodels(fitted, exog_train[val_idx])
-            if np.any(np.isnan(preds)):
-                scores.append(np.inf)
-            else:
-                scores.append(np.sqrt(mean_squared_error(y_train[val_idx], preds)))
-        return np.mean(scores)
-    return objective
-
-
-def csa_objective_sarimax(y_train, exog_train, seasonal_period, cv_folds):
-    def objective(params):
-        order = (int(params['p']), int(params['d']), int(params['q']))
-        seasonal_order = (int(params['P']), int(params['D']),
-                          int(params['Q']), seasonal_period)
-        tscv = TimeSeriesSplit(n_splits=cv_folds)
-        scores = []
-        for train_idx, val_idx in tscv.split(exog_train):
-            if len(train_idx) < seasonal_period * 2:
-                scores.append(np.inf)
-                continue
-            fitted = train_statsmodels('sarimax', y_train[train_idx],
-                                       exog_train[train_idx], order, seasonal_order)
-            if fitted is None:
-                scores.append(np.inf)
-                continue
-            preds = predict_statsmodels(fitted, exog_train[val_idx])
-            if np.any(np.isnan(preds)):
-                scores.append(np.inf)
-            else:
-                scores.append(np.sqrt(mean_squared_error(y_train[val_idx], preds)))
-        return np.mean(scores)
-    return objective
-
-
 def run_csa(model_type, objective_fn, population_size, max_iterations):
-    if model_type in ('arimax', 'sarimax'):
-        max_iterations = min(max_iterations, 30)
-        population_size = min(population_size, 15)
-
     optimizer = CrowSearchOptimizer(
         objective_function=objective_fn,
         parameter_specs=CSA_PARAM_SPACES[model_type],
@@ -371,45 +258,23 @@ def save_model_artifacts(
     model_type: str,
     scaler,
     feature_cols: List[str],
-    exog_indices: List[int],
     params: dict,
     save_dir: str,
     gcs_bucket: Optional[str] = None,
     gcs_prefix: str = 'models',
 ) -> None:
-    """Save a trained model, its scaler, and metadata to *save_dir*.
+    """Save a trained XGBoost model, its scaler, and metadata to *save_dir*.
 
     Optionally uploads the files to GCS when *gcs_bucket* is provided.
-
-    Parameters
-    ----------
-    model        : fitted sklearn estimator OR fitted statsmodels result (None is OK)
-    model_type   : 'xgboost' | 'random_forest' | 'arimax' | 'sarimax'
-    scaler       : fitted RobustScaler (shared across model types per horizon)
-    feature_cols : ordered list of feature column names used during training
-    exog_indices : integer column indices selected for ARIMAX/SARIMAX exog
-    params       : hyperparameters dict (base / CSA best / Bayesian best)
-    save_dir     : local directory to write files into
-    gcs_bucket   : GCS bucket name — omit to skip upload
-    gcs_prefix   : object prefix inside the bucket
     """
     os.makedirs(save_dir, exist_ok=True)
 
-    # model
     if model is not None:
-        if model_type in ('xgboost', 'random_forest'):
-            joblib.dump(model, os.path.join(save_dir, 'model.pkl'))
-        else:
-            try:
-                model.save(os.path.join(save_dir, 'model_statsmodels.pkl'))
-            except Exception as exc:
-                warnings.warn(f'save_model_artifacts: statsmodels save failed: {exc}')
+        joblib.dump(model, os.path.join(save_dir, 'model.pkl'))
 
-    # scaler
     if scaler is not None:
         joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
 
-    # metadata
     def _serialise(v):
         if hasattr(v, 'tolist'):
             return v.tolist()
@@ -418,7 +283,6 @@ def save_model_artifacts(
     meta = {
         'model_type':   model_type,
         'feature_cols': list(feature_cols),
-        'exog_indices': [int(i) for i in exog_indices],
         'params':       {k: _serialise(v) for k, v in params.items()},
         'saved_at':     pd.Timestamp.now().isoformat(),
     }
@@ -434,11 +298,7 @@ def load_model_artifacts(
     gcs_bucket: Optional[str] = None,
     gcs_prefix: str = 'models',
 ) -> Optional[Dict]:
-    """Load artifacts previously saved by :func:`save_model_artifacts`.
-
-    Downloads from GCS first when *gcs_bucket* is supplied and local files
-    are absent.  Returns ``None`` if no artifacts are found.
-    """
+    """Load artifacts previously saved by :func:`save_model_artifacts`."""
     meta_path = os.path.join(load_dir, 'meta.json')
 
     if gcs_bucket and not os.path.exists(meta_path):
@@ -450,24 +310,11 @@ def load_model_artifacts(
     with open(meta_path) as fh:
         meta = json.load(fh)
 
-    model_type = meta['model_type']
-
-    # model
     model = None
-    if model_type in ('xgboost', 'random_forest'):
-        p = os.path.join(load_dir, 'model.pkl')
-        if os.path.exists(p):
-            model = joblib.load(p)
-    else:
-        p = os.path.join(load_dir, 'model_statsmodels.pkl')
-        if os.path.exists(p):
-            try:
-                from statsmodels.tsa.statespace.sarimax import SARIMAXResultsWrapper
-                model = SARIMAXResultsWrapper.load(p)
-            except Exception:
-                model = None
+    p = os.path.join(load_dir, 'model.pkl')
+    if os.path.exists(p):
+        model = joblib.load(p)
 
-    # scaler
     scaler = None
     sp = os.path.join(load_dir, 'scaler.pkl')
     if os.path.exists(sp):
@@ -476,9 +323,8 @@ def load_model_artifacts(
     return {
         'model':        model,
         'scaler':       scaler,
-        'model_type':   model_type,
+        'model_type':   meta['model_type'],
         'feature_cols': meta['feature_cols'],
-        'exog_indices': meta['exog_indices'],
         'params':       meta['params'],
         'saved_at':     meta.get('saved_at'),
     }
