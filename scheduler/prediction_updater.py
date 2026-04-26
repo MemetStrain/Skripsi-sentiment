@@ -1,11 +1,11 @@
 """
-prediction_updater.py — Compute all 56 prediction combinations and write to Firestore.
+prediction_updater.py — Compute XGBoost prediction combinations and write to Firestore.
 
-Combinations: 4 models × 2 variants × 7 daily horizons.
-For 'csa'/'bayesian' variants, stored hyperparameters from `HorizonModelParameters` are used.
+Combinations: 1 model (XGBoost) × 2 variants (base, csa) × 7 daily horizons = 14 documents.
+For 'csa' variant, stored hyperparameters from `HorizonModelParameters` are used.
 For 'base' variant, default hyperparameters are used.
 
-Sklearn models (XGBoost, RandomForest) are cached to GCS after first training so that
+Trained XGBoost models are cached to GCS after first training so that
 subsequent scheduler runs load them instead of re-training from scratch.
 Set GCS_BUCKET env-var to enable; omit to run without caching (train every time).
 Models older than MODEL_CACHE_MAX_AGE_DAYS are automatically re-trained and re-saved.
@@ -27,16 +27,13 @@ logger = logging.getLogger(__name__)
 FREQ_CONFIG = {
     'Daily': {'horizons': list(range(1, 8)), 'periods': 252},
 }
-MODELS = ['xgboost', 'random_forest', 'arimax', 'sarimax']
-VARIANTS = ['base', 'csa', 'bayesian']
+MODELS = ['xgboost']
+VARIANTS = ['base', 'csa']
 
 # Default hyperparameters for 'base' variant
 BASE_PARAMS = {
-    'xgboost':      {'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.05,
-                     'subsample': 0.8, 'colsample_bytree': 0.8},
-    'random_forest': {'n_estimators': 200, 'max_depth': 15, 'min_samples_split': 5},
-    'arimax':       {'order': (2, 1, 2)},
-    'sarimax':      {'order': (1, 1, 1), 'seasonal_order': (1, 0, 1, 5)},
+    'xgboost': {'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.05,
+                'subsample': 0.8, 'colsample_bytree': 0.8},
 }
 
 LAG_PERIODS = [1, 2, 3, 5, 10, 20]
@@ -259,7 +256,7 @@ def _load_opt_params(db, frequency: str, model: str, horizon: int, variant: str)
     """Fetch stored optimizer hyperparameters from HorizonModelParameters collection.
 
     Doc ID format: {model}_{variant}_{frequency}_h{horizon}
-    e.g. xgboost_csa_Daily_h1, xgboost_bayesian_Daily_h1
+    e.g. xgboost_csa_Daily_h1
     """
     try:
         doc_id = f'{model}_{variant}_{frequency}_h{horizon}'
@@ -312,92 +309,22 @@ def _predict_price_xgboost(X_train, y_train, last_X, params: dict,
     return float(model.predict(last_X)[0])
 
 
-def _predict_price_rf(X_train, y_train, last_X, params: dict,
-                      doc_id: str = '') -> float:
-    from sklearn.ensemble import RandomForestRegressor
-    model = _load_cached_sklearn(doc_id) if doc_id else None
-    if model is None:
-        model = RandomForestRegressor(**{k: v for k, v in params.items()
-                                         if k in RandomForestRegressor().get_params()},
-                                      random_state=42, n_jobs=-1)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            model.fit(X_train, y_train)
-        if doc_id:
-            _save_cached_sklearn(model, doc_id)
-    return float(model.predict(last_X)[0])
-
-
-def _predict_price_arimax(df: pd.DataFrame, horizon: int, params: dict) -> float:
-    from statsmodels.tsa.statespace.sarimax import SARIMAX
-    exog_cols = ['sentiment_score', 'state', 'rsi', 'macd']
-    exog_cols = [c for c in exog_cols if c in df.columns]
-    endog = df['close'].values
-    exog = df[exog_cols].values if exog_cols else None
-    order = tuple(params.get('order', (2, 1, 2)))
+def _compute_metrics(X_train, y_train, params: dict) -> dict:
+    """Compute MAPE, RMSE, R², directional accuracy on a pseudo-validation split."""
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            model = SARIMAX(endog, exog=exog, order=order).fit(disp=False)
-        fc = model.forecast(steps=horizon, exog=exog[-horizon:] if exog is not None else None)
-        return float(fc[-1] if hasattr(fc, '__len__') else fc)
-    except Exception as e:
-        logger.warning(f'ARIMAX failed: {e}')
-        return float(df['close'].iloc[-1])
-
-
-def _predict_price_sarimax(df: pd.DataFrame, horizon: int, params: dict) -> float:
-    from statsmodels.tsa.statespace.sarimax import SARIMAX
-    exog_cols = ['sentiment_score', 'state', 'rsi', 'macd']
-    exog_cols = [c for c in exog_cols if c in df.columns]
-    endog = df['close'].values
-    exog = df[exog_cols].values if exog_cols else None
-    order = tuple(params.get('order', (1, 1, 1)))
-    seasonal_order = tuple(params.get('seasonal_order', (1, 0, 1, 5)))
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            model = SARIMAX(endog, exog=exog,
-                            order=order,
-                            seasonal_order=seasonal_order).fit(disp=False)
-        fc = model.forecast(steps=horizon, exog=exog[-horizon:] if exog is not None else None)
-        return float(fc[-1] if hasattr(fc, '__len__') else fc)
-    except Exception as e:
-        logger.warning(f'SARIMAX failed: {e}')
-        return float(df['close'].iloc[-1])
-
-
-def _compute_metrics(X_train, y_train, model_type: str, params: dict,
-                     df: pd.DataFrame) -> dict:
-    """Compute MAPE, RMSE, R², directional accuracy on the training set."""
-    try:
+        from xgboost import XGBRegressor
         # Use last 20% as pseudo-validation
         split = max(10, int(len(X_train) * 0.8))
         X_tr, X_val = X_train[:split], X_train[split:]
         y_tr, y_val = y_train[:split], y_train[split:]
 
-        if model_type == 'xgboost':
-            from xgboost import XGBRegressor
-            m = XGBRegressor(**{k: v for k, v in params.items()
-                                if k in XGBRegressor().get_params()},
-                             random_state=42, verbosity=0)
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                m.fit(X_tr, y_tr)
-            preds = m.predict(X_val)
-        elif model_type == 'random_forest':
-            from sklearn.ensemble import RandomForestRegressor
-            m = RandomForestRegressor(**{k: v for k, v in params.items()
-                                         if k in RandomForestRegressor().get_params()},
-                                      random_state=42, n_jobs=-1)
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                m.fit(X_tr, y_tr)
-            preds = m.predict(X_val)
-        else:
-            # For time-series models, use simple persistence as fallback metric
-            preds = np.roll(y_val, 1)
-            preds[0] = y_tr[-1]
+        m = XGBRegressor(**{k: v for k, v in params.items()
+                            if k in XGBRegressor().get_params()},
+                         random_state=42, verbosity=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            m.fit(X_tr, y_tr)
+        preds = m.predict(X_val)
 
         mape = float(np.mean(np.abs((y_val - preds) / (y_val + 1e-9))) * 100)
         rmse = float(np.sqrt(np.mean((y_val - preds) ** 2)))
@@ -437,7 +364,8 @@ def _horizon_to_date(last_date_str: str, horizon: int) -> str:
 
 def run_all_predictions(db) -> None:
     """
-    Compute all 56 prediction combinations and write to `predictions` collection.
+    Compute all 14 prediction combinations (1 × 2 × 7) and write to
+    `predictions` collection.
     """
     from firestore_writer import write_prediction
 
@@ -449,8 +377,6 @@ def run_all_predictions(db) -> None:
     if df.empty or len(df) < 30:
         logger.warning(f'Not enough data for {frequency} predictions')
         return
-
-    feature_cols = [c for c in df.columns if c not in ('date', 'close')]
 
     for horizon in cfg['horizons']:
         X_train, y_train, last_X, last_row = _build_features_target(df, horizon)
@@ -465,32 +391,17 @@ def run_all_predictions(db) -> None:
             for variant in VARIANTS:
                 doc_id = f'{model_type}_{variant}_{frequency}_h{horizon}'
                 try:
-                    # Get hyperparameters
-                    if variant in ('csa', 'bayesian'):
+                    if variant == 'csa':
                         params = _load_opt_params(db, frequency, model_type, horizon, variant)
                         if params is None:
                             params = BASE_PARAMS[model_type].copy()
                     else:
                         params = BASE_PARAMS[model_type].copy()
 
-                    # Run prediction (sklearn models use cache; statsmodels re-train each time)
-                    if model_type == 'xgboost':
-                        pred = _predict_price_xgboost(X_train, y_train, last_X, params,
-                                                      doc_id=doc_id)
-                    elif model_type == 'random_forest':
-                        pred = _predict_price_rf(X_train, y_train, last_X, params,
-                                                 doc_id=doc_id)
-                    elif model_type == 'arimax':
-                        pred = _predict_price_arimax(df, horizon, params)
-                    elif model_type == 'sarimax':
-                        pred = _predict_price_sarimax(df, horizon, params)
-                    else:
-                        continue
+                    pred = _predict_price_xgboost(X_train, y_train, last_X, params,
+                                                  doc_id=doc_id)
 
-                    # Compute metrics
-                    metrics = _compute_metrics(
-                        X_train, y_train, model_type, params, df
-                    )
+                    metrics = _compute_metrics(X_train, y_train, params)
 
                     write_prediction(db, model_type, variant, frequency, horizon, {
                         'model': model_type,
