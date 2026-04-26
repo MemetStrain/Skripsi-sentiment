@@ -1,0 +1,102 @@
+{
+  "interval": "Weekly",
+  "horizon": 1,
+  "timestamp": "2026-03-26T02:03:59.195822",
+  "n_features": 60,
+  "n_train": 412,
+  "n_test": 104,
+  "models": {
+    "xgboost_base": {
+      "n_estimators": 200,
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 1,
+      "random_state": 42
+    },
+    "xgboost_csa": {
+      "n_estimators": 75,
+      "max_depth": 11,
+      "learning_rate": 0.18862485279197352,
+      "subsample": 0.9942527476662227,
+      "colsample_bytree": 1.0,
+      "min_child_weight": 5,
+      "csa_best_score": 686.1954819456188,
+      "csa_iterations": 25
+    },
+    "random_forest_base": {
+      "n_estimators": 200,
+      "max_depth": 15,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "max_features": 0.7,
+      "random_state": 42
+    },
+    "random_forest_csa": {
+      "n_estimators": 186,
+      "max_depth": 5,
+      "min_samples_split": 5,
+      "min_samples_leaf": 5,
+      "max_features": 0.9000000000000001,
+      "csa_best_score": 696.9634163361898,
+      "csa_iterations": 36
+    },
+    "arimax_base": {
+      "order": [
+        2,
+        1,
+        2
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "arimax_csa": {
+      "order": [
+        0,
+        1,
+        1
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "csa_best_score": 996.1920983750282,
+      "csa_iterations": 13
+    },
+    "sarimax_base": {
+      "order": [
+        1,
+        1,
+        1
+      ],
+      "seasonal_order": [
+        1,
+        0,
+        1,
+        4
+      ]
+    },
+    "sarimax_csa": {
+      "order": [
+        2,
+        0,
+        0
+      ],
+      "seasonal_order": [
+        2,
+        1,
+        1,
+        4
+      ],
+      "csa_best_score": 202.88076710473194,
+      "csa_iterations": 15
+    }
+  }
+}

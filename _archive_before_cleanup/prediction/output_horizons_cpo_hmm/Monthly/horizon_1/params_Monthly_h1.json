@@ -1,0 +1,106 @@
+{
+  "interval": "Monthly",
+  "horizon": 1,
+  "data_sources": [
+    "cpo_variables",
+    "hmm_states_results"
+  ],
+  "timestamp": "2026-03-31T23:34:23.009079",
+  "n_features": 43,
+  "n_train": 82,
+  "n_test": 21,
+  "models": {
+    "xgboost_base": {
+      "n_estimators": 200,
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 1,
+      "random_state": 42
+    },
+    "xgboost_csa": {
+      "n_estimators": 493,
+      "max_depth": 13,
+      "learning_rate": 0.04918566048077624,
+      "subsample": 0.8417224162398501,
+      "colsample_bytree": 0.8013091374338297,
+      "min_child_weight": 1,
+      "csa_best_score": 793.2110292877051,
+      "csa_iterations": 49
+    },
+    "random_forest_base": {
+      "n_estimators": 200,
+      "max_depth": 15,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "max_features": 0.7,
+      "random_state": 42
+    },
+    "random_forest_csa": {
+      "n_estimators": 499,
+      "max_depth": 5,
+      "min_samples_split": 2,
+      "min_samples_leaf": 1,
+      "max_features": 0.3607544015465367,
+      "csa_best_score": 850.7994688054151,
+      "csa_iterations": 32
+    },
+    "arimax_base": {
+      "order": [
+        2,
+        1,
+        2
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "arimax_csa": {
+      "order": [
+        5,
+        0,
+        3
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "csa_best_score": 689.2832772865162,
+      "csa_iterations": 13
+    },
+    "sarimax_base": {
+      "order": [
+        1,
+        1,
+        1
+      ],
+      "seasonal_order": [
+        1,
+        0,
+        1,
+        4
+      ]
+    },
+    "sarimax_csa": {
+      "order": [
+        0,
+        0,
+        0
+      ],
+      "seasonal_order": [
+        1,
+        0,
+        1,
+        4
+      ],
+      "csa_best_score": 655.702946541316,
+      "csa_iterations": 25
+    }
+  }
+}

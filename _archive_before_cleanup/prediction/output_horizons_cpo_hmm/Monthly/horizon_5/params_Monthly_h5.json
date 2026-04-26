@@ -1,0 +1,106 @@
+{
+  "interval": "Monthly",
+  "horizon": 5,
+  "data_sources": [
+    "cpo_variables",
+    "hmm_states_results"
+  ],
+  "timestamp": "2026-04-01T02:42:37.402415",
+  "n_features": 37,
+  "n_train": 79,
+  "n_test": 20,
+  "models": {
+    "xgboost_base": {
+      "n_estimators": 200,
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 1,
+      "random_state": 42
+    },
+    "xgboost_csa": {
+      "n_estimators": 140,
+      "max_depth": 10,
+      "learning_rate": 0.26493630886248787,
+      "subsample": 0.6912935275180507,
+      "colsample_bytree": 0.6,
+      "min_child_weight": 1,
+      "csa_best_score": 935.1960689985075,
+      "csa_iterations": 47
+    },
+    "random_forest_base": {
+      "n_estimators": 200,
+      "max_depth": 15,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "max_features": 0.7,
+      "random_state": 42
+    },
+    "random_forest_csa": {
+      "n_estimators": 83,
+      "max_depth": 5,
+      "min_samples_split": 4,
+      "min_samples_leaf": 2,
+      "max_features": 0.3,
+      "csa_best_score": 1131.7039399651637,
+      "csa_iterations": 40
+    },
+    "arimax_base": {
+      "order": [
+        2,
+        1,
+        2
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "arimax_csa": {
+      "order": [
+        2,
+        0,
+        1
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "csa_best_score": 1792.6309272666142,
+      "csa_iterations": 11
+    },
+    "sarimax_base": {
+      "order": [
+        1,
+        1,
+        1
+      ],
+      "seasonal_order": [
+        1,
+        0,
+        1,
+        4
+      ]
+    },
+    "sarimax_csa": {
+      "order": [
+        3,
+        0,
+        1
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        2,
+        4
+      ],
+      "csa_best_score": 1724.6094019554846,
+      "csa_iterations": 19
+    }
+  }
+}

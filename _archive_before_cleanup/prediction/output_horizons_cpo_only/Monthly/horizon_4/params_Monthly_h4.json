@@ -1,0 +1,105 @@
+{
+  "interval": "Monthly",
+  "horizon": 4,
+  "data_sources": [
+    "cpo_variables"
+  ],
+  "timestamp": "2026-04-01T00:31:14.044836",
+  "n_features": 26,
+  "n_train": 88,
+  "n_test": 23,
+  "models": {
+    "xgboost_base": {
+      "n_estimators": 200,
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 1,
+      "random_state": 42
+    },
+    "xgboost_csa": {
+      "n_estimators": 500,
+      "max_depth": 10,
+      "learning_rate": 0.001152048141235262,
+      "subsample": 0.999269856056004,
+      "colsample_bytree": 0.9721187643363005,
+      "min_child_weight": 6,
+      "csa_best_score": 1110.5002054827721,
+      "csa_iterations": 50
+    },
+    "random_forest_base": {
+      "n_estimators": 200,
+      "max_depth": 15,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "max_features": 0.7,
+      "random_state": 42
+    },
+    "random_forest_csa": {
+      "n_estimators": 85,
+      "max_depth": 14,
+      "min_samples_split": 10,
+      "min_samples_leaf": 7,
+      "max_features": 0.8611666685040205,
+      "csa_best_score": 1319.7575916571923,
+      "csa_iterations": 39
+    },
+    "arimax_base": {
+      "order": [
+        2,
+        1,
+        2
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "arimax_csa": {
+      "order": [
+        3,
+        0,
+        0
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "csa_best_score": 1971.7495975952227,
+      "csa_iterations": 10
+    },
+    "sarimax_base": {
+      "order": [
+        1,
+        1,
+        1
+      ],
+      "seasonal_order": [
+        1,
+        0,
+        1,
+        4
+      ]
+    },
+    "sarimax_csa": {
+      "order": [
+        1,
+        1,
+        1
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        1,
+        4
+      ],
+      "csa_best_score": 1871.8574857041797,
+      "csa_iterations": 14
+    }
+  }
+}
