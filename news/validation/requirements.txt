@@ -1,0 +1,19 @@
+# Validation-only dependencies for the FinBERT diagnostic suite.
+# These are NOT required for the production scheduler pipeline; install
+# them in a separate environment when you want to run the validation
+# suite for thesis Bab 4 (Hugging Face Datasets, etc).
+#
+# Production requirements live in:
+#   - scheduler/requirements.txt (Cloud Run Job)
+#   - website/requirements.txt   (Vercel front-end)
+
+datasets>=2.14.0      # Financial PhraseBank benchmark loader
+transformers>=4.30.0  # FinBERT inference (already in scheduler/requirements.txt)
+torch>=2.1.0          # FinBERT inference backend
+scikit-learn>=1.3.0   # confusion matrix + classification report
+matplotlib>=3.8.0     # plots
+seaborn>=0.13.0       # heatmap
+statsmodels>=0.14.0   # Granger causality
+scipy>=1.11.0         # Pearson, Spearman, etc.
+pandas>=2.0.0
+numpy>=1.24.0

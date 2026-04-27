@@ -1,0 +1,10 @@
+metric,value,p_value,interpretation
+pearson_corr,0.0224,0.247,Linear correlation (Sentiment_t vs Next_Day_LogReturn)
+spearman_corr,0.0266,0.1694,Rank correlation
+granger_lag1_pvalue,,0.5141,Sentiment_t Granger-causes Next_Day_LogReturn at lag 1
+granger_lag2_pvalue,,0.3847,Sentiment_t Granger-causes Next_Day_LogReturn at lag 2
+granger_lag3_pvalue,,0.4,Sentiment_t Granger-causes Next_Day_LogReturn at lag 3
+granger_lag5_pvalue,,0.73,Sentiment_t Granger-causes Next_Day_LogReturn at lag 5
+directional_agreement_pct,50.4817,,% days where sign(sentiment) == sign(next-day return)
+sample_size,2677,,Daily observations after inner-join + dropna
+narrative,,,"Pearson correlation between daily sentiment and next-day log return is +0.0224 (positive, not significant). Effect size of |0.0224| indicates a weak relationship. Granger causality at lag 1 (p=0.5141) does not support predictive direction."
