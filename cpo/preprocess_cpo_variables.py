@@ -98,7 +98,7 @@ def preprocess_cpo(filepath: str, freq_label: str) -> pd.DataFrame:
     Parameters
     ----------
     filepath   : Path to the raw CSV file.
-    freq_label : 'Daily', 'Weekly', or 'Monthly' (for informational output only).
+    freq_label : 'Daily' (kept as a parameter for log/output naming only).
 
     Returns
     -------

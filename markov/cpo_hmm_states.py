@@ -1,7 +1,8 @@
 """
 Hidden Markov Model (HMM) for CPO Price State Analysis
 =======================================================
-Processes Daily, Weekly, and Monthly data in a single run.
+Processes Daily data only (Weekly / Monthly variants dropped from scope
+during the 2026-04-26 thesis-scope-reduction sweep).
 
 Statistical Design
 ------------------
@@ -17,9 +18,7 @@ Normalization:
   at time t only information up to t is used → eliminates look-ahead bias.
 
 Covariance type:
-  daily / weekly  → "full"  (≥500 obs; enough to estimate full cov matrix)
-  monthly         → "diag"  (~115 obs after warmup; diagonal avoids over-
-                             parameterisation and keeps parameter/obs ratio ≥ 3)
+  daily → "full"  (≥500 obs; enough to estimate full covariance matrix)
 
 Note: PCA is intentionally omitted.  A global PCA fit on the full time series
 would introduce look-ahead bias; the GaussianHMM already captures feature
@@ -867,7 +866,6 @@ def main():
     print("\n  Statistical properties ensured:")
     print("  ✓ Look-ahead-free normalisation  (rolling Z-score, window = 1 year)")
     print("  ✓ Stationarity of inputs         (log returns + derived ratios)")
-    print("  ✓ Parsimony for monthly data      (diagonal covariance)")
     print("  ✓ Stable initialisation           (K-Means seeding, 50 restarts)")
     print("  ✓ Numerical stability             (min_covar floor, log-scale E-step)")
     print("  ✓ Fixed 3-state model             (Bullish | Neutral | Bearish)")
