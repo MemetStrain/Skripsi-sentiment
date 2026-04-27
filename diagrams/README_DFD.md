@@ -1,6 +1,14 @@
 # Data Flow Diagram (DFD)
 ## Sistem Web Prediksi Harga CPO dengan FinBERT & HMM
 
+> ⚠️ **OUTDATED — pre-2026-04-26**
+>
+> Mentions Random Forest as a production model. After the
+> thesis-scope-reduction sweep the production scope is XGBoost only
+> with ablation study (C1-C4). See
+> [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) and
+> [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 ### 📁 File Diagram
 
 1. **dfd_level_0_context.html** - Context Diagram (DFD Level 0)

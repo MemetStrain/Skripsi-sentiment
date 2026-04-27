@@ -1,5 +1,14 @@
 # Sequence Diagrams — CPO Price Prediction System
 
+> ⚠️ **OUTDATED — pre-2026-04-26**
+>
+> The flows below show the pre-cleanup multi-model dispatch
+> (RF / ARIMAX / SARIMAX / XGBoost × base / csa / Bayesian). Current
+> scope is XGBoost only × {base, csa}. See
+> [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) and
+> [ARCHITECTURE.md](../ARCHITECTURE.md). Sequence diagrams will be
+> redrawn in a separate task.
+
 Four interaction flows are documented here:
 1. [User Registration](#1-user-registration)
 2. [User Login and Dashboard Load](#2-user-login-and-dashboard-load)

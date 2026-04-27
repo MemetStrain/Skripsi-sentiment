@@ -1,5 +1,15 @@
 # Activity Diagrams — CPO Price Prediction System
 
+> ⚠️ **OUTDATED — pre-2026-04-26**
+>
+> This document describes the pre-cleanup thesis design (RF / ARIMAX /
+> SARIMAX / XGBoost models, Bayesian + CSA optimisers, Daily + Weekly +
+> Monthly intervals). The current scope is **XGBoost only with an
+> ablation study (C1-C4), CSA optimiser, and Daily frequency**.
+> See [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) for the trim list
+> and [ARCHITECTURE.md](../ARCHITECTURE.md) for the current architecture.
+> The diagrams will be redrawn in a separate task.
+
 Four activity flows are documented here:
 1. [User Authentication Flow](#1-user-authentication-flow)
 2. [Dashboard Load Flow](#2-dashboard-load-flow)

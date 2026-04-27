@@ -1,5 +1,14 @@
 # Use Case Diagram — CPO Price Prediction System
 
+> ⚠️ **OUTDATED — pre-2026-04-26**
+>
+> "Run prediction" use case below lists models RF / ARIMAX / SARIMAX
+> /  XGBoost and variants base / CSA / Bayesian. After the cleanup the
+> dashboard exposes XGBoost only × {base, csa}. See
+> [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) and
+> [ARCHITECTURE.md](../ARCHITECTURE.md). Use-case diagram will be
+> redrawn in a separate task.
+
 ## Diagram
 
 ```mermaid

@@ -1,5 +1,15 @@
 # Entity Relationship Diagram — CPO Price Prediction System
 
+> ⚠️ **OUTDATED — pre-2026-04-26**
+>
+> The `predictions` collection schema documented below lists 4 model
+> values and 3 variant values. After the thesis-scope-reduction sweep
+> the live scope is `model ∈ {xgboost}` and `variant ∈ {base, csa}`.
+> Existing legacy docs remain in Firestore but are no longer refreshed.
+> See [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) and
+> [ARCHITECTURE.md](../ARCHITECTURE.md). The ERD will be redrawn in a
+> separate task.
+
 ## Diagram
 
 ```mermaid
