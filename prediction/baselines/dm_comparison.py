@@ -34,8 +34,8 @@ if _PREDICTION_DIR not in sys.path:
 from naive_baseline import diebold_mariano_test  # noqa: E402
 
 
-PARAMETRIC_MODELS: Tuple[str, ...] = ("xgboost", "random_forest", "arimax", "sarimax")
-PARAMETRIC_OPTS: Tuple[str, ...] = ("BASE", "CSA", "BAYESIAN")
+PARAMETRIC_MODELS: Tuple[str, ...] = ("xgboost",)
+PARAMETRIC_OPTS: Tuple[str, ...] = ("BASE", "CSA")
 
 
 # =============================================================================
@@ -76,8 +76,9 @@ def _select_best_parametric_at_h1(
     From a horizon_summary DataFrame, return (model, optimization) of the best
     parametric model at h=1 by the given metric.
 
-    Parametric candidates are restricted to the 4 × 3 grid of (model, optimization).
-    Non-parametric rows (e.g. naive rows already appended) are ignored.
+    Parametric candidates are restricted to the in-scope (xgboost) × {base,csa}
+    grid. Legacy rows (RF / ARIMAX / SARIMAX / Bayesian) and naive rows already
+    appended are ignored — they remain in the historical CSVs for reference.
     """
     if summary_df.empty:
         raise ValueError("summary DataFrame is empty — cannot select best parametric model")

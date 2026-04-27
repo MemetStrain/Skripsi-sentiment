@@ -55,8 +55,8 @@ SCHEMA_COLUMNS = [
     "MAPE", "sMAPE", "RMSE",
     "Directional_Accuracy", "R2_Price", "R2_LogReturn",
 ]
-PARAMETRIC_MODELS = ("xgboost", "random_forest", "arimax", "sarimax")
-PARAMETRIC_OPTS = ("BASE", "CSA", "BAYESIAN")
+PARAMETRIC_MODELS = ("xgboost",)
+PARAMETRIC_OPTS = ("BASE", "CSA")
 
 
 # =============================================================================
