@@ -1,0 +1,4 @@
+from_state,from_label,row_sum,is_stochastic,max_persistence,has_absorbing
+0,Bullish,1.0,True,0.954638,False
+1,Neutral,1.0,True,0.97022,False
+2,Bearish,1.0,True,0.964968,False

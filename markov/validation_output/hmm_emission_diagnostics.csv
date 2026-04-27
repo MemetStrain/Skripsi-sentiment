@@ -1,0 +1,5 @@
+state_id,state_label,n_observations,frequency_pct,mean_logret,std_logret,skewness,kurtosis,shapiro_W,shapiro_pvalue,shapiro_normal,jarque_bera_stat,jb_pvalue,jb_normal,persistence
+0,Bullish,580,22.8887,0.002833,0.020951,0.2796,3.1335,0.9625,0.0,False,244.8423,0.0,False,0.954638
+1,Neutral,1205,47.5533,0.000494,0.013889,0.2448,1.6821,0.9862,0.0,False,154.0967,0.0,False,0.97022
+2,Bearish,749,29.558,-0.002127,0.022022,-0.7122,2.6633,0.9574,0.0,False,284.6924,0.0,False,0.964968
+,FOOTNOTE: Non-normality is expected for financial returns (fat tails); Gaussian HMM remains a reasonable approximation per literature (Hamilton 1989; Rabiner 1989). Future work could explore Student-t or mixture emission distributions.,,,,,,,,,,,,,

@@ -1,0 +1,4 @@
+n_states,log_likelihood,n_free_params,AIC,BIC,converged,recommendation,notes
+2,-10879.1263,43,21844.2526,22095.2674,True,,
+3,-9424.0676,68,18984.1351,19381.0888,True,,Thesis design chose N=3 for economic interpretability (Bullish/Neutral/Bearish); BIC suggests N=4
+4,-8710.1553,95,17610.3106,18164.8783,True,BIC_OPTIMAL,

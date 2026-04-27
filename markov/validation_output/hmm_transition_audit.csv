@@ -1,0 +1,10 @@
+from_state,to_state,from_label,to_label,transition_prob,is_diagonal,notes
+0,0,Bullish,Bullish,0.954638,True,
+0,1,Bullish,Neutral,0.033412,False,
+0,2,Bullish,Bearish,0.01195,False,
+1,0,Neutral,Bullish,0.01447,False,
+1,1,Neutral,Neutral,0.97022,True,
+1,2,Neutral,Bearish,0.01531,False,
+2,0,Bearish,Bullish,0.012384,False,
+2,1,Bearish,Neutral,0.022648,False,
+2,2,Bearish,Bearish,0.964968,True,

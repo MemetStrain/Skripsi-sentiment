@@ -1,0 +1,12 @@
+metric,value,interpretation
+n_states_chosen,3,Bullish/Neutral/Bearish per thesis design
+n_states_bic_optimal,4,BIC suggests 4 state(s)
+log_likelihood_chosen,-9424.0676,Log-likelihood of chosen N=3 model
+log_likelihood_mean_30restarts,-9424.0676,Mean across 30 restarts
+log_likelihood_cv,0.0,Coefficient of variation (lower = more stable)
+state_labels_consistent,True,All labels match economic expectation
+emission_normality_passed,False,Are log-returns normally distributed per state? (Expected: False for financial data)
+transition_row_stochastic,True,Sanity check: every transition row sums to 1
+absorbing_state_detected,False,Warns of degenerate model (any diagonal >= 0.99)
+data_observations,2534,Total daily observations used
+data_period,2015-08-03 to 2026-02-26,Date range
