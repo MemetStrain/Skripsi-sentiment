@@ -1,3 +1,7 @@
+# Cleanup 2026-04-26 (thesis-scope-reduction): statsmodels removed
+# (ARIMAX/SARIMAX dropped from production scope; was only used by archived
+# prediction/adaptive_prediction.py and validate_arimax_sarimax.py).
+
 # Google Cloud / Firebase
 firebase-admin>=6.0
 google-cloud-firestore>=2.13
@@ -5,9 +9,9 @@ google-cloud-firestore>=2.13
 # Data processing
 numpy>=1.24.0
 pandas>=2.0.0
-scikit-learn>=1.3.0
+scikit-learn>=1.3.0     # RobustScaler, mean_squared_error, TimeSeriesSplit
 xgboost>=2.0.0
-statsmodels>=0.14.0
+# statsmodels>=0.14.0   # SARIMAX/ARIMAX (out of scope) — re-enable if reintroducing
 
 # HMM
 hmmlearn>=0.3.0

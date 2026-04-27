@@ -1,0 +1,15 @@
+interval,horizon,model,AIC,BIC,HQIC,LLF,MAPE,RMSE,R2,DirAcc,LB_pass_rate,JB_normal,SW_normal,ARCH_homo,BG_no_serial,ADF_stat_orig,KPSS_stat_orig,ADF_stat_d1,KPSS_stat_d1
+Daily,1,arimax,21495.7891,21578.5845,21526.3149,-10732.8946,3.2541,181.4405,0.7211,48.0519,10.0,False,False,False,False,False,False,True,True
+Daily,1,sarimax,21451.382,21534.1448,21481.8991,-10710.691,4.06,223.2304,0.5778,48.7013,0.0,False,False,False,False,False,False,True,True
+Daily,2,arimax,21559.441,21642.2364,21589.9668,-10764.7205,10.5032,560.5509,-1.6643,50.5423,35.0,False,False,False,False,False,False,True,True
+Daily,2,sarimax,21513.2046,21595.9674,21543.7217,-10741.6023,10.4124,557.3549,-1.634,50.7592,45.0,False,False,False,False,False,False,True,True
+Daily,3,arimax,21556.1013,21638.8886,21586.6249,-10763.0507,10.0514,543.4943,-1.4965,47.9393,85.0,False,False,False,False,False,False,True,True
+Daily,3,sarimax,21519.5965,21602.3511,21550.1114,-10744.7982,10.0884,544.7777,-1.5083,47.9393,20.0,False,False,False,False,False,False,True,True
+Daily,4,arimax,21557.6112,21640.3903,21588.1326,-10763.8056,9.3064,506.9096,-1.163,50.5423,0.0,False,False,False,False,False,False,True,True
+Daily,4,sarimax,21527.3467,21610.0932,21557.8594,-10748.6733,9.3275,507.6365,-1.1692,50.5423,0.0,False,False,False,False,False,False,True,True
+Daily,5,arimax,21560.5601,21643.331,21591.0793,-10765.28,10.2296,549.7247,-1.5378,47.7223,0.0,False,False,False,False,False,False,True,True
+Daily,5,sarimax,21514.9665,21597.7049,21545.4771,-10742.4833,10.168,547.5768,-1.518,47.2885,0.0,False,False,False,False,False,False,True,True
+Daily,6,arimax,21485.4556,21568.2184,21515.9727,-10727.7278,11.0134,587.2081,-1.8969,50.1085,0.0,False,False,False,False,False,False,True,True
+Daily,6,sarimax,21442.7778,21525.508,21473.2862,-10706.3889,11.01,587.0808,-1.8957,50.1085,95.0,False,False,False,True,False,False,True,True
+Daily,7,arimax,21475.8923,21558.6552,21506.4094,-10722.9462,9.7281,533.4819,-1.4006,48.2609,0.0,False,False,False,False,False,False,True,True
+Daily,7,sarimax,21432.3402,21515.0703,21462.8486,-10701.1701,9.7662,534.785,-1.4123,48.4783,0.0,False,False,False,False,False,False,True,True
