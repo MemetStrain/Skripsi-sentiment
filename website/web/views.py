@@ -113,8 +113,8 @@ def dashboard(request):
     metrics = {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'}
     try:
         best_mape = float('inf')
-        for model in ('xgboost', 'random_forest', 'arimax', 'sarimax'):
-            for variant in ('base', 'csa', 'bayesian'):
+        for model in ('xgboost',):
+            for variant in ('base', 'csa'):
                 doc_id = f'{model}_{variant}_Daily_h1'
                 doc = db.collection('predictions').document(doc_id).get()
                 if not doc.exists:
@@ -170,11 +170,15 @@ def prediction_api(request):
     except (ValueError, TypeError):
         return JsonResponse({'error': 'Invalid horizon'}, status=400)
 
-    valid_models = {'xgboost', 'random_forest', 'arimax', 'sarimax'}
-    valid_variants = {'base', 'csa', 'bayesian'}
+    valid_models = {'xgboost'}
+    valid_variants = {'base', 'csa'}
     valid_freqs = {'Daily'}
     if model not in valid_models or variant not in valid_variants or frequency not in valid_freqs:
-        return JsonResponse({'error': 'Invalid parameters'}, status=400)
+        return JsonResponse(
+            {'error': f"Invalid parameters. Supported: model={sorted(valid_models)}, "
+                      f"variant={sorted(valid_variants)}, frequency={sorted(valid_freqs)}"},
+            status=400,
+        )
 
     doc_id = f'{model}_{variant}_{frequency}_h{horizon}'
     try:

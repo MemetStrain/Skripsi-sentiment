@@ -83,16 +83,17 @@ def task_retrain_horizon_models():
     """
     Re-run horizon forecasting with CSA optimization.
 
-    Wraps prediction/horizon_forecast.py:
-    1. Load merged data (CPO + Sentiment + HMM) from Firestore
+    Wraps prediction/horizon_forecast_C{1..4}_*.py:
+    1. Load merged data (CPO + Sentiment + HMM) from Firestore.
     2. For each horizon (1-7 days):
-       a. Engineer horizon-aware features
-       b. Train 4 models x 2 variants with CSA optimization
-       c. Evaluate on test set
-    3. Upload updated parameters to Firestore HorizonModelParameters
-    4. Upload updated metrics to Firestore HorizonModelMetrics
+       a. Engineer horizon-aware features.
+       b. Train 1 model (XGBoost) × 4 ablation configurations (C1-C4)
+          × 2 variants (base, csa) with CSA optimization.
+       c. Evaluate on test set.
+    3. Upload updated parameters to Firestore HorizonModelParameters.
+    4. Upload updated metrics to Firestore HorizonModelMetrics.
     """
-    # TODO: Run horizon_forecast.py logic
+    # TODO: Run horizon_forecast_C{1..4} logic
     # TODO: Upload params and metrics to Firestore
     logger.info("task_retrain_horizon_models: Not yet implemented")
     raise NotImplementedError("Model retraining task not yet implemented")
