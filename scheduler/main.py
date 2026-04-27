@@ -114,7 +114,7 @@ def run_initial_load(db):
     2. MPOB news (with sentiment if available) → news_articles
     3. Sentiment aggregates → sentiment_aggregates
     4. HMM states → hmm_states
-    5. All 56 predictions → predictions
+    5. All XGBoost predictions (1 model × 2 variants × 7 horizons = 14) → predictions
 
     Each step is checkpointed to initial_load_progress.json next to main.py.
     Re-running the script skips any already-completed steps.
@@ -190,7 +190,7 @@ def run_initial_load(db):
     if progress.get('step5'):
         logger.info('Step 5: SKIPPED (already done)')
     else:
-        logger.info('Step 5: Computing all 56 predictions...')
+        logger.info('Step 5: Computing all 14 XGBoost predictions...')
         from prediction_updater import run_all_predictions
         run_all_predictions(db)
         _mark_done(progress, 'step5')
@@ -211,7 +211,7 @@ def run_daily_update(db):
     3. Run FinBERT on new articles
     4. Update sentiment aggregates
     5. Re-run HMM states
-    6. Recompute all 136 predictions
+    6. Recompute all 14 XGBoost predictions (1 × 2 × 7)
     """
     logger.info('=== DAILY UPDATE START ===')
 
@@ -262,7 +262,7 @@ def run_daily_update(db):
     update_hmm_states(db)
 
     # Step 6: Predictions
-    logger.info('Step 6: Recomputing all 56 predictions...')
+    logger.info('Step 6: Recomputing all 14 XGBoost predictions...')
     from prediction_updater import run_all_predictions
     run_all_predictions(db)
 
