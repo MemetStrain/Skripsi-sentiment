@@ -286,8 +286,9 @@ def evaluate_labels(output_dir: str) -> Optional[Dict[str, object]]:
     interpretation = (
         f"On {n} manually-labelled MPOB articles, FinBERT achieves "
         f"macro-F1 = {macro_f1:.4f} and agreement rate = {accuracy*100:.1f}%. "
-        "Sample size is small (n=50); statistical significance is limited "
-        "but consistent with Phase 2a benchmark results."
+        "Sample size is small (n=50); statistical significance is limited. "
+        "Compare against the in-domain Phase 2a benchmark "
+        "(finbert_phrasebank_results.csv) to assess domain transfer."
     )
 
     metrics_df = res["metrics_df"]

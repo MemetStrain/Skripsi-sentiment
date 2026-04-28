@@ -1,0 +1,4 @@
+true_label_manual,negative,neutral,positive
+negative,4,10,2
+neutral,5,3,10
+positive,8,3,5

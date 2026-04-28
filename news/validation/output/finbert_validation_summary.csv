@@ -5,6 +5,6 @@ sentiment_pearson_corr,0.0224,Phase 2b,Daily sentiment vs next-day log return
 sentiment_pearson_pvalue,0.247,Phase 2b,Statistical significance (p)
 granger_lag1_pvalue,0.5141,Phase 2b,Granger causality at lag 1
 directional_agreement_pct,50.4817,Phase 2b,% days where sign(sentiment) == sign(next-day return)
-manual_macro_f1,PENDING,Phase 2c,Label manual_sample_FOR_LABELING.csv first
-manual_agreement_rate,PENDING,Phase 2c,Label manual_sample_FOR_LABELING.csv first
-limitation_note,—,—,Single-annotator validation; no inter-rater Cohen's κ. Future work should incorporate multi-annotator validation per Cohen (1960) and Artstein & Poesio (2008).
+manual_macro_f1,0.2406,Phase 2c,50-sample manual evaluation (n=50)
+manual_agreement_rate,0.24,Phase 2c,% samples where FinBERT matches manual label
+limitation_note,-,-,Single-annotator validation; no inter-rater Cohen's kappa. Future work should incorporate multi-annotator validation per Cohen (1960) and Artstein & Poesio (2008).

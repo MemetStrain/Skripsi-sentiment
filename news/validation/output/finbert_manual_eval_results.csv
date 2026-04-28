@@ -1,0 +1,6 @@
+class,precision,recall,f1,support,interpretation
+negative,0.2353,0.25,0.2424,16,
+neutral,0.1875,0.1667,0.1765,18,
+positive,0.2941,0.3125,0.303,16,
+macro_avg,0.239,0.2431,0.2406,50,"On 50 manually-labelled MPOB articles, FinBERT achieves macro-F1 = 0.2406 and agreement rate = 24.0%. Sample size is small (n=50); statistical significance is limited. Compare against the in-domain Phase 2a benchmark (finbert_phrasebank_results.csv) to assess domain transfer."
+weighted_avg,0.2369,0.24,0.2381,50,

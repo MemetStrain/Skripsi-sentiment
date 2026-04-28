@@ -1,0 +1,2 @@
+Limitation note for thesis Bab 4 / Bab 5:
+Due to single-annotator constraints, intra-rater reliability was not measured. Future work should incorporate multi-annotator validation following established protocols (Cohen 1960; Artstein & Poesio 2008).
