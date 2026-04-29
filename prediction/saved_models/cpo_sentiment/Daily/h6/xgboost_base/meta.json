@@ -42,18 +42,6 @@
     "Sentiment_Score_lag20",
     "Sentiment_x_Return"
   ],
-  "exog_indices": [
-    15,
-    17,
-    7,
-    16,
-    18,
-    34,
-    35,
-    36,
-    30,
-    22
-  ],
   "params": {
     "n_estimators": 200,
     "max_depth": 6,
@@ -63,5 +51,5 @@
     "min_child_weight": 1,
     "random_state": 42
   },
-  "saved_at": "2026-04-14T15:28:49.074702"
+  "saved_at": "2026-04-30T00:57:18.081203"
 }

@@ -52,18 +52,6 @@
     "HMM_State_lag20",
     "Volatility_x_RSI"
   ],
-  "exog_indices": [
-    36,
-    9,
-    13,
-    32,
-    19,
-    25,
-    10,
-    22,
-    29,
-    30
-  ],
   "params": {
     "n_estimators": 50,
     "max_depth": 3,
@@ -72,5 +60,5 @@
     "colsample_bytree": 0.7257606994577213,
     "min_child_weight": 10
   },
-  "saved_at": "2026-04-13T00:41:08.582578"
+  "saved_at": "2026-04-29T20:36:42.545609"
 }

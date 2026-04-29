@@ -53,18 +53,6 @@
     "Sentiment_x_Return",
     "Volatility_x_RSI"
   ],
-  "exog_indices": [
-    6,
-    17,
-    7,
-    8,
-    16,
-    18,
-    43,
-    38,
-    44,
-    22
-  ],
   "params": {
     "n_estimators": 50,
     "max_depth": 3,
@@ -73,5 +61,5 @@
     "colsample_bytree": 0.9317964297972087,
     "min_child_weight": 7
   },
-  "saved_at": "2026-04-15T02:05:09.524697"
+  "saved_at": "2026-04-30T02:50:46.822211"
 }
