@@ -34,18 +34,6 @@
     "Close_lag10",
     "Close_lag20"
   ],
-  "exog_indices": [
-    17,
-    6,
-    29,
-    27,
-    18,
-    28,
-    30,
-    31,
-    24,
-    22
-  ],
   "params": {
     "n_estimators": 200,
     "max_depth": 6,
@@ -55,5 +43,5 @@
     "min_child_weight": 1,
     "random_state": 42
   },
-  "saved_at": "2026-04-14T01:41:07.863258"
+  "saved_at": "2026-04-27T17:13:43.157082"
 }

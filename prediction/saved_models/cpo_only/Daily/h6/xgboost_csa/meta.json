@@ -33,25 +33,13 @@
     "Close_lag10",
     "Close_lag20"
   ],
-  "exog_indices": [
-    15,
-    17,
-    7,
-    16,
-    18,
-    28,
-    29,
-    30,
-    24,
-    22
-  ],
   "params": {
-    "n_estimators": 147,
-    "max_depth": 3,
-    "learning_rate": 0.0011841749133327847,
-    "subsample": 0.9847264931789756,
-    "colsample_bytree": 1.0,
-    "min_child_weight": 7
+    "n_estimators": 278,
+    "max_depth": 15,
+    "learning_rate": 0.001,
+    "subsample": 0.739367801730186,
+    "colsample_bytree": 0.6856893247084905,
+    "min_child_weight": 5
   },
-  "saved_at": "2026-04-14T09:10:36.968493"
+  "saved_at": "2026-04-27T17:16:16.418747"
 }
