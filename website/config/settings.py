@@ -1,7 +1,10 @@
 """
 Django settings — CPO Prediction (Vercel + Firestore edition)
 
-- No database: auth lives in Firestore, sessions in signed cookies
+# Auth removed 2026-05-05 — public-facing decision support tool
+# No user accounts, no sessions tied to users, no login required.
+
+- No database: all data lives in Firestore
 - Firebase credentials loaded from FIREBASE_CREDENTIALS_JSON env var
   (falls back to firebase-credentials.json for local dev)
 """
@@ -38,7 +41,6 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'web.auth_backend.FirestoreAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -54,7 +56,6 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.messages.context_processors.messages',
-                'web.auth_backend.user_context_processor',
             ],
         },
     },
@@ -68,18 +69,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {}
 
 # ------------------------------------------------------------------
-# Sessions — stored entirely in a signed cookie (no DB / file needed)
+# Sessions — kept (signed-cookie backend) so django.contrib.messages
+# can store flash messages without a database.
 # ------------------------------------------------------------------
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-
-# ------------------------------------------------------------------
-# Auth redirects (used by firestore_login_required decorator)
-# ------------------------------------------------------------------
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'dashboard'
-LOGOUT_REDIRECT_URL = 'login'
 
 # ------------------------------------------------------------------
 # Internationalization
