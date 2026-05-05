@@ -113,6 +113,14 @@
             </div>
         </div>
 
+        <!-- Per-Horizon Model Performance -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <h3 class="text-base font-bold text-slate-800 mb-1">Per-Horizon Model Performance</h3>
+            <p class="text-xs text-slate-400 mb-4">Click a horizon card to compare Base vs CSA metrics</p>
+            <div id="horizon-cards" class="grid grid-cols-4 sm:grid-cols-7 gap-2 mb-4"></div>
+            <div id="horizon-detail" class="hidden border-t border-slate-100 pt-4"></div>
+        </div>
+
     </div><!-- /Main Content -->
 </div>
 {% endblock %}
@@ -437,5 +445,100 @@
 
         plotPredictions(lastActualDate, lastActualPrice, picks);
     });
+
+    // -----------------------------------------------------------------------
+    // Per-Horizon expandable cards
+    // -----------------------------------------------------------------------
+    const horizonData = JSON.parse('{{ horizon_data|safe }}');
+    let activeHorizon = null;
+
+    function fmtMetric(val, dec) {
+        return val == null ? '—' : parseFloat(val).toFixed(dec);
+    }
+
+    function bestCls(bv, cv, lowerBetter) {
+        if (bv == null || cv == null) return ['', ''];
+        return (lowerBetter ? bv <= cv : bv >= cv)
+            ? ['font-bold text-green-600', '']
+            : ['', 'font-bold text-green-600'];
+    }
+
+    function renderHorizonCards() {
+        const container = document.getElementById('horizon-cards');
+        if (!container) return;
+        container.innerHTML = '';
+        horizonData.forEach(h => {
+            const isActive = activeHorizon === h.horizon;
+            const badgeColor = h.best_variant === 'csa'
+                ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-600';
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = [
+                'flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-colors',
+                isActive ? 'border-primary bg-teal-50' : 'border-slate-200 hover:border-primary hover:bg-slate-50'
+            ].join(' ');
+            card.innerHTML = `
+                <span class="text-xs font-bold text-slate-700 mb-1">H${h.horizon}</span>
+                <span class="inline-block px-1.5 py-0.5 rounded text-xs font-medium ${badgeColor} mb-1">${h.best_variant ? h.best_variant.toUpperCase() : '—'}</span>
+                <span class="text-xs font-semibold text-slate-600">${h.best_mape != null ? parseFloat(h.best_mape).toFixed(2) + '%' : '—'}</span>
+            `;
+            card.addEventListener('click', () => toggleHorizonDetail(h.horizon));
+            container.appendChild(card);
+        });
+    }
+
+    function renderHorizonDetail(horizonNum) {
+        const panel = document.getElementById('horizon-detail');
+        const h = horizonData.find(x => x.horizon === horizonNum);
+        if (!h || !panel) return;
+        const b = h.base, c = h.csa;
+        const rows = [
+            { label: 'MAPE',           bv: b?.mape,            cv: c?.mape,            fmt: v => fmtMetric(v,4)+'%',             lob: true  },
+            { label: 'RMSE',           bv: b?.rmse,            cv: c?.rmse,            fmt: v => fmtMetric(v,4),                  lob: true  },
+            { label: 'R²',             bv: b?.r2,              cv: c?.r2,              fmt: v => fmtMetric(v,4),                  lob: false },
+            { label: 'Dir. Accuracy',  bv: b?.da,              cv: c?.da,              fmt: v => fmtMetric(v,2)+'%',             lob: false },
+            { label: 'Predicted Price',bv: b?.predicted_price, cv: c?.predicted_price, fmt: v => v == null ? '—' : 'Rp '+parseFloat(v).toLocaleString('id-ID'), lob: null },
+            { label: 'Predicted Date', bv: b?.predicted_date,  cv: c?.predicted_date,  fmt: v => v || '—',                       lob: null  },
+        ];
+        const tableRows = rows.map(r => {
+            const [bc, cc] = r.lob != null ? bestCls(r.bv, r.cv, r.lob) : ['', ''];
+            return `<tr class="border-t border-slate-100">
+                <td class="py-2 pr-4 text-xs text-slate-500 font-medium whitespace-nowrap">${r.label}</td>
+                <td class="py-2 pr-4 text-xs text-slate-700 text-center ${bc}">${r.fmt(r.bv)}</td>
+                <td class="py-2 text-xs text-slate-700 text-center ${cc}">${r.fmt(r.cv)}</td>
+            </tr>`;
+        }).join('');
+        panel.innerHTML = `
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-bold text-slate-700">Horizon ${horizonNum} — Base vs CSA</h4>
+                <button type="button" onclick="toggleHorizonDetail(${horizonNum})"
+                    class="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded hover:bg-slate-100">Collapse ×</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[320px]">
+                    <thead><tr class="text-xs text-slate-400 uppercase tracking-wide">
+                        <th class="pb-2 pr-4 text-left font-medium">Metric</th>
+                        <th class="pb-2 pr-4 text-center font-medium">Base</th>
+                        <th class="pb-2 text-center font-medium">CSA</th>
+                    </tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            </div>`;
+        panel.classList.remove('hidden');
+    }
+
+    function toggleHorizonDetail(horizonNum) {
+        const panel = document.getElementById('horizon-detail');
+        if (activeHorizon === horizonNum) {
+            activeHorizon = null;
+            if (panel) panel.classList.add('hidden');
+        } else {
+            activeHorizon = horizonNum;
+            renderHorizonDetail(horizonNum);
+        }
+        renderHorizonCards();
+    }
+
+    if (horizonData.length > 0) renderHorizonCards();
 </script>
 {% endblock %}

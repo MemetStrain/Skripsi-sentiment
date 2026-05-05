@@ -98,47 +98,65 @@ def dashboard(request):
         stats = {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0}
         latest_date = 'N/A'
 
-    # Best metric from pre-computed predictions (horizon 1 Daily, lowest MAPE).
-    # Fetch by constructing known doc IDs to avoid composite index requirements.
+    # Fetch all 14 prediction docs (1 model x 2 variants x 7 horizons).
+    # Individual .get() calls by constructed doc ID - no composite index needed.
     metrics = {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'}
+    horizon_data = []
     try:
-        best_mape = float('inf')
-        for model in ('xgboost',):
+        for h in range(1, 8):
+            h_entry = {'horizon': h, 'best_variant': None, 'best_mape': None, 'base': None, 'csa': None}
             for variant in ('base', 'csa'):
-                doc_id = f'{model}_{variant}_Daily_h1'
+                doc_id = f'xgboost_{variant}_Daily_h{h}'
                 doc = db.collection('predictions').document(doc_id).get()
                 if not doc.exists:
                     continue
                 d = doc.to_dict()
                 m = d.get('metrics', {})
-                mape = m.get('mape', float('inf'))
-                if mape < best_mape:
-                    best_mape = mape
-                    metrics = {
-                        'mape': round(mape, 2),
-                        'r2': round(m.get('r2', 0), 4),
-                        'accuracy': round(m.get('directional_accuracy', 0), 2),
-                        'best_model': f"{d.get('model', '')} ({d.get('variant', '')})",
-                    }
+                entry = {
+                    'mape':            round(float(m.get('mape', 0)), 4),
+                    'rmse':            round(float(m.get('rmse', 0)), 4),
+                    'r2':              round(float(m.get('r2', 0)), 4),
+                    'da':              round(float(m.get('directional_accuracy', 0)), 2),
+                    'predicted_price': round(float(d.get('predicted_price', 0)), 2),
+                    'predicted_date':  d.get('predicted_date', ''),
+                }
+                h_entry[variant] = entry
+                if h_entry['best_mape'] is None or entry['mape'] < h_entry['best_mape']:
+                    h_entry['best_mape'] = entry['mape']
+                    h_entry['best_variant'] = variant
+            horizon_data.append(h_entry)
+
+        # Backward-compatible h=1 summary for the 4-card header row
+        h1 = next((x for x in horizon_data if x['horizon'] == 1), None)
+        if h1 and h1['best_variant']:
+            best = h1[h1['best_variant']]
+            metrics = {
+                'mape':       round(best['mape'], 2),
+                'r2':         round(best['r2'], 4),
+                'accuracy':   round(best['da'], 2),
+                'best_model': f"XGBoost ({h1['best_variant'].upper()})",
+            }
     except Exception:
         pass
 
     return render(request, 'dashboard.html', {
-        'chart_data': json.dumps(chart_data),
-        'metrics': metrics,
-        'stats': stats,
-        'latest_date': latest_date,
-        'page_title': 'CPO Price Prediction Dashboard',
+        'chart_data':   json.dumps(chart_data),
+        'metrics':      metrics,
+        'horizon_data': json.dumps(horizon_data),
+        'stats':        stats,
+        'latest_date':  latest_date,
+        'page_title':   'CPO Price Prediction Dashboard',
     })
 
 
 def _empty_dashboard_ctx():
     return {
-        'chart_data': json.dumps([]),
-        'metrics': {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'},
-        'stats': {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0},
-        'latest_date': 'N/A',
-        'page_title': 'CPO Price Prediction Dashboard',
+        'chart_data':   json.dumps([]),
+        'metrics':      {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'},
+        'horizon_data': json.dumps([]),
+        'stats':        {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0},
+        'latest_date':  'N/A',
+        'page_title':   'CPO Price Prediction Dashboard',
     }
 
 
