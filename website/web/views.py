@@ -139,24 +139,49 @@ def dashboard(request):
     except Exception:
         pass
 
+    # Sentiment trend from `sentiment_aggregates` (Daily, 90-day window).
+    sentiment_list = []
+    try:
+        sent_docs = (
+            db.collection('sentiment_aggregates')
+            .where('date', '>=', three_months_ago)
+            .order_by('date')
+            .stream()
+        )
+        for doc in sent_docs:
+            d = doc.to_dict()
+            if d.get('frequency') != 'Daily':
+                continue
+            sentiment_list.append({
+                'date':            d.get('date'),
+                'positive_prob':   round(float(d.get('positive_prob', 0)), 4),
+                'negative_prob':   round(float(d.get('negative_prob', 0)), 4),
+                'neutral_prob':    round(float(d.get('neutral_prob',  0)), 4),
+                'sentiment_score': round(float(d.get('sentiment_score', 0)), 4),
+            })
+    except Exception:
+        pass
+
     return render(request, 'dashboard.html', {
-        'chart_data':   json.dumps(chart_data),
-        'metrics':      metrics,
-        'horizon_data': json.dumps(horizon_data),
-        'stats':        stats,
-        'latest_date':  latest_date,
-        'page_title':   'CPO Price Prediction Dashboard',
+        'chart_data':     json.dumps(chart_data),
+        'metrics':        metrics,
+        'horizon_data':   json.dumps(horizon_data),
+        'sentiment_data': json.dumps(sentiment_list),
+        'stats':          stats,
+        'latest_date':    latest_date,
+        'page_title':     'CPO Price Prediction Dashboard',
     })
 
 
 def _empty_dashboard_ctx():
     return {
-        'chart_data':   json.dumps([]),
-        'metrics':      {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'},
-        'horizon_data': json.dumps([]),
-        'stats':        {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0},
-        'latest_date':  'N/A',
-        'page_title':   'CPO Price Prediction Dashboard',
+        'chart_data':     json.dumps([]),
+        'metrics':        {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'},
+        'horizon_data':   json.dumps([]),
+        'sentiment_data': json.dumps([]),
+        'stats':          {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0},
+        'latest_date':    'N/A',
+        'page_title':     'CPO Price Prediction Dashboard',
     }
 
 
