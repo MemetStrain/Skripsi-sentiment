@@ -246,6 +246,7 @@ def news(request):
 
     total_news = len(news_list)
     total_pages = max(1, (total_news + items_per_page - 1) // items_per_page)
+    page_number = max(1, min(page_number, total_pages))
     start = (page_number - 1) * items_per_page
     news_page = news_list[start:start + items_per_page]
 
