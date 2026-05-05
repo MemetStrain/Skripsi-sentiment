@@ -45,19 +45,13 @@
 
             <div class="space-y-3">
                 <input type="hidden" id="pred-model" value="xgboost">
-                <div>
-                    <label class="block text-xs font-medium text-slate-600 mb-1">Variant</label>
-                    <select id="pred-variant" class="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary">
-                        <option value="csa">CSA-Optimized</option>
-                        <option value="base">Base</option>
-                    </select>
-                </div>
                 <input type="hidden" id="pred-frequency" value="Daily">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 mb-1">Horizon</label>
                     <select id="pred-horizon" class="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary">
-                        <!-- Populated by JS based on frequency -->
+                        <!-- Populated by JS -->
                     </select>
+                    <p class="mt-1 text-[11px] text-slate-400">All horizons up to the selected one are plotted using the variant with the lowest MAPE per horizon.</p>
                 </div>
                 <button id="run-prediction"
                     class="w-full bg-primary hover:bg-teal-800 text-white text-sm font-medium py-2 rounded-lg transition-colors">
@@ -71,22 +65,7 @@
                     <span class="text-slate-500 text-xs">Last Actual</span>
                     <span id="res-last-price" class="font-semibold text-slate-800 text-xs"></span>
                 </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-500 text-xs">Predicted</span>
-                    <span id="res-pred-price" class="font-bold text-primary"></span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-500 text-xs">Date</span>
-                    <span id="res-pred-date" class="text-slate-700 text-xs"></span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-500 text-xs">MAPE</span>
-                    <span id="res-mape" class="text-slate-700 text-xs"></span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-500 text-xs">Dir. Accuracy</span>
-                    <span id="res-da" class="text-slate-700 text-xs"></span>
-                </div>
+                <div id="res-horizons" class="space-y-1.5"></div>
             </div>
             <div id="prediction-error" class="hidden mt-3 text-xs text-red-600 bg-red-50 rounded p-2"></div>
             <div id="prediction-loading" class="hidden mt-3 text-xs text-slate-500 text-center">Loading…</div>
@@ -247,12 +226,24 @@
     });
 
     // -----------------------------------------------------------------------
-    // Prediction panel
+    // Prediction panel — best variant per horizon, all horizons up to N
     // -----------------------------------------------------------------------
     const originalLabels = [...labels];
     const originalPrices = [...prices];
 
-    function clearPredictionDataset() {
+    // Distinct color per horizon (h=1..7). Avoids the bullish/bearish/neutral
+    // palette so prediction lines are visually separable from the state bands.
+    const HORIZON_COLORS = {
+        1: '#f59e0b', // amber
+        2: '#ec4899', // pink
+        3: '#8b5cf6', // violet
+        4: '#06b6d4', // cyan
+        5: '#10b981', // emerald
+        6: '#6366f1', // indigo
+        7: '#84cc16', // lime
+    };
+
+    function clearPredictionDatasets() {
         priceChart.data.labels = [...originalLabels];
         priceChart.data.datasets[0].data = [...originalPrices];
         if (priceChart.data.datasets.length > 1) {
@@ -262,42 +253,58 @@
         priceChart.update();
     }
 
-    function plotPrediction(lastActualDate, lastActualPrice, predictedDate, predictedPrice) {
+    /**
+     * Plot one prediction dataset per horizon: a 2-point dotted line from
+     * the last actual close to the horizon's predicted price.
+     * `points` = [{ horizon, predDate, predPrice, color }, ...]
+     */
+    function plotPredictions(lastActualDate, lastActualPrice, points) {
         const extLabels = [...originalLabels];
-        if (!extLabels.includes(predictedDate)) extLabels.push(predictedDate);
-
-        const lastIdx = extLabels.indexOf(lastActualDate);
-        const predIdx = extLabels.indexOf(predictedDate);
-        const predData = new Array(extLabels.length).fill(null);
-        if (lastIdx !== -1) predData[lastIdx] = lastActualPrice;
-        if (predIdx !== -1) predData[predIdx] = predictedPrice;
-
-        const pointRadii = new Array(extLabels.length).fill(0);
-        if (predIdx !== -1) pointRadii[predIdx] = 6;
+        for (const p of points) {
+            if (!extLabels.includes(p.predDate)) extLabels.push(p.predDate);
+        }
+        // Keep prediction dates in chronological order on the x-axis.
+        extLabels.sort();
 
         priceChart.data.labels = extLabels;
-        priceChart.data.datasets[0].data = [...originalPrices, ...(extLabels.length > originalLabels.length ? [null] : [])];
+        const closeData = new Array(extLabels.length).fill(null);
+        originalLabels.forEach((d, i) => {
+            const idx = extLabels.indexOf(d);
+            if (idx !== -1) closeData[idx] = originalPrices[i];
+        });
+        priceChart.data.datasets[0].data = closeData;
 
-        const predDataset = {
-            label: 'Prediction',
-            data: predData,
-            borderColor: '#f59e0b',
-            backgroundColor: 'rgba(245,158,11,0.08)',
-            borderWidth: 2,
-            borderDash: [6, 3],
-            fill: false,
-            tension: 0,
-            pointRadius: pointRadii,
-            pointHoverRadius: 6,
-            pointBackgroundColor: '#f59e0b',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2
-        };
-
+        // Remove any previous prediction datasets.
         if (priceChart.data.datasets.length > 1) {
-            priceChart.data.datasets[1] = predDataset;
-        } else {
-            priceChart.data.datasets.push(predDataset);
+            priceChart.data.datasets.splice(1);
+        }
+
+        const lastIdx = extLabels.indexOf(lastActualDate);
+        for (const p of points) {
+            const predIdx = extLabels.indexOf(p.predDate);
+            const data = new Array(extLabels.length).fill(null);
+            if (lastIdx !== -1) data[lastIdx] = lastActualPrice;
+            if (predIdx !== -1) data[predIdx] = p.predPrice;
+
+            const pointRadii = new Array(extLabels.length).fill(0);
+            if (predIdx !== -1) pointRadii[predIdx] = 6;
+
+            priceChart.data.datasets.push({
+                label: `+${p.horizon}d (${p.variant})`,
+                data,
+                borderColor: p.color,
+                backgroundColor: p.color + '14',
+                borderWidth: 2,
+                borderDash: [6, 3],
+                fill: false,
+                tension: 0,
+                spanGaps: true,
+                pointRadius: pointRadii,
+                pointHoverRadius: 6,
+                pointBackgroundColor: p.color,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+            });
         }
 
         document.getElementById('pred-legend').classList.remove('hidden');
@@ -305,6 +312,7 @@
     }
 
     const HORIZONS = [1, 2, 3, 4, 5, 6, 7];
+    const VARIANTS = ['base', 'csa'];
 
     function populateHorizons() {
         const sel = document.getElementById('pred-horizon');
@@ -319,10 +327,59 @@
 
     populateHorizons();
 
+    /**
+     * Fetch one (variant, horizon) prediction. Returns null on any failure
+     * so the per-horizon selector can fall back to the other variant.
+     */
+    async function fetchOne(model, variant, horizon) {
+        try {
+            const res = await fetch(
+                `/api/prediction/?model=${model}&variant=${variant}&frequency=Daily&horizon=${horizon}`
+            );
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.error || data.predicted_price == null) return null;
+            return { variant, ...data };
+        } catch {
+            return null;
+        }
+    }
+
+    /** Pick the candidate with the lowest MAPE; null-safe. */
+    function pickBest(candidates) {
+        const valid = candidates.filter(c => c && c.metrics && c.metrics.mape != null);
+        if (!valid.length) return candidates.find(c => c) || null;
+        valid.sort((a, b) =>
+            parseFloat(a.metrics.mape) - parseFloat(b.metrics.mape)
+        );
+        return valid[0];
+    }
+
+    function renderHorizonRows(picks) {
+        const container = document.getElementById('res-horizons');
+        container.innerHTML = '';
+        for (const p of picks) {
+            const row = document.createElement('div');
+            row.className = 'flex justify-between items-center text-xs gap-2';
+            const variantBadge = p.variant === 'csa' ? 'CSA' : 'Base';
+            const mapeStr = p.mape != null ? `${parseFloat(p.mape).toFixed(2)}%` : '—';
+            row.innerHTML = `
+                <span class="flex items-center gap-1.5 text-slate-600">
+                    <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${p.color}"></span>
+                    +${p.horizon}d
+                    <span class="text-slate-400">(${variantBadge})</span>
+                </span>
+                <span class="text-right">
+                    <span class="font-semibold text-slate-800">Rp ${parseFloat(p.predPrice).toLocaleString('id-ID')}</span>
+                    <span class="text-slate-400 ml-1">${mapeStr}</span>
+                </span>`;
+            container.appendChild(row);
+        }
+    }
+
     document.getElementById('run-prediction').addEventListener('click', async () => {
         const model = document.getElementById('pred-model').value;
-        const variant = document.getElementById('pred-variant').value;
-        const horizon = document.getElementById('pred-horizon').value;
+        const horizon = parseInt(document.getElementById('pred-horizon').value, 10);
 
         const resultEl = document.getElementById('prediction-result');
         const errorEl = document.getElementById('prediction-error');
@@ -332,45 +389,53 @@
         errorEl.classList.add('hidden');
         loadingEl.classList.remove('hidden');
 
-        try {
-            const res = await fetch(
-                `/api/prediction/?model=${model}&variant=${variant}&frequency=Daily&horizon=${horizon}`
-            );
-            loadingEl.classList.add('hidden');
-            const data = await res.json();
-
-            if (!res.ok || data.error) {
-                errorEl.textContent = data.error || 'Prediction unavailable.';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-
-            document.getElementById('res-last-price').textContent =
-                `Rp ${parseFloat(data.last_actual_price).toLocaleString('id-ID')} (${data.last_actual_date})`;
-            document.getElementById('res-pred-price').textContent =
-                `Rp ${parseFloat(data.predicted_price).toLocaleString('id-ID')}`;
-            document.getElementById('res-pred-date').textContent = data.predicted_date || '—';
-            document.getElementById('res-mape').textContent =
-                data.metrics?.mape != null ? `${parseFloat(data.metrics.mape).toFixed(2)}%` : '—';
-            document.getElementById('res-da').textContent =
-                data.metrics?.directional_accuracy != null
-                    ? `${parseFloat(data.metrics.directional_accuracy).toFixed(1)}%` : '—';
-
-            resultEl.classList.remove('hidden');
-
-            if (data.last_actual_date && data.predicted_date && data.predicted_price != null) {
-                plotPrediction(
-                    data.last_actual_date,
-                    parseFloat(data.last_actual_price),
-                    data.predicted_date,
-                    parseFloat(data.predicted_price)
-                );
-            }
-        } catch (e) {
-            loadingEl.classList.add('hidden');
-            errorEl.textContent = 'Network error. Please try again.';
-            errorEl.classList.remove('hidden');
+        // Fan out: 2 variants × N horizons in parallel.
+        const requests = [];
+        for (let h = 1; h <= horizon; h++) {
+            for (const v of VARIANTS) requests.push(fetchOne(model, v, h));
         }
+        const results = await Promise.all(requests);
+        loadingEl.classList.add('hidden');
+
+        // Group by horizon and pick the best variant per h.
+        const byHorizon = {};
+        results.forEach((r) => {
+            if (!r) return;
+            (byHorizon[r.horizon] = byHorizon[r.horizon] || []).push(r);
+        });
+
+        const picks = [];
+        for (let h = 1; h <= horizon; h++) {
+            const best = pickBest(byHorizon[h] || []);
+            if (!best) continue;
+            picks.push({
+                horizon: h,
+                variant: best.variant,
+                predDate: best.predicted_date,
+                predPrice: parseFloat(best.predicted_price),
+                mape: best.metrics?.mape,
+                color: HORIZON_COLORS[h] || '#f59e0b',
+            });
+        }
+
+        if (!picks.length) {
+            errorEl.textContent = 'Predictions unavailable for the selected horizons.';
+            errorEl.classList.remove('hidden');
+            clearPredictionDatasets();
+            return;
+        }
+
+        // All picks share the same last_actual_* (single live model run).
+        const anyResult = results.find(r => r);
+        const lastActualDate = anyResult.last_actual_date;
+        const lastActualPrice = parseFloat(anyResult.last_actual_price);
+
+        document.getElementById('res-last-price').textContent =
+            `Rp ${lastActualPrice.toLocaleString('id-ID')} (${lastActualDate})`;
+        renderHorizonRows(picks);
+        resultEl.classList.remove('hidden');
+
+        plotPredictions(lastActualDate, lastActualPrice, picks);
     });
 </script>
 {% endblock %}
