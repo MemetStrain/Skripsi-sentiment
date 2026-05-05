@@ -22,9 +22,10 @@ For history of what was removed, see that inventory.
 - **Sentiment model:** FinBERT (English).
 - **Regime detection:** Gaussian HMM with 3 states (Bullish / Neutral /
   Bearish), `N_STATES_RANGE = range(2, 5)` for BIC selection.
-- **Database:** Google Cloud Firestore for everything (auth + data).
-- **Deployment:** Vercel for read-only Django frontend, Cloud Run Job
-  (Docker) for the daily ML scheduler.
+- **Database:** Google Cloud Firestore for all data.
+- **Deployment:** Vercel for the public-facing read-only Django frontend
+  (no authentication — three pages: Dashboard, News, About), Cloud Run
+  Job (Docker) for the daily ML scheduler.
 
 ## Pipeline overview
 
@@ -93,10 +94,9 @@ scheduler/                       Production daily pipeline (Cloud Run Job)
   Dockerfile
   initial_load_progress.json     Checkpoint file (currently {})
 
-website/                         Vercel-hosted read-only Django app
+website/                         Vercel-hosted public read-only Django app
   config/                        Django settings
-  web/auth_backend.py            Custom Firestore auth (no ORM)
-  web/views.py, templates/       Dashboard / News / About / Auth
+  web/views.py, templates/       Dashboard / News / About
   web/tasks.py                   Stubs for future scheduler triggers
 
 revision/CPO_COUNCIL_VERDICT_…   Most recent thesis-council verdict.
@@ -107,7 +107,7 @@ _archive_before_cleanup/         Everything removed by the 2026-04-26 sweep.
 
 | Collection            | Doc ID                                  | Notes |
 |-----------------------|-----------------------------------------|-------|
-| `users`               | UID                                     | Email + password hash for custom Firestore auth. |
+| `users`               | UID                                     | Legacy — historical login data, no longer read or written. Site is now public-facing read-only. |
 | `daily_prices`        | `YYYY-MM-DD`                            | OHLCV. |
 | `hmm_states`          | `{frequency}_{YYYY-MM-DD}`              | Currently `Daily_…` only. |
 | `predictions`         | `{model}_{variant}_{frequency}_h{h}`    | Live: `xgboost_{base,csa}_Daily_h{1..7}` (14 docs). Legacy RF / ARIMAX / SARIMAX / Bayesian docs may exist from earlier runs but are no longer refreshed. |
@@ -152,10 +152,21 @@ cd website
 python manage.py runserver
 ```
 
-Auth uses the custom Firestore middleware in `web/auth_backend.py` — no
-Django ORM, no SQLite.
+Public-facing read-only system; no authentication required. All data
+reads go directly through Firestore in `web/views.py` — no Django ORM,
+no SQLite.
 
 ## What changed in 2026-04-26 sweep
 
 See [CLEANUP_INVENTORY.md](CLEANUP_INVENTORY.md) and
 [CLEANUP_REPORT.md](CLEANUP_REPORT.md) (forthcoming).
+
+## What changed in 2026-05-05 auth-removal sweep
+
+The custom Firestore-backed login flow (`auth_backend.py`, login.html,
+register.html, login/logout/register URLs and views) was removed. The
+site is now a public-facing read-only dashboard with three pages —
+Dashboard, News, About. See
+[AUTH_REMOVAL_INVENTORY.md](AUTH_REMOVAL_INVENTORY.md) and
+[AUTH_REMOVAL_REPORT.md](AUTH_REMOVAL_REPORT.md). All archived files
+live under `_archive_auth_removal/`.
