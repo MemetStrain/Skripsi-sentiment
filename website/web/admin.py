@@ -1,1 +1,1 @@
-# Django admin not used — authentication is Firestore-backed.
+# Django admin not used — public-facing read-only site.
