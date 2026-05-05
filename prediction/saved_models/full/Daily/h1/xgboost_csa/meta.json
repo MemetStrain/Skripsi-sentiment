@@ -67,11 +67,11 @@
   ],
   "params": {
     "n_estimators": 50,
-    "max_depth": 15,
+    "max_depth": 7,
     "learning_rate": 0.001,
-    "subsample": 0.6,
-    "colsample_bytree": 0.6670946246012288,
-    "min_child_weight": 6
+    "subsample": 1.0,
+    "colsample_bytree": 0.9056244411718182,
+    "min_child_weight": 10
   },
-  "saved_at": "2026-04-29T20:43:31.368358"
+  "saved_at": "2026-05-05T02:56:31.294354"
 }

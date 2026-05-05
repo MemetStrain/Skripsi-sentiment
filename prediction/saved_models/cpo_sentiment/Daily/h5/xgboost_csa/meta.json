@@ -45,12 +45,12 @@
     "Sentiment_x_Return"
   ],
   "params": {
-    "n_estimators": 125,
+    "n_estimators": 104,
     "max_depth": 3,
-    "learning_rate": 0.0013528019485158549,
+    "learning_rate": 0.0013870641996980085,
     "subsample": 1.0,
     "colsample_bytree": 1.0,
     "min_child_weight": 9
   },
-  "saved_at": "2026-04-30T00:57:10.260126"
+  "saved_at": "2026-05-05T08:38:12.821525"
 }

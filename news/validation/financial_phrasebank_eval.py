@@ -35,13 +35,13 @@ except Exception:
 # Constants
 # =============================================================================
 
-MODEL_NAME = "ProsusAI/finbert"
+MODEL_NAME = "yiyanghkust/finbert-tone"
 MAX_LENGTH = 256          # PhraseBank sentences are short
 BATCH_SIZE = 32
 RANDOM_STATE = 42
 
 # FinBERT id->label mapping (matches scheduler/sentiment_runner.py)
-FINBERT_ID2LABEL = {0: "positive", 1: "negative", 2: "neutral"}
+FINBERT_ID2LABEL = {0: 'neutral', 1: 'positive', 2: 'negative'}
 
 # Financial PhraseBank label values: 0=negative, 1=neutral, 2=positive
 PHRASEBANK_ID2LABEL = {0: "negative", 1: "neutral", 2: "positive"}

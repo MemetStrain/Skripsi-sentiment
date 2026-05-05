@@ -1,8 +1,8 @@
 horizon,best_model,naive_model,dm_stat,p_value,significant_at_0.05,better_model
-1,xgboost_csa,naive_rw,-0.363164,0.716482,False,tie
-2,xgboost_csa,naive_rw,-0.083386,0.933545,False,tie
-3,xgboost_csa,naive_rw,0.876118,0.380966,False,tie
-4,xgboost_csa,naive_rw,-0.642667,0.52044,False,tie
-5,xgboost_csa,naive_rw,-0.684336,0.493763,False,tie
-6,xgboost_csa,naive_rw,-0.760981,0.446668,False,tie
-7,xgboost_csa,naive_rw,-0.405263,0.685284,False,tie
+1,xgboost_csa,naive_rw,-0.545241,0.585588,False,tie
+2,xgboost_csa,naive_rw,-0.337007,0.736112,False,tie
+3,xgboost_csa,naive_rw,-0.350723,0.725796,False,tie
+4,xgboost_csa,naive_rw,-0.769785,0.441428,False,tie
+5,xgboost_csa,naive_rw,0.114137,0.909129,False,tie
+6,xgboost_csa,naive_rw,-0.593427,0.552895,False,tie
+7,xgboost_csa,naive_rw,-0.415406,0.677845,False,tie

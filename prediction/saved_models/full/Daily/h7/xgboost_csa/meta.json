@@ -56,10 +56,10 @@
   "params": {
     "n_estimators": 50,
     "max_depth": 3,
-    "learning_rate": 0.0010267818891091462,
-    "subsample": 0.830993815191316,
-    "colsample_bytree": 0.9317964297972087,
-    "min_child_weight": 7
+    "learning_rate": 0.001,
+    "subsample": 0.8086552135359479,
+    "colsample_bytree": 0.6713020096229284,
+    "min_child_weight": 6
   },
-  "saved_at": "2026-04-30T02:50:46.822211"
+  "saved_at": "2026-05-05T09:49:25.708815"
 }
