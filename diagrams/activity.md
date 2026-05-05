@@ -1,305 +1,222 @@
-# Activity Diagrams — CPO Price Prediction System
+# Activity Diagrams — CPO Prediction Website
 
-> ⚠️ **OUTDATED — pre-2026-04-26**
->
-> This document describes the pre-cleanup thesis design (RF / ARIMAX /
-> SARIMAX / XGBoost models, Bayesian + CSA optimisers, Daily + Weekly +
-> Monthly intervals). The current scope is **XGBoost only with an
-> ablation study (C1-C4), CSA optimiser, and Daily frequency**.
-> See [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) for the trim list
-> and [ARCHITECTURE.md](../ARCHITECTURE.md) for the current architecture.
-> The diagrams will be redrawn in a separate task.
+> Scope: the public-facing Django website (`website/`).
+> Reflects state as of 2026-05-05 — post auth-removal and post
+> multi-horizon prediction feature.
+> The daily Cloud Run scheduler that populates Firestore is out of
+> scope here; see [ARCHITECTURE.md](../ARCHITECTURE.md) for that flow.
 
-Four activity flows are documented here:
-1. [User Authentication Flow](#1-user-authentication-flow)
-2. [Dashboard Load Flow](#2-dashboard-load-flow)
-3. [Prediction Request Flow](#3-prediction-request-flow)
-4. [Daily Scheduler Pipeline](#4-daily-scheduler-pipeline)
+Three activity flows are documented:
+
+1. [Dashboard Load](#1-dashboard-load)
+2. [Multi-Horizon Prediction Request](#2-multi-horizon-prediction-request)
+3. [News Browsing & Filtering](#3-news-browsing--filtering)
 
 ---
 
-## 1. User Authentication Flow
+## 1. Dashboard Load
 
 ### Diagram
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B{User has\nan account?}
+    A([Visitor opens /]) --> B[Django routes to<br/>views.py: dashboard]
 
-    B -->|No| REG1[Navigate to /register/]
-    B -->|Yes| LOG1[Navigate to /login/]
+    B --> C{Firestore client<br/>initialised?}
+    C -->|ValueError| C1[Add error message:<br/>Firebase not initialized]
+    C1 --> C2[Render dashboard.html<br/>with empty context]
+    C2 --> Z([Page rendered<br/>placeholder values])
 
-    REG1 --> REG2[Fill in username,\nemail, password]
-    REG2 --> REG3{Validate input}
-    REG3 -->|Email already exists| REG4[Show error:\nEmail taken]
-    REG4 --> REG2
-    REG3 -->|Password too short| REG5[Show error:\nPassword < 8 chars]
-    REG5 --> REG2
-    REG3 -->|Valid| REG6[Hash password\nmake_password PBKDF2-SHA256]
-    REG6 --> REG7[Create document\nin Firestore users collection]
-    REG7 --> LOG1
+    C -->|OK| D[Compute<br/>three_months_ago = today - 90d]
 
-    LOG1 --> LOG2[Fill in email, password]
-    LOG2 --> LOG3[POST /login/]
-    LOG3 --> LOG4{Query Firestore\nfor email match}
-    LOG4 -->|No user found| LOG5[Show error:\nInvalid credentials]
-    LOG5 --> LOG2
-    LOG4 -->|User found| LOG6{check_password\nagainst hash}
-    LOG6 -->|Mismatch| LOG5
-    LOG6 -->|Match| LOG7[Write uid, username, email\nto signed session cookie]
-    LOG7 --> LOG8[Update last_login\nin Firestore]
-    LOG8 --> LOG9[Redirect to /dashboard/\nor ?next= param]
+    D --> E[Stream daily_prices<br/>where date ≥ three_months_ago<br/>order by date]
+    E --> E1[Build price_list:<br/>open / high / low / close / volume]
 
-    LOG9 --> DASH([Dashboard])
-    DASH --> LOGOUT{User clicks\nLogout?}
-    LOGOUT -->|No| DASH
-    LOGOUT -->|Yes| OUT1[POST /logout/]
-    OUT1 --> OUT2[Flush session cookie]
-    OUT2 --> LOG1
+    E1 --> F[Stream hmm_states<br/>where date ≥ three_months_ago<br/>order by date]
+    F --> F1[Filter to frequency in null, Daily<br/>Build state_dict: date → state_label, state]
+
+    F1 --> G[For each price row:<br/>look up state_dict<br/>fall back to Neutral if missing]
+    G --> G1[Append to chart_data<br/>date, OHLC, volume,<br/>state int 0/1/2, state_label]
+
+    G1 --> H{price_list<br/>non-empty?}
+    H -->|Yes| H1[Compute stats:<br/>current = last close<br/>max / min / avg<br/>total_days]
+    H -->|No| H2[stats = zeros<br/>latest_date = N/A]
+
+    H1 --> I
+    H2 --> I
+
+    I[Read 2 best-model candidates:<br/>predictions xgboost_base_Daily_h1<br/>predictions xgboost_csa_Daily_h1]
+    I --> I1{Lowest<br/>MAPE?}
+    I1 --> I2[metrics = best.mape, r2,<br/>directional_accuracy, label]
+
+    I2 --> J[Build context:<br/>chart_data JSON, metrics,<br/>stats, latest_date,<br/>page_title]
+    J --> K[Render dashboard.html]
+
+    K --> L([Browser receives HTML])
+    L --> M[Chart.js parses inline JSON<br/>creates line dataset of close]
+    M --> N[Annotation plugin groups<br/>consecutive same-state dates<br/>draws colored bands]
+    N --> O[Populate horizon dropdown 1..7]
+    O --> P([Dashboard interactive])
 ```
 
 ### Activity Descriptions
 
 | Step | Actor | Description |
 |---|---|---|
-| User has an account? | User | Branch point: directs to register or login |
-| Fill registration form | User | Enters username, email, and password on `/register/` |
-| Validate input | System | Checks for duplicate email (Firestore query) and password length ≥ 8 |
-| Show error: Email taken | System | Re-renders `/register/` with validation error message |
-| Show error: Password < 8 chars | System | Re-renders `/register/` with validation error message |
-| Hash password | System | Calls Django `make_password()` → PBKDF2-SHA256 hash |
-| Create user in Firestore | System | Writes new document to `users` collection with `is_active=True` |
-| Fill login form | User | Enters email and password on `/login/` |
-| Query Firestore for email | System | `users.where("email", "==", email_lower).limit(1)` |
-| check_password | System | Verifies submitted password against stored hash |
-| Write session cookie | System | Stores `_uid`, `_username`, `_email` in signed Django session |
-| Update last_login | System | Asynchronously updates Firestore `users` document |
-| Redirect to dashboard | System | Sends 302 to `/` or to `?next=` destination |
-| Flush session cookie | System | `request.session.flush()` — invalidates the cookie |
+| Routes to dashboard | Django | URL `/` resolves to `views.py:dashboard` (no auth decorator). |
+| Firestore client init | System | `firestore.client()`; raises `ValueError` if `firebase_admin.initialize_app` was not called. |
+| three_months_ago | System | `(datetime.now().date() - timedelta(days=90)).isoformat()` — sliding 90-day window. |
+| Stream daily_prices | System | `.where('date','>=',cutoff).order_by('date').stream()` — single-field filter so no composite index needed. |
+| Stream hmm_states | System | Same query shape; filter `frequency in (None, 'Daily')` is applied client-side. |
+| Build chart_data | System | Per-row merge of price + HMM label; `state_label` mapped via `{Bearish:0, Bullish:1, Neutral:2}`. |
+| Compute stats | System | List-comprehension `max() / min() / sum()/len()` on `close` values. |
+| Best-model lookup | System | Iterates over `('base','csa')` for `xgboost_*_Daily_h1`; picks lowest MAPE. |
+| Render dashboard.html | System | `django.shortcuts.render` with the assembled context dict. |
+| Chart.js init | Browser | Parses `{{ chart_data\|safe }}` into JS array; constructs a single `'Close Price'` dataset. |
+| Annotation bands | Browser | Walks `chart_data`; emits one `box` annotation per consecutive run of same `state`. |
+| Populate horizon dropdown | Browser | Static array `[1..7]` → `<option>` per horizon (variant select was removed). |
 
-**Key Files:** `website/web/views.py` (`login_view`, `register_view`, `logout_view`), `website/web/auth_backend.py`
+**Key files:** `website/web/views.py:dashboard`, `website/web/templates/dashboard.html`, `website/web/templates/base.html`
 
 ---
 
-## 2. Dashboard Load Flow
+## 2. Multi-Horizon Prediction Request
 
 ### Diagram
 
 ```mermaid
 flowchart TD
-    A([User navigates to /]) --> B{Session cookie\nvalid?}
-    B -->|No| C[Redirect to /login/]
-    B -->|Yes| D[FirestoreAuthMiddleware\nsets request.user from cookie]
+    A([Visitor on Dashboard]) --> B[Visitor selects horizon N<br/>1–7 days ahead]
+    B --> C[Visitor clicks<br/>Get Prediction button]
 
-    D --> E[Query Firestore daily_prices\nlast 90 days ordered by date desc]
-    E --> F[Query Firestore hmm_states\nfor same date range]
+    C --> D[run-prediction click handler]
+    D --> D1[Hide previous result + error<br/>Show loading spinner]
 
-    F --> G[Compute price statistics\nfrom price list]
-    G --> G1[current_price = prices 0 close]
-    G --> G2[max_price = max of all closes]
-    G --> G3[min_price = min of all closes]
-    G --> G4[avg_price = mean of all closes]
+    D1 --> E[Build request fan-out:<br/>for h in 1..N<br/>for v in base, csa<br/>fetchOne model, v, h]
 
-    G1 & G2 & G3 & G4 --> H[Serialize to JSON\nfor Chart.js]
+    E --> F[Promise.all<br/>2 × N parallel GET requests<br/>to /api/prediction/]
 
-    H --> H1[dates array\nYYYY-MM-DD strings]
-    H --> H2[close_prices array\nfloats]
-    H --> H3[hmm_states dict\ndate → state label]
+    F --> G[Each request hits<br/>views.py: prediction_api]
+    G --> G1[Validate model / variant /<br/>frequency / horizon]
+    G1 --> G2{Valid<br/>params?}
+    G2 -->|No| G3[Return JSON<br/>error 400]
+    G2 -->|Yes| G4[Build doc_id:<br/>xgboost_v_Daily_hN]
+    G4 --> G5[predictions.document doc_id .get]
+    G5 --> G6{Doc exists?}
+    G6 -->|No| G7[Return JSON<br/>404 error]
+    G6 -->|Yes| G8[Return JSON<br/>predicted_date, predicted_price,<br/>last_actual_*, metrics]
 
-    H1 & H2 & H3 --> I[Render dashboard.html\nwith template context]
-
-    I --> J[Browser receives HTML + inline JSON]
-    J --> K[Chart.js initialises\nline chart from close_prices]
-    K --> L[Annotation plugin draws\nHMM state background bands]
-
-    L --> M[User views dashboard]
-
-    M --> N{User selects\nmodel, variant,\nhorizon}
-    N -->|Clicks Get Prediction| O[JS calls GET /api/prediction/\nwith query params]
-    O --> P[Update prediction panel\nwith returned JSON]
-    P --> M
-
-    M --> Q{User navigates\nto /news/}
-    Q -->|Yes| R([News Page])
-    Q -->|No| M
-```
-
-### Activity Descriptions
-
-| Step | Actor | Description |
-|---|---|---|
-| Session cookie valid? | System | `FirestoreAuthMiddleware` checks signed cookie on every request |
-| Redirect to /login/ | System | 302 redirect; `?next=/` appended so user returns after login |
-| Set request.user | System | Builds `FirestoreUser` from cookie values; checks in-memory UID cache |
-| Query daily_prices | System | Firestore `daily_prices` ordered by `date` descending, limit 90 |
-| Query hmm_states | System | Firestore `hmm_states` where `frequency == "Daily"` and `date in [date_list]` |
-| Compute price statistics | System | Python list comprehension over the 90 price documents |
-| Serialize to JSON | System | `json.dumps()` of arrays; injected as `{{ chart_data\|safe }}` in template |
-| Render dashboard.html | System | Django template engine renders with full context dict |
-| Chart.js initialises | Browser | Parses inline JSON, builds `Chart` instance with line dataset |
-| Annotation plugin draws bands | Browser | Groups consecutive same-state dates; draws colored rectangles |
-| User selects prediction params | User | Dropdown selectors in the prediction control panel |
-| JS calls /api/prediction/ | Browser | `fetch()` with query string parameters |
-| Update prediction panel | Browser | DOM manipulation to show price, date, metrics |
-
-**Key Files:** `website/web/views.py` (`dashboard`), `website/web/auth_backend.py`, `website/web/templates/dashboard.html`
-
----
-
-## 3. Prediction Request Flow
-
-### Diagram
-
-```mermaid
-flowchart TD
-    A([User on Dashboard]) --> B[User selects:\nModel, Variant, Horizon]
-
-    B --> C{Validates\nselection}
-    C -->|Horizon not selected| D[Show warning:\nPlease select all options]
-    D --> B
-
-    C -->|All selected| E[JavaScript calls\nGET /api/prediction/\nmodel=X&variant=Y&frequency=Daily&horizon=N]
-
-    E --> F[Show loading spinner]
-    F --> G[Django prediction_api view\nreceives GET request]
-
-    G --> H[Extract query params:\nmodel, variant, frequency, horizon]
-    H --> I[Build Firestore document ID:\nmodel_variant_frequency_hN]
-    I --> J[Query Firestore predictions collection\nfor that document ID]
-
-    J --> K{Document\nfound?}
-    K -->|Not found| L[Return JSON:\nsuccess=false, error=No prediction available]
-    L --> M[Dashboard shows error message]
-    M --> A
-
-    K -->|Found| N[Extract fields:\npredicted_price, predicted_date,\nmape, r2, directional_accuracy,\ncomputed_at]
-    N --> O[Return JSON:\nsuccess=true with all fields]
-
-    O --> P[Hide loading spinner]
-    P --> Q[Update prediction result card:\nPredicted Price\nPredicted Date\nMAPE\nDirectional Accuracy]
-    Q --> R[Update model info card:\nModel name, Variant, Horizon\nComputed at timestamp]
-
-    R --> S([User views prediction result])
-```
-
-### Activity Descriptions
-
-| Step | Actor | Description |
-|---|---|---|
-| User selects model/variant/horizon | User | Three dropdowns in the prediction control panel on the dashboard |
-| Validates selection | Browser JS | Checks all three dropdowns have a non-empty value |
-| Show warning | Browser JS | Inline validation message; no API call made |
-| Call /api/prediction/ | Browser JS | `fetch()` GET request with `URLSearchParams` |
-| Show loading spinner | Browser JS | CSS spinner shown while awaiting response |
-| Django receives request | System | `prediction_api()` view decorated with `@firestore_login_required` |
-| Extract query params | System | `request.GET.get("model")`, etc. |
-| Build document ID | System | String concatenation: `f"{model}_{variant}_{frequency}_h{horizon}"` |
-| Query Firestore predictions | System | `.collection("predictions").document(doc_id).get()` |
-| Document not found | System | Returns `{"success": false, "error": "..."}` with HTTP 200 |
-| Extract fields | System | Access `.to_dict()` on the Firestore document snapshot |
-| Return JSON | System | `JsonResponse({"success": true, ...})` |
-| Update prediction card | Browser JS | DOM manipulation using returned field values |
-| Update model info card | Browser JS | Shows which model config produced this prediction |
-
-**Key Files:** `website/web/views.py` (`prediction_api`), `website/web/templates/dashboard.html` (JS section)
-
----
-
-## 4. Daily Scheduler Pipeline
-
-### Diagram
-
-```mermaid
-flowchart TD
-    A([Cloud Scheduler Trigger\ndaily cron]) --> B[scheduler/main.py\n--mode daily]
-
-    B --> C{Mode?}
-    C -->|initial| INIT[Load all CSVs\nCheckpointed bulk load]
-    C -->|daily| D
-
-    INIT --> D
-
-    D --> E[Step 1: Fetch Prices\nscheduler/price_fetcher.py]
-    E --> E1{New data\nfrom API?}
-    E1 -->|Yes| E2[Write new daily_prices\ndocuments to Firestore]
-    E1 -->|No| E3[Log: prices up to date]
-    E2 --> F
-    E3 --> F
-
-    F[Step 2: Scrape News\nscheduler/news_extractor.py] --> F1[GET MPOB website\nBeautifulSoup parsing]
-    F1 --> F2{New articles\nfound?}
-    F2 -->|Yes| F3[Deduplicate by MD5 url]
-    F3 --> F4[Write new news_articles\nto Firestore]
-    F2 -->|No| F5[Log: news up to date]
-    F4 --> G
-    F5 --> G
-
-    G[Step 3: Sentiment Analysis\nscheduler/sentiment_runner.py] --> G1[Find articles without\nsentiment_label]
-    G1 --> G2{Unlabelled\narticles?}
-    G2 -->|Yes| G3[Run FinBERT inference\nGPU-accelerated batches]
-    G3 --> G4[Update news_articles\nwith labels + scores]
-    G4 --> G5[Recompute sentiment_aggregates\nfor affected dates]
-    G5 --> G6[Write to Firestore]
-    G2 -->|No| G7[Log: sentiment up to date]
-    G6 --> H
+    G3 --> H[fetchOne returns null<br/>treated as missing]
     G7 --> H
+    G8 --> I[fetchOne returns parsed result]
 
-    H[Step 4: Update HMM States\nscheduler/hmm_updater.py] --> H1[Load all daily_prices\nfrom Firestore]
-    H1 --> H2[Compute log-returns]
-    H2 --> H3[Fit GaussianHMM\n2-5 states, BIC selection]
-    H3 --> H4[Label states:\nBullish / Bearish / Neutral\nbased on mean return]
-    H4 --> H5[Write all hmm_states\nto Firestore]
-    H5 --> I
+    H --> J
+    I --> J[All Promises resolved<br/>group results by horizon]
 
-    I[Step 5: Compute Predictions\nscheduler/prediction_updater.py] --> I1[Build feature dataset\ncreate_prediction_dataset.py]
-    I1 --> I2[Merge price + HMM + sentiment\n60+ engineered features]
+    J --> K[Hide loading spinner]
+    K --> L[For each h in 1..N:<br/>pickBest of 2 candidates<br/>by lowest MAPE]
 
-    I2 --> I3[For each of 56 combinations\n4 models x 3 variants x 7 horizons]
+    L --> L1{Any<br/>picks?}
+    L1 -->|No| L2[Show error<br/>Predictions unavailable]
+    L2 --> L3[Clear prediction datasets]
+    L3 --> END1([Visitor sees error message])
 
-    I3 --> I4{Model type?}
-    I4 -->|XGBoost or\nRandom Forest| I5[Load cached model\nfrom GCS or retrain]
-    I4 -->|ARIMAX or\nSARIMAX| I6[Fit statsmodels\non latest data window]
+    L1 -->|Yes| M[Take last_actual_* from any result<br/>same across all horizons]
 
-    I5 --> I7{Variant?}
-    I6 --> I7
+    M --> N[Update result panel:<br/>Last Actual row +<br/>one row per horizon<br/>swatch + Nd + variant + price + MAPE]
 
-    I7 -->|base| I8[Use default\nhyperparameters]
-    I7 -->|csa| I9[Run Crow Search Algorithm\ncsa_hyperparameter_optimizer.py]
-    I7 -->|bayesian| I10[Run Bayesian Optimisation\nbayesian_optimizer.py]
+    N --> O[plotPredictions:<br/>extend chart labels with new dates<br/>sort chronologically]
+    O --> O1[Remove any prior<br/>prediction datasets]
+    O1 --> O2[For each pick:<br/>add 2-point dotted dataset<br/>last actual → predicted<br/>color = HORIZON_COLORS h]
 
-    I8 --> I11[Generate h-step\nahead prediction]
-    I9 --> I11
-    I10 --> I11
-
-    I11 --> I12[Compute test set metrics\nMAPE, R2, RMSE, DA]
-    I12 --> I13{More combinations?}
-    I13 -->|Yes| I3
-    I13 -->|No| I14[56 predictions complete]
-
-    I14 --> J[Step 6: Write to Firestore\nscheduler/firestore_writer.py]
-    J --> J1[Chunk into 500-doc batches\nFirestore batch limit]
-    J1 --> J2[Commit batches\nidempotent overwrite]
-    J2 --> K([Pipeline complete\nDashboard data refreshed])
+    O2 --> O3[Show prediction legend chip]
+    O3 --> P[priceChart.update]
+    P --> Q([Chart fans out N colored<br/>prediction lines])
 ```
 
 ### Activity Descriptions
 
 | Step | Actor | Description |
 |---|---|---|
-| Cloud Scheduler Trigger | External | GCP Cloud Scheduler fires HTTP request to Cloud Run endpoint once per day |
-| scheduler/main.py | System | Entry point; parses `--mode` argument; dispatches to each step |
-| Fetch Prices | System | Calls Investing.com API for latest CPO close; writes only new date documents |
-| Scrape News | System | Multi-threaded BeautifulSoup scraper against MPOB website |
-| Deduplicate by MD5(url) | System | `hashlib.md5(url.encode()).hexdigest()` used as Firestore doc ID |
-| FinBERT Sentiment | System | `AutoTokenizer` + `AutoModelForSequenceClassification` (ProsusAI/finbert); batched GPU inference |
-| Recompute aggregates | System | Groups news by date; computes `positive_prob`, `negative_prob`, `neutral_prob`, weighted `sentiment_score` |
-| Fit GaussianHMM | System | `hmmlearn.GaussianHMM`; number of states selected by BIC criterion (2–5 candidates) |
-| Label states | System | States are relabeled post-fit: highest mean-return state = Bullish, lowest = Bearish |
-| Build feature dataset | System | `create_prediction_dataset.py` merges three data sources; engineers lag features, sin/cos cyclical features, returns |
-| 56 combinations loop | System | Outer loop: 4 models × 3 variants × 7 horizons (some model-variant combos may be skipped) |
-| CSA optimization | System | Stochastic Crow Search metaheuristic (`prediction/csa_hyperparameter_optimizer.py`) |
-| Bayesian optimization | System | Gaussian Process surrogate model (`prediction/bayesian_optimizer.py`) |
-| Compute metrics | System | Evaluated on held-out test split (15% of historical data, newest dates) |
-| Write to Firestore | System | `firestore_writer.py`; uses `batch.set()` with merge=False; document ID is deterministic string |
+| Visitor picks horizon N | Visitor | Single dropdown — variant is auto-picked per horizon, no longer user-selectable. |
+| Build request fan-out | Browser JS | Nested loop produces `2 × N` `Promise`s before awaiting; max 14 calls (h=7). |
+| `Promise.all` | Browser JS | All requests fire concurrently; total wall time ≈ slowest single request. |
+| `fetchOne` | Browser JS | On any non-2xx response, body error, or thrown exception → returns `null`; per-horizon picker tolerates one missing variant. |
+| Validate params | Django | Hard-coded sets: `model in {xgboost}`, `variant in {base,csa}`, `frequency in {Daily}`, `horizon` parsed as int. |
+| Build doc_id | Django | `f'xgboost_{variant}_Daily_h{horizon}'` — deterministic, no Firestore composite index needed. |
+| Return JSON | Django | `JsonResponse` with HTTP 200 (success), 400 (bad params), 404 (no doc), or 500 (server error). |
+| Group by horizon | Browser JS | `byHorizon[r.horizon] = byHorizon[r.horizon] || []; ...push(r)` — nulls dropped. |
+| `pickBest` | Browser JS | Filters out `null`s and missing `metrics.mape`; sorts ascending by MAPE; returns index 0. |
+| Update result panel | Browser JS | One row per horizon containing color swatch (matches chart), `+Nd`, variant tag, `Rp …`, MAPE %. |
+| `plotPredictions` | Browser JS | Extends `labels` with all new prediction dates, sorts chronologically, rebuilds the close-price dataset on the new label set, then appends one dataset per pick. |
+| `HORIZON_COLORS` | Browser JS | `{1:amber, 2:pink, 3:violet, 4:cyan, 5:emerald, 6:indigo, 7:lime}` — fixed palette. |
 
-**Key Files:** `scheduler/main.py`, `scheduler/price_fetcher.py`, `scheduler/news_extractor.py`, `scheduler/sentiment_runner.py`, `scheduler/hmm_updater.py`, `scheduler/prediction_updater.py`, `scheduler/firestore_writer.py`, `prediction/horizon_forecast.py`, `prediction/bayesian_optimizer.py`, `prediction/csa_hyperparameter_optimizer.py`
+**Key files:** `website/web/templates/dashboard.html` (`run-prediction` click handler, `fetchOne`, `pickBest`, `plotPredictions`); `website/web/views.py:prediction_api`.
+
+---
+
+## 3. News Browsing & Filtering
+
+### Diagram
+
+```mermaid
+flowchart TD
+    A([Visitor opens /news/]) --> B[Django routes to<br/>views.py: news]
+
+    B --> C[Read query params:<br/>sentiment_filter = ?sentiment<br/>page_number = ?page or 1]
+
+    C --> D[Stream entire<br/>news_articles collection<br/>no server-side sort]
+
+    D --> E[Initialise<br/>sentiment_counts =<br/>positive / negative / neutral / total all 0]
+
+    E --> F[For each doc in stream]
+    F --> F1[Increment total<br/>increment matching label bucket]
+
+    F1 --> F2{sentiment_filter<br/>set?}
+    F2 -->|Yes and label<br/>does not match| F3[Skip row<br/>still counted]
+    F2 -->|No or label matches| F4[Build snippet:<br/>doc snippet field, fallback<br/>first 200 chars of content]
+
+    F4 --> F5[Append to news_list:<br/>date, title, category,<br/>snippet, url,<br/>sentiment_label, sentiment_score]
+
+    F3 --> F6{More docs?}
+    F5 --> F6
+    F6 -->|Yes| F
+    F6 -->|No| G[Sort news_list by date desc<br/>Python stable sort]
+
+    G --> H[Compute pagination:<br/>total_pages = ceil len / 9<br/>start = page-1 * 9<br/>news_page = list start:start+9]
+
+    H --> I[Build pagination context:<br/>has_previous / has_next<br/>previous_page / next_page<br/>page_range 1..total_pages]
+
+    I --> J[Render news.html<br/>with news_page,<br/>sentiment_counts,<br/>current_filter,<br/>pagination, page_title]
+
+    J --> K([Visitor sees article cards<br/>plus filter pills + paginator])
+
+    K --> L{Visitor<br/>action?}
+    L -->|Click filter pill| L1[GET /news/?sentiment=X<br/>resets to page 1]
+    L1 --> B
+
+    L -->|Click page number| L2[GET /news/?page=N<br/>preserves current filter]
+    L2 --> B
+
+    L -->|Click Read original| L3[Open external URL<br/>target=_blank<br/>rel=noopener noreferrer]
+    L3 --> K
+
+    L -->|Navigate away| END([Other page])
+```
+
+### Activity Descriptions
+
+| Step | Actor | Description |
+|---|---|---|
+| Read query params | Django | `request.GET.get('sentiment')`, `int(request.GET.get('page', 1))`. No validation on `page` overflow — handled implicitly by slicing. |
+| Stream collection | Django | `.collection('news_articles').stream()` — full scan; sort done client-side to avoid composite index. |
+| sentiment_counts | Django | Counted before filter — visitor always sees the global breakdown, not the post-filter slice. |
+| Skip on filter mismatch | Django | Filter compares raw `sentiment_label` strings (`'Positive'` / `'Negative'` / `'Neutral'`). |
+| Snippet fallback | Django | Uses pre-computed `snippet` field from scheduler; if absent, derives from first 200 chars of `content` clipped at last space. |
+| Sort by date desc | Django | Python `list.sort(key=…, reverse=True)` — strings sort lexicographically; valid because dates are `YYYY-MM-DD`. |
+| Pagination | Django | Hard-coded `items_per_page = 9`; `page_range = range(1, total_pages+1)` for the UI. |
+| Filter pill click | Browser | Plain `<a>` links — full page reload, no AJAX. |
+| Page number click | Browser | `?page=N&sentiment=X` — current filter preserved as a second query param. |
+| Read original | Browser | External URL in a new tab; site does not proxy article content. |
+
+**Key files:** `website/web/views.py:news`, `website/web/templates/news.html`
