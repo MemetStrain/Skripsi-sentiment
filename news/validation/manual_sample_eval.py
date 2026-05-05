@@ -39,7 +39,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_HERE))
 
 DEFAULT_ARTICLE_CSV = os.path.join(
-    _PROJECT_ROOT, "news", "mpob_news_with_sentiment.csv"
+    _PROJECT_ROOT, "news", "mpob_news_with_sentiment_tone.csv"
 )
 DEFAULT_OUTPUT_DIR = os.path.join(_HERE, "output")
 
@@ -86,10 +86,10 @@ def _load_articles_with_sentiment(path: str) -> pd.DataFrame:
         df["finbert_confidence"] = np.nan
 
     # Snippet / content
-    if "Snippet" in df.columns:
+    if "Content" in df.columns:
+        df["content"] = df["Content"].fillna("").astype(str)
+    elif "Snippet" in df.columns:
         df["content_snippet"] = df["Snippet"].fillna("").astype(str).str.slice(0, 500)
-    elif "Content" in df.columns:
-        df["content_snippet"] = df["Content"].fillna("").astype(str).str.slice(0, 500)
     else:
         df["content_snippet"] = ""
 
@@ -98,8 +98,10 @@ def _load_articles_with_sentiment(path: str) -> pd.DataFrame:
     else:
         df["title"] = ""
     if "Date" in df.columns:
-        df["date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        df["_date_dt"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["date"] = df["_date_dt"].dt.strftime("%Y-%m-%d")
     else:
+        df["_date_dt"] = pd.NaT
         df["date"] = ""
 
     return df
@@ -174,16 +176,34 @@ def _save_confusion_plot(cm_df: pd.DataFrame, png_path: str, title: str) -> None
 def generate_sample(
     output_dir: str,
     article_csv: str = DEFAULT_ARTICLE_CSV,
+    min_date: Optional[str] = None,
 ) -> str:
-    """Stratified random sample of 50 articles, returns the CSV path."""
+    """Stratified random sample of 50 articles, returns the CSV path.
+
+    Parameters
+    ----------
+    min_date : Optional[str]
+        Inclusive lower bound on Date (YYYY-MM-DD). Articles with missing
+        or earlier dates are excluded. ``None`` keeps the original
+        unfiltered behaviour.
+    """
     os.makedirs(output_dir, exist_ok=True)
 
     print("=" * 65)
     print("Phase 2c-i: Generate manual labelling sample (n=50)")
+    if min_date is not None:
+        print(f"  date filter: Date >= {min_date}")
     print("=" * 65)
 
     df = _load_articles_with_sentiment(article_csv)
     df = df[df["finbert_predicted_label"].isin(LABEL_ORDER)].copy()
+
+    if min_date is not None:
+        cutoff = pd.to_datetime(min_date, errors="raise")
+        before = len(df)
+        df = df[df["_date_dt"].notna() & (df["_date_dt"] >= cutoff)].copy()
+        print(f"  pool after date filter: {len(df)} (dropped {before - len(df)})")
+
     if len(df) < SAMPLE_TOTAL:
         raise ValueError(
             f"Only {len(df)} scored articles available — need at least "
@@ -208,7 +228,7 @@ def generate_sample(
     sampled["manual_label"] = ""
 
     out_cols = [
-        "sample_id", "date", "title", "content_snippet",
+        "sample_id", "date", "title", "content",
         "finbert_predicted_label", "finbert_confidence", "manual_label",
     ]
     out = sampled[out_cols]
@@ -224,7 +244,7 @@ def generate_sample(
     print()
     print("INSTRUCTIONS FOR MATTHEW:")
     print("  1. Open the CSV in Excel/Google Sheets")
-    print("  2. Read each title + content_snippet")
+    print("  2. Read each title + content")
     print("  3. Fill in the 'manual_label' column with: positive, negative, or neutral")
     print("  4. Use your own judgment based on financial sentiment toward CPO market")
     print(f"  5. Save the file as: {LABELED_FILENAME} (in same folder)")
@@ -341,6 +361,9 @@ def main() -> int:
     )
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--articles", default=DEFAULT_ARTICLE_CSV)
+    parser.add_argument("--min-date", default=None,
+                        help="Inclusive lower bound on article Date (YYYY-MM-DD); "
+                             "applies to --generate only.")
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--generate", action="store_true",
                    help="Generate manual_sample_FOR_LABELING.csv")
@@ -350,7 +373,7 @@ def main() -> int:
 
     output_dir = os.path.abspath(args.output_dir)
     if args.generate:
-        generate_sample(output_dir, article_csv=args.articles)
+        generate_sample(output_dir, article_csv=args.articles, min_date=args.min_date)
     else:
         evaluate_labels(output_dir)
     return 0

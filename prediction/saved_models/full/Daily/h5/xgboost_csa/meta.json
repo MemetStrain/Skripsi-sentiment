@@ -57,12 +57,12 @@
     "Volatility_x_RSI"
   ],
   "params": {
-    "n_estimators": 53,
-    "max_depth": 9,
-    "learning_rate": 0.0015887903233001831,
-    "subsample": 0.9999592175156785,
-    "colsample_bytree": 0.9772286541667066,
-    "min_child_weight": 1
+    "n_estimators": 70,
+    "max_depth": 11,
+    "learning_rate": 0.0011960722586747585,
+    "subsample": 1.0,
+    "colsample_bytree": 0.999864928245661,
+    "min_child_weight": 2
   },
-  "saved_at": "2026-04-30T01:22:23.688622"
+  "saved_at": "2026-05-05T07:53:55.141682"
 }

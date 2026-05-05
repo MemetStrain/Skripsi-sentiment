@@ -66,9 +66,9 @@
     "n_estimators": 50,
     "max_depth": 3,
     "learning_rate": 0.001,
-    "subsample": 0.6616111451954282,
-    "colsample_bytree": 0.9085461196860192,
-    "min_child_weight": 2
+    "subsample": 0.6751085026586605,
+    "colsample_bytree": 0.6,
+    "min_child_weight": 1
   },
-  "saved_at": "2026-04-29T21:32:47.429045"
+  "saved_at": "2026-05-05T03:52:11.144009"
 }
