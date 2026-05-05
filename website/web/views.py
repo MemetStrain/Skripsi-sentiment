@@ -2,30 +2,20 @@
 Views — CPO Prediction Dashboard
 =================================
 All views are explicit, linear functions reading from Firestore.
-Authentication uses the custom Firestore backend (no Django ORM).
+Public-facing read-only site; no authentication required.
 """
-from django.shortcuts import render, redirect
+from django.shortcuts import render
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta
 from firebase_admin import firestore
 import json
-
-from .auth_backend import (
-    firestore_login_required,
-    authenticate,
-    create_user,
-    login as auth_login,
-    logout as auth_logout,
-)
 
 
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 
-@firestore_login_required
 def dashboard(request):
     """Display CPO price chart with HMM market states."""
     try:
@@ -156,7 +146,6 @@ def _empty_dashboard_ctx():
 # Prediction API  (called by dashboard JS)
 # ---------------------------------------------------------------------------
 
-@firestore_login_required
 def prediction_api(request):
     """
     GET /api/prediction/?model=xgboost&variant=csa&frequency=Daily&horizon=1
@@ -208,7 +197,6 @@ def prediction_api(request):
 # News
 # ---------------------------------------------------------------------------
 
-@firestore_login_required
 def news(request):
     """Display news articles from `news_articles` collection."""
     db = firestore.client()
@@ -286,73 +274,3 @@ def news(request):
 
 def about(request):
     return render(request, 'about.html', {'page_title': 'About'})
-
-
-# ---------------------------------------------------------------------------
-# Authentication
-# ---------------------------------------------------------------------------
-
-@require_http_methods(['GET', 'POST'])
-def login_view(request):
-    if request.user.is_authenticated:
-        return redirect('dashboard')
-
-    if request.method == 'GET':
-        return render(request, 'login.html', {'page_title': 'Login'})
-
-    email = request.POST.get('email', '').strip()
-    password = request.POST.get('password', '')
-
-    if not email or not password:
-        messages.error(request, 'Email and password are required.')
-        return redirect('login')
-
-    user = authenticate(email, password)
-    if user is None:
-        messages.error(request, 'Invalid email or password.')
-        return redirect('login')
-
-    auth_login(request, user)
-    next_url = request.GET.get('next', '')
-    return redirect(next_url if next_url else 'dashboard')
-
-
-@require_http_methods(['GET', 'POST'])
-def register_view(request):
-    if request.user.is_authenticated:
-        return redirect('dashboard')
-
-    if request.method == 'GET':
-        return render(request, 'register.html', {'page_title': 'Register'})
-
-    username = request.POST.get('username', '').strip()
-    email = request.POST.get('email', '').strip()
-    password = request.POST.get('password', '')
-    password_confirm = request.POST.get('password_confirm', '')
-
-    errors = []
-    if not username or not email or not password or not password_confirm:
-        errors.append('All fields are required.')
-    if password != password_confirm:
-        errors.append('Passwords do not match.')
-    if len(password) < 8:
-        errors.append('Password must be at least 8 characters long.')
-
-    if errors:
-        for err in errors:
-            messages.error(request, err)
-        return redirect('register')
-
-    try:
-        user = create_user(username, email, password)
-        messages.success(request, 'Account created! You can now log in.')
-        return redirect('login')
-    except ValueError as e:
-        messages.error(request, str(e))
-        return redirect('register')
-
-
-@require_http_methods(['POST'])
-def logout_view(request):
-    auth_logout(request)
-    return redirect('login')
