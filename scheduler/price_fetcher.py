@@ -121,41 +121,72 @@ def fetch_latest_price() -> Optional[dict]:
     """
     Fetch the most recent CPO price from Investing.com using investiny.
     Returns a single price dict or None on failure.
+
+    investiny.historical_data returns a dict keyed by column names
+    (date, open, high, low, close, volume) — each value is a list aligned by row.
     """
     try:
         from investiny import historical_data
 
-        # Fetch the last 5 trading days to ensure we get the latest
+        # Investing.com requires MM/DD/YYYY. A narrow window (e.g. 7 days)
+        # can hit holidays/weekends and return no_data, so we widen on retry.
         end = datetime.now()
-        start = end - timedelta(days=7)
+        data = None
+        last_err: Optional[Exception] = None
+        for lookback_days in (90, 365, 365 * 3):
+            start = end - timedelta(days=lookback_days)
+            try:
+                data = historical_data(
+                    investing_id=CPO_INVESTING_ID,
+                    from_date=start.strftime('%m/%d/%Y'),
+                    to_date=end.strftime('%m/%d/%Y'),
+                    interval='D',
+                )
+                if data:
+                    break
+            except Exception as e:
+                last_err = e
+                logger.warning(f'investiny call failed (lookback={lookback_days}d): {e}')
+                continue
 
-        data = historical_data(
-            investing_id=CPO_INVESTING_ID,
-            from_date=start.strftime('%m/%d/%Y'),
-            to_date=end.strftime('%m/%d/%Y'),
-        )
-
-        if not data or not data.get('t'):
-            logger.warning('investiny returned no data')
+        if not data:
+            if last_err:
+                logger.error(f'investiny returned no data after retries; last error: {last_err}')
+            else:
+                logger.warning('investiny returned no data')
             return None
 
-        timestamps = data['t']
-        closes = data['c']
-        opens = data.get('o', closes)
-        highs = data.get('h', closes)
-        lows = data.get('l', closes)
-        volumes = data.get('v', [0] * len(timestamps))
+        # Normalise keys (investiny may return capitalised column names)
+        norm = {k.lower(): v for k, v in data.items()}
+
+        dates = norm.get('date')
+        closes = norm.get('close')
+        if not dates or not closes:
+            logger.warning(f'investiny payload missing date/close: keys={list(data.keys())}')
+            return None
+
+        opens = norm.get('open', closes)
+        highs = norm.get('high', closes)
+        lows = norm.get('low', closes)
+        volumes = norm.get('volume', [0] * len(dates))
 
         # Take the last (most recent) row
         idx = -1
-        trade_date = date.fromtimestamp(timestamps[idx]).isoformat()
+        raw_date = dates[idx]
+        if isinstance(raw_date, (int, float)):
+            trade_date = date.fromtimestamp(raw_date).isoformat()
+        else:
+            # investiny returns ISO strings like '2026-05-06'
+            trade_date = str(raw_date)[:10]
+
+        vol = volumes[idx] if idx < len(volumes) else 0
         return {
             'date': trade_date,
             'open': float(opens[idx]),
             'high': float(highs[idx]),
             'low': float(lows[idx]),
             'close': float(closes[idx]),
-            'volume': float(volumes[idx]) if volumes[idx] else 0.0,
+            'volume': float(vol) if vol else 0.0,
             'change_pct': None,
         }
 

@@ -22,19 +22,19 @@
             <div class="space-y-2.5">
                 <div class="flex justify-between items-center">
                     <span class="text-xs text-slate-500">Highest</span>
-                    <span class="text-sm font-bold text-slate-800">Rp {{ stats.max_price|floatformat:0 }}</span>
+                    <span class="text-sm font-bold text-slate-800">MYR {{ stats.max_price|floatformat:0 }}</span>
                 </div>
                 <div class="flex justify-between items-center">
                     <span class="text-xs text-slate-500">Lowest</span>
-                    <span class="text-sm font-bold text-slate-800">Rp {{ stats.min_price|floatformat:0 }}</span>
+                    <span class="text-sm font-bold text-slate-800">MYR {{ stats.min_price|floatformat:0 }}</span>
                 </div>
                 <div class="flex justify-between items-center">
                     <span class="text-xs text-slate-500">Average</span>
-                    <span class="text-sm font-bold text-slate-800">Rp {{ stats.avg_price|floatformat:0 }}</span>
+                    <span class="text-sm font-bold text-slate-800">MYR {{ stats.avg_price|floatformat:0 }}</span>
                 </div>
                 <div class="pt-2.5 border-t border-slate-100 flex justify-between items-center">
                     <span class="text-xs text-slate-500">Current</span>
-                    <span class="text-base font-bold text-primary">Rp {{ stats.current_price|floatformat:0 }}</span>
+                    <span class="text-base font-bold text-primary">MYR {{ stats.current_price|floatformat:0 }}</span>
                 </div>
             </div>
         </div>
@@ -209,17 +209,17 @@
                             const v = ctx.parsed.y;
                             if (v == null) return null;
                             if (ctx.dataset.label === 'Prediction') {
-                                return `Predicted: Rp ${v.toLocaleString('id-ID')}`;
+                                return `Predicted: MYR ${v.toLocaleString('id-ID')}`;
                             }
-                            return `Close: Rp ${v.toLocaleString('id-ID')}`;
+                            return `Close: MYR ${v.toLocaleString('id-ID')}`;
                         },
                         afterBody: (ctx) => {
                             const d = chartData[ctx[0].dataIndex];
                             if (!d) return [];
                             return [
-                                `Open: Rp ${d.open.toLocaleString('id-ID')}`,
-                                `High: Rp ${d.high.toLocaleString('id-ID')}`,
-                                `Low:  Rp ${d.low.toLocaleString('id-ID')}`,
+                                `Open: MYR ${d.open.toLocaleString('id-ID')}`,
+                                `High: MYR ${d.high.toLocaleString('id-ID')}`,
+                                `Low:  MYR ${d.low.toLocaleString('id-ID')}`,
                             ];
                         }
                     }
@@ -234,7 +234,7 @@
                 y: {
                     grid: { color: '#f1f5f9' },
                     ticks: {
-                        callback: v => 'Rp ' + v.toLocaleString('id-ID'),
+                        callback: v => 'MYR ' + v.toLocaleString('id-ID'),
                         font: { size: 11 }, color: '#64748b'
                     }
                 }
@@ -387,7 +387,7 @@
                     <span class="text-slate-400">(${variantBadge})</span>
                 </span>
                 <span class="text-right">
-                    <span class="font-semibold text-slate-800">Rp ${parseFloat(p.predPrice).toLocaleString('id-ID')}</span>
+                    <span class="font-semibold text-slate-800">MYR ${parseFloat(p.predPrice).toLocaleString('id-ID')}</span>
                     <span class="text-slate-400 ml-1">${mapeStr}</span>
                 </span>`;
             container.appendChild(row);
@@ -448,7 +448,7 @@
         const lastActualPrice = parseFloat(anyResult.last_actual_price);
 
         document.getElementById('res-last-price').textContent =
-            `Rp ${lastActualPrice.toLocaleString('id-ID')} (${lastActualDate})`;
+            `MYR ${lastActualPrice.toLocaleString('id-ID')} (${lastActualDate})`;
         renderHorizonRows(picks);
         resultEl.classList.remove('hidden');
 
@@ -506,7 +506,7 @@
             { label: 'RMSE',           bv: b?.rmse,            cv: c?.rmse,            fmt: v => fmtMetric(v,4),                  lob: true  },
             { label: 'R²',             bv: b?.r2,              cv: c?.r2,              fmt: v => fmtMetric(v,4),                  lob: false },
             { label: 'Dir. Accuracy',  bv: b?.da,              cv: c?.da,              fmt: v => fmtMetric(v,2)+'%',             lob: false },
-            { label: 'Predicted Price',bv: b?.predicted_price, cv: c?.predicted_price, fmt: v => v == null ? '—' : 'Rp '+parseFloat(v).toLocaleString('id-ID'), lob: null },
+            { label: 'Predicted Price',bv: b?.predicted_price, cv: c?.predicted_price, fmt: v => v == null ? '—' : 'MYR '+parseFloat(v).toLocaleString('id-ID'), lob: null },
             { label: 'Predicted Date', bv: b?.predicted_date,  cv: c?.predicted_date,  fmt: v => v || '—',                       lob: null  },
         ];
         const tableRows = rows.map(r => {
