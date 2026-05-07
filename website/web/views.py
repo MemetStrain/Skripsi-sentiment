@@ -293,6 +293,11 @@ def news(request):
     start = (page_number - 1) * items_per_page
     news_page = news_list[start:start + items_per_page]
 
+    window_size = 5
+    window_start = max(1, page_number - window_size // 2)
+    window_end = min(total_pages, window_start + window_size - 1)
+    window_start = max(1, window_end - window_size + 1)
+
     pagination = {
         'current_page': page_number,
         'total_pages': total_pages,
@@ -300,7 +305,9 @@ def news(request):
         'has_next': page_number < total_pages,
         'previous_page': page_number - 1 if page_number > 1 else None,
         'next_page': page_number + 1 if page_number < total_pages else None,
-        'page_range': range(1, total_pages + 1),
+        'page_range': range(window_start, window_end + 1),
+        'show_left_ellipsis': window_start > 1,
+        'show_right_ellipsis': window_end < total_pages,
     }
 
     return render(request, 'news.html', {

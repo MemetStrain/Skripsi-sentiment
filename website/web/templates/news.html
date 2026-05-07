@@ -116,15 +116,36 @@
         <ul class="flex items-center gap-1">
             {% if pagination.has_previous %}
                 <li>
-                    <a href="?page={{ pagination.previous_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                    <a href="?page=1{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                       aria-label="First page"
                        class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
-                        &lt;
+                        &laquo;
+                    </a>
+                </li>
+                <li>
+                    <a href="?page={{ pagination.previous_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                       aria-label="Previous page"
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                        &lsaquo;
                     </a>
                 </li>
             {% else %}
                 <li>
                     <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
-                        &lt;
+                        &laquo;
+                    </span>
+                </li>
+                <li>
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                        &lsaquo;
+                    </span>
+                </li>
+            {% endif %}
+
+            {% if pagination.show_left_ellipsis %}
+                <li>
+                    <span class="w-9 h-9 flex items-center justify-center text-slate-400 text-sm">
+                        &hellip;
                     </span>
                 </li>
             {% endif %}
@@ -146,17 +167,38 @@
                 {% endif %}
             {% endfor %}
 
+            {% if pagination.show_right_ellipsis %}
+                <li>
+                    <span class="w-9 h-9 flex items-center justify-center text-slate-400 text-sm">
+                        &hellip;
+                    </span>
+                </li>
+            {% endif %}
+
             {% if pagination.has_next %}
                 <li>
                     <a href="?page={{ pagination.next_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                       aria-label="Next page"
                        class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
-                        &gt;
+                        &rsaquo;
+                    </a>
+                </li>
+                <li>
+                    <a href="?page={{ pagination.total_pages }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
+                       aria-label="Last page"
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                        &raquo;
                     </a>
                 </li>
             {% else %}
                 <li>
                     <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
-                        &gt;
+                        &rsaquo;
+                    </span>
+                </li>
+                <li>
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                        &raquo;
                     </span>
                 </li>
             {% endif %}
