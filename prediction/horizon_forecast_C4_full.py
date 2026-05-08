@@ -234,8 +234,6 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
             model=model_val, model_type=model_type, scaler=data['scaler'],
             feature_cols=feature_cols, params=base_params,
             save_dir=os.path.join(artifacts_dir, f'{model_type}_base'),
-            gcs_bucket=os.environ.get('GCS_BUCKET'),
-            gcs_prefix=f'models/{SCRIPT_TAG}/{interval}/h{horizon}/{model_type}_base',
         )
 
         key = f'{model_type}_base'
@@ -273,8 +271,6 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
                 model=model_val, model_type=model_type, scaler=data['scaler'],
                 feature_cols=feature_cols, params=csa_params,
                 save_dir=os.path.join(artifacts_dir, f'{model_type}_csa'),
-                gcs_bucket=os.environ.get('GCS_BUCKET'),
-                gcs_prefix=f'models/{SCRIPT_TAG}/{interval}/h{horizon}/{model_type}_csa',
             )
 
             key = f'{model_type}_csa'
@@ -463,23 +459,26 @@ def generate_horizon_summary(interval: str,
 # Main
 # =============================================================================
 
-def run_interval(interval: str, output_dir: str, csa_config: Dict):
-    """Run all horizons for a given interval."""
+def run_interval(interval: str, output_dir: str, csa_config: Dict,
+                 horizons_filter=None):
+    """Run all (or a filtered subset of) horizons for a given interval."""
+    horizons = horizons_filter or HORIZONS
     print(f"\n{'#'*70}")
     print(f"  MULTI-HORIZON FORECAST - {interval.upper()}  (C4: full)")
-    print(f"  Horizons: {HORIZONS}")
+    print(f"  Horizons: {horizons}")
     print(f"{'#'*70}")
 
     merged_df = load_and_merge_data(interval)
 
     all_test_results = {}
     all_val_results  = {}
-    for h in HORIZONS:
+    for h in horizons:
         test_df, val_df = run_single_horizon(interval, h, merged_df, output_dir, csa_config)
         all_test_results[h] = test_df
         all_val_results[h]  = val_df
 
-    generate_horizon_summary(interval, all_test_results, all_val_results, output_dir)
+    if horizons_filter is None:
+        generate_horizon_summary(interval, all_test_results, all_val_results, output_dir)
 
 
 def main():
@@ -491,9 +490,16 @@ def main():
     parser.add_argument('--csa-iterations', type=int, default=50)
     parser.add_argument('--csa-cv-folds', type=int, default=3)
     parser.add_argument('--no-csa', action='store_true', help='Disable CSA optimisation')
+    parser.add_argument('--horizons', type=str, default='',
+                        help='Comma-separated horizons to run, e.g. "2,5,7" (default: all 7).')
     args = parser.parse_args()
 
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output_horizons')
+    horizons_filter = None
+    if args.horizons:
+        horizons_filter = [int(x) for x in args.horizons.split(',') if x.strip()]
+
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'output_horizons', SCRIPT_TAG)
     os.makedirs(output_dir, exist_ok=True)
 
     csa_config = {
@@ -504,7 +510,8 @@ def main():
     }
 
     start = time.time()
-    run_interval(args.interval.capitalize(), output_dir, csa_config)
+    run_interval(args.interval.capitalize(), output_dir, csa_config,
+                 horizons_filter=horizons_filter)
     print(f"\n{'='*70}")
     print(f"  ALL DONE! Total time: {time.time()-start:.1f}s")
     print(f"  Output: {output_dir}")

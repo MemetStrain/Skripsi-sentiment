@@ -38,12 +38,12 @@
     "Close_lag20"
   ],
   "params": {
-    "n_estimators": 50,
-    "max_depth": 3,
-    "learning_rate": 0.001,
-    "subsample": 1.0,
-    "colsample_bytree": 0.7163840182344071,
-    "min_child_weight": 2
+    "n_estimators": 184,
+    "max_depth": 6,
+    "learning_rate": 0.0011433814110065788,
+    "subsample": 0.9970339660949248,
+    "colsample_bytree": 0.6,
+    "min_child_weight": 3
   },
-  "saved_at": "2026-05-05T02:48:14.900715"
+  "saved_at": "2026-05-07T22:57:23.044999"
 }

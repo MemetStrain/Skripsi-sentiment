@@ -67,10 +67,10 @@ def dashboard(request):
     # Build chart data
     chart_data = []
     for row in price_list:
-        state_info = state_dict.get(row['date'], {'state': 2, 'state_label': 'Neutral'})
+        state_info = state_dict.get(row['date'], {'state': None, 'state_label': None})
         state_label = state_info['state_label']
-        state_value = state_info['state']
-        # Map label to numeric for colour coding (0=Bearish,1=Bullish,2=Neutral)
+        # Map label to numeric for colour coding (0=Bearish,1=Bullish,2=Neutral).
+        # None for dates with no HMM entry → no background shading (white).
         label_to_int = {'Bearish': 0, 'Bullish': 1, 'Neutral': 2}
         chart_data.append({
             'date': row['date'],
@@ -79,7 +79,7 @@ def dashboard(request):
             'high': row['high'],
             'low': row['low'],
             'volume': row['volume'],
-            'state': label_to_int.get(state_label, state_value),
+            'state': label_to_int.get(state_label) if state_label else None,
             'state_label': state_label,
         })
 
@@ -98,45 +98,32 @@ def dashboard(request):
         stats = {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0}
         latest_date = 'N/A'
 
-    # Fetch all 14 prediction docs (1 model x 2 variants x 7 horizons).
-    # Individual .get() calls by constructed doc ID - no composite index needed.
+    # Predictions are computed live by /api/forecasts/. We render the static
+    # 4×7 metrics-comparison table server-side from prediction/winners.json
+    # and a small summary badge for h=1's winner; the chart's rolling-forecast
+    # overlay is fetched async by the dashboard JS.
     metrics = {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'}
-    horizon_data = []
+    winners_payload = {}
     try:
-        for h in range(1, 8):
-            h_entry = {'horizon': h, 'best_variant': None, 'best_mape': None, 'base': None, 'csa': None}
-            for variant in ('base', 'csa'):
-                doc_id = f'xgboost_{variant}_Daily_h{h}'
-                doc = db.collection('predictions').document(doc_id).get()
-                if not doc.exists:
-                    continue
-                d = doc.to_dict()
-                m = d.get('metrics', {})
-                entry = {
-                    'mape':            round(float(m.get('mape', 0)), 4),
-                    'rmse':            round(float(m.get('rmse', 0)), 4),
-                    'r2':              round(float(m.get('r2', 0)), 4),
-                    'da':              round(float(m.get('directional_accuracy', 0)), 2),
-                    'predicted_price': round(float(d.get('predicted_price', 0)), 2),
-                    'predicted_date':  d.get('predicted_date', ''),
+        from .predictor import load_winners
+        winners_payload = load_winners()
+        h1_tag = winners_payload.get('winners_by_horizon', {}).get('1')
+        if h1_tag:
+            h1_metrics = (
+                winners_payload.get('metrics', {})
+                .get(h1_tag, {})
+                .get('1', {})
+                .get('CSA', {})
+            )
+            if h1_metrics:
+                metrics = {
+                    'mape':       round(h1_metrics.get('mape', 0), 2),
+                    'r2':         round(h1_metrics.get('r2_price', 0), 4),
+                    'accuracy':   round(h1_metrics.get('da', 0), 2),
+                    'best_model': f"XGBoost CSA ({winners_payload.get('configs_by_horizon', {}).get('1', '?')})",
                 }
-                h_entry[variant] = entry
-                if h_entry['best_mape'] is None or entry['mape'] < h_entry['best_mape']:
-                    h_entry['best_mape'] = entry['mape']
-                    h_entry['best_variant'] = variant
-            horizon_data.append(h_entry)
-
-        # Backward-compatible h=1 summary for the 4-card header row
-        h1 = next((x for x in horizon_data if x['horizon'] == 1), None)
-        if h1 and h1['best_variant']:
-            best = h1[h1['best_variant']]
-            metrics = {
-                'mape':       round(best['mape'], 2),
-                'r2':         round(best['r2'], 4),
-                'accuracy':   round(best['da'], 2),
-                'best_model': f"XGBoost ({h1['best_variant'].upper()})",
-            }
-    except Exception:
+    except FileNotFoundError:
+        # winners.json not produced yet — page still renders with N/A metrics.
         pass
 
     # Sentiment trend from `sentiment_aggregates` (Daily, 90-day window).
@@ -163,13 +150,13 @@ def dashboard(request):
         pass
 
     return render(request, 'dashboard.html', {
-        'chart_data':     json.dumps(chart_data),
-        'metrics':        metrics,
-        'horizon_data':   json.dumps(horizon_data),
-        'sentiment_data': json.dumps(sentiment_list),
-        'stats':          stats,
-        'latest_date':    latest_date,
-        'page_title':     'CPO Price Prediction Dashboard',
+        'chart_data':      json.dumps(chart_data),
+        'metrics':         metrics,
+        'winners_data':    json.dumps(winners_payload),
+        'sentiment_data':  json.dumps(sentiment_list),
+        'stats':           stats,
+        'latest_date':     latest_date,
+        'page_title':      'CPO Price Prediction Dashboard',
     })
 
 
@@ -177,7 +164,7 @@ def _empty_dashboard_ctx():
     return {
         'chart_data':     json.dumps([]),
         'metrics':        {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'},
-        'horizon_data':   json.dumps([]),
+        'winners_data':   json.dumps({}),
         'sentiment_data': json.dumps([]),
         'stats':          {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0},
         'latest_date':    'N/A',
@@ -186,52 +173,34 @@ def _empty_dashboard_ctx():
 
 
 # ---------------------------------------------------------------------------
-# Prediction API  (called by dashboard JS)
+# Forecasts API  (called by dashboard JS for the rolling-trail chart overlay)
 # ---------------------------------------------------------------------------
 
-def prediction_api(request):
+def forecasts_api(request):
     """
-    GET /api/prediction/?model=xgboost&variant=csa&frequency=Daily&horizon=1
-    Returns pre-computed prediction from Firestore `predictions` collection.
+    GET /api/forecasts/?max_horizon=7&window_days=90
+
+    Runs live XGBoost inference for h ∈ {1..max_horizon} using the
+    auto-picked winning ablation config per horizon (lowest base-MAPE
+    from prediction/winners.json), and returns rolling forecast trails
+    over the trailing `window_days` window.
     """
-    model = request.GET.get('model', 'xgboost').lower()
-    variant = request.GET.get('variant', 'csa').lower()
-    frequency = request.GET.get('frequency', 'Daily')
     try:
-        horizon = int(request.GET.get('horizon', 1))
+        max_horizon = int(request.GET.get('max_horizon', 7))
+        window_days = int(request.GET.get('window_days', 90))
     except (ValueError, TypeError):
-        return JsonResponse({'error': 'Invalid horizon'}, status=400)
+        return JsonResponse({'error': 'Invalid integer parameter'}, status=400)
+    max_horizon = max(1, min(max_horizon, 7))
+    window_days = max(7, min(window_days, 365))
 
-    valid_models = {'xgboost'}
-    valid_variants = {'base', 'csa'}
-    valid_freqs = {'Daily'}
-    if model not in valid_models or variant not in valid_variants or frequency not in valid_freqs:
-        return JsonResponse(
-            {'error': f"Invalid parameters. Supported: model={sorted(valid_models)}, "
-                      f"variant={sorted(valid_variants)}, frequency={sorted(valid_freqs)}"},
-            status=400,
-        )
-
-    doc_id = f'{model}_{variant}_{frequency}_h{horizon}'
     try:
+        from .predictor import compute_forecast_trails
         db = firestore.client()
-        doc = db.collection('predictions').document(doc_id).get()
-        if not doc.exists:
-            return JsonResponse({'error': 'Prediction not available yet'}, status=404)
-        data = doc.to_dict()
-        return JsonResponse({
-            'success': True,
-            'model': data.get('model'),
-            'variant': data.get('variant'),
-            'frequency': data.get('frequency'),
-            'horizon': data.get('horizon'),
-            'last_actual_date': data.get('last_actual_date'),
-            'last_actual_price': data.get('last_actual_price'),
-            'predicted_date': data.get('predicted_date'),
-            'predicted_price': data.get('predicted_price'),
-            'metrics': data.get('metrics', {}),
-            'computed_at': data.get('computed_at'),
-        })
+        payload = compute_forecast_trails(db, max_horizon=max_horizon,
+                                          window_days=window_days)
+        return JsonResponse(payload)
+    except FileNotFoundError as e:
+        return JsonResponse({'error': str(e)}, status=503)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 

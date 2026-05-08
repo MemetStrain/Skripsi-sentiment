@@ -24,29 +24,35 @@ For history of what was removed, see that inventory.
   Bearish), `N_STATES_RANGE = range(2, 5)` for BIC selection.
 - **Database:** Google Cloud Firestore for all data.
 - **Deployment:** Vercel for the public-facing read-only Django frontend
-  (no authentication — three pages: Dashboard, News, About), Cloud Run
-  Job (Docker) for the daily ML scheduler.
+  (no authentication — three pages: Dashboard, News, About). The ML
+  scheduler is a **local Python script** run ad-hoc by the maintainer;
+  it is no longer hosted on Cloud Run.
+- **Prediction inference:** runs **live on the website** using the
+  offline-trained CSA model artefacts under `prediction/saved_models/`.
+  The scheduler does not pre-compute predictions.
 
 ## Pipeline overview
 
 ```
-Raw scrape (MPOB news)         ──┐
-Investing.com daily price feed ──┤
+Local CSVs (source of truth)   ──┐
+  cpo/Data_CPO_Daily.csv         │
+  news/mpob_news_with_sentiment_tone.csv
                                  │
-                    scheduler/ (Cloud Run Job, daily 1AM MYT)
+                  scheduler/ (local, run ad-hoc)
                                  │
-   1. price_fetcher.py    →  daily_prices  (Firestore)
-   2. news_extractor.py   →  news_articles (Firestore)
-   3. sentiment_runner.py →  sentiment_aggregates (FinBERT scores)
+   1. price_fetcher.py    →  append cpo CSV    →  daily_prices  (Firestore mirror)
+   2. news_extractor.py   →  scrape + preprocess + FinBERT-Tone
+                          →  append 3 news CSVs →  news_articles (Firestore mirror)
+   3. sentiment_runner.py →  recompute aggregates → sentiment_aggregates
    4. hmm_updater.py      →  hmm_states  (3-state Gaussian HMM)
-   5. prediction_updater.py
-        - XGBoost × {base, csa} × 7 horizons = 14 docs
-        - written to `predictions` collection
                                  │
                                  ▼
               website/ (Django app on Vercel — read-only)
-                  └── Dashboard reads daily_prices + hmm_states
-                                 + predictions and renders chart.
+                  ├── Dashboard reads daily_prices + hmm_states
+                  │   + sentiment_aggregates and renders chart.
+                  └── /api/forecasts/ runs live XGBoost inference per
+                      horizon using prediction/saved_models/{config}/…
+                      (auto-picks the lowest-MAPE config per horizon).
 ```
 
 ## Module layout
@@ -82,16 +88,14 @@ prediction/
   output_horizons*/                     Per-ablation prediction outputs
   output_validation/                    Ablation validation summary
 
-scheduler/                       Production daily pipeline (Cloud Run Job)
+scheduler/                       Local ad-hoc data pipeline
   main.py                        Entry: --mode initial | daily
-  prediction_updater.py          Writes the 14 XGBoost prediction docs
   hmm_updater.py                 Daily HMM state refit
-  sentiment_runner.py            FinBERT on new articles only
-  news_extractor.py
-  price_fetcher.py
-  firestore_writer.py
-  cleanup_old_articles.py
-  Dockerfile
+  sentiment_runner.py            FinBERT-Tone on new articles only
+  news_extractor.py              Scrape + preprocess bridge to news/
+  price_fetcher.py               Investing.com fetcher + trading-day helper
+  firestore_writer.py            Mirror writes (CSV is source of truth)
+  local_csv_writer.py            CSV append-with-dedup helpers
   initial_load_progress.json     Checkpoint file (currently {})
 
 website/                         Vercel-hosted public read-only Django app
@@ -110,40 +114,53 @@ _archive_before_cleanup/         Everything removed by the 2026-04-26 sweep.
 | `users`               | UID                                     | Legacy — historical login data, no longer read or written. Site is now public-facing read-only. |
 | `daily_prices`        | `YYYY-MM-DD`                            | OHLCV. |
 | `hmm_states`          | `{frequency}_{YYYY-MM-DD}`              | Currently `Daily_…` only. |
-| `predictions`         | `{model}_{variant}_{frequency}_h{h}`    | Live: `xgboost_{base,csa}_Daily_h{1..7}` (14 docs). Legacy RF / ARIMAX / SARIMAX / Bayesian docs may exist from earlier runs but are no longer refreshed. |
-| `news_articles`       | md5(url)                                | Article metadata + FinBERT sentiment. |
+| `news_articles`       | md5(url)                                | Article metadata + FinBERT-Tone sentiment. |
 | `sentiment_aggregates`| `{frequency}_{YYYY-MM-DD}`              | Daily aggregate. |
-| `HorizonModelParameters` | `{model}_{variant}_{frequency}_h{h}` | CSA-tuned hyperparameters per horizon. |
+
+The `predictions` and `HorizonModelParameters` collections were dropped —
+inference is performed live by the website using offline-trained model
+artefacts. CSA hyperparameters are baked into the saved model objects.
 
 ## How to run
 
 ### Offline ablation training (researcher workflow)
 
-```bash
-# Train each ablation × all 7 horizons × {base, csa}
-python prediction/horizon_forecast_C1_price_only.py     --interval daily
-python prediction/horizon_forecast_C2_price_hmm.py      --interval daily
-python prediction/horizon_forecast_C3_price_sentiment.py --interval daily
-python prediction/horizon_forecast_C4_full.py            --interval daily
+Training is staged so CSA optimisation is only spent on the configs the
+dashboard will actually serve (one per horizon):
 
-# Add naive baseline rows + Diebold-Mariano comparison (H4)
+```bash
+# Phase A — base-only training across all 4 ablations × 7 horizons.
+python prediction/horizon_forecast_C1_price_only.py     --interval daily --no-csa
+python prediction/horizon_forecast_C2_price_hmm.py      --interval daily --no-csa
+python prediction/horizon_forecast_C3_price_sentiment.py --interval daily --no-csa
+python prediction/horizon_forecast_C4_full.py            --interval daily --no-csa
+
+# Phase B — pick the lowest-base-MAPE config per horizon → winners.json.
+python prediction/compute_winners.py
+
+# Phase C — CSA-optimise only the winning (tag, horizon) pairs (7 runs).
+python prediction/train_winners_csa.py
+
+# Phase D — refresh the metrics matrix to include the new CSA cells.
+python prediction/compute_winners.py
+
+# Naive baseline + Diebold-Mariano (H4 control experiment)
 python prediction/baselines/run_naive_integration.py
 ```
 
-Outputs land in `prediction/output_horizons*/Daily/horizon_*/`.
+Outputs land in `prediction/output_horizons/{tag}/Daily/horizon_*/`,
+and saved model artefacts in
+`prediction/saved_models/{tag}/Daily/h{horizon}/xgboost_{base,csa}/`.
 
-### Daily scheduler (production, manual sanity-check run)
+### Daily scheduler (local, ad-hoc)
 
 ```bash
-# from project root
-docker run --rm \
-  -v "$(pwd)/scheduler:/app" -v "$(pwd)/cpo:/cpo" -v "$(pwd)/news:/news" \
-  -e FIREBASE_CREDENTIALS_JSON="$(cat website/firebase-credentials.json)" \
-  cpo-scheduler --mode daily
+# from project root — credentials picked up from website/firebase-credentials.json
+python scheduler/main.py --mode daily
 ```
 
-`--mode initial` does the historical bootstrap from local CSVs;
-`--reset-progress` clears the checkpoint file before re-running.
+`--mode initial` does the historical bootstrap from local CSVs into
+Firestore; `--reset-progress` clears the checkpoint file before re-running.
 
 ### Web app (local development)
 

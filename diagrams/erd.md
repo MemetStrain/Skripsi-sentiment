@@ -211,7 +211,12 @@ Document ID: `{model}_{variant}_{frequency}_h{horizon}` e.g. `xgboost_csa_Daily_
 | `directional_accuracy` | float | % of correct up/down movement predictions |
 | `computed_at` | ISO timestamp | When the prediction was generated |
 
-**Purpose:** Pre-computed by the scheduler (`scheduler/prediction_updater.py`). There are 56 documents total (4 models × 3 variants × 7 horizons minus 4 base-only = actually 4×3×7 = 84, but some models skip variants). The dashboard `/api/prediction/` endpoint reads directly from this collection, so the web server never runs ML inference at request time.
+**Purpose:** *Removed.* Predictions are no longer pre-computed in Firestore.
+The dashboard's `/api/forecasts/` endpoint runs XGBoost inference live on
+the website using offline-trained model artefacts under
+`prediction/saved_models/{config}/Daily/h{horizon}/xgboost_csa/`. The
+winning ablation config per horizon is auto-picked from
+`prediction/winners.json` (lowest base-MAPE).
 
 ---
 

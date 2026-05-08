@@ -7,6 +7,6 @@ urlpatterns = [
     path('news/', views.news, name='news'),
     path('about/', views.about, name='about'),
 
-    # Prediction API (called by dashboard JS)
-    path('api/prediction/', views.prediction_api, name='prediction_api'),
+    # Forecasts API (called by dashboard JS — rolling forecast trails)
+    path('api/forecasts/', views.forecasts_api, name='forecasts_api'),
 ]

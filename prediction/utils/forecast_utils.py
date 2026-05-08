@@ -9,7 +9,6 @@ helpers and Bayesian optimisation hooks are no longer present.
 
 import json
 import os
-import warnings
 from typing import Dict, List, Optional
 
 import joblib
@@ -250,7 +249,7 @@ def run_csa(model_type, objective_fn, population_size, max_iterations):
 
 
 # =============================================================================
-# Model artifact persistence (save / load / GCS helpers)
+# Model artifact persistence (local only)
 # =============================================================================
 
 def save_model_artifacts(
@@ -260,13 +259,8 @@ def save_model_artifacts(
     feature_cols: List[str],
     params: dict,
     save_dir: str,
-    gcs_bucket: Optional[str] = None,
-    gcs_prefix: str = 'models',
 ) -> None:
-    """Save a trained XGBoost model, its scaler, and metadata to *save_dir*.
-
-    Optionally uploads the files to GCS when *gcs_bucket* is provided.
-    """
+    """Save a trained XGBoost model, its scaler, and metadata to *save_dir*."""
     os.makedirs(save_dir, exist_ok=True)
 
     if model is not None:
@@ -289,21 +283,10 @@ def save_model_artifacts(
     with open(os.path.join(save_dir, 'meta.json'), 'w') as fh:
         json.dump(meta, fh, indent=2)
 
-    if gcs_bucket:
-        _gcs_upload_dir(save_dir, gcs_bucket, gcs_prefix)
 
-
-def load_model_artifacts(
-    load_dir: str,
-    gcs_bucket: Optional[str] = None,
-    gcs_prefix: str = 'models',
-) -> Optional[Dict]:
+def load_model_artifacts(load_dir: str) -> Optional[Dict]:
     """Load artifacts previously saved by :func:`save_model_artifacts`."""
     meta_path = os.path.join(load_dir, 'meta.json')
-
-    if gcs_bucket and not os.path.exists(meta_path):
-        _gcs_download_dir(gcs_bucket, gcs_prefix, load_dir)
-
     if not os.path.exists(meta_path):
         return None
 
@@ -328,34 +311,3 @@ def load_model_artifacts(
         'params':       meta['params'],
         'saved_at':     meta.get('saved_at'),
     }
-
-
-def _gcs_upload_dir(local_dir: str, bucket_name: str, gcs_prefix: str) -> None:
-    """Upload every file in *local_dir* to GCS under *gcs_prefix*."""
-    try:
-        from google.cloud import storage  # type: ignore
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-        for fname in os.listdir(local_dir):
-            fpath = os.path.join(local_dir, fname)
-            if os.path.isfile(fpath):
-                blob = bucket.blob(f'{gcs_prefix}/{fname}')
-                blob.upload_from_filename(fpath)
-    except Exception as exc:
-        warnings.warn(f'GCS upload failed ({gcs_prefix}): {exc}')
-
-
-def _gcs_download_dir(bucket_name: str, gcs_prefix: str, local_dir: str) -> None:
-    """Download all blobs under *gcs_prefix* from GCS into *local_dir*."""
-    try:
-        from google.cloud import storage  # type: ignore
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-        os.makedirs(local_dir, exist_ok=True)
-        prefix = gcs_prefix.rstrip('/') + '/'
-        for blob in bucket.list_blobs(prefix=prefix):
-            fname = blob.name[len(prefix):]
-            if fname:
-                blob.download_to_filename(os.path.join(local_dir, fname))
-    except Exception as exc:
-        warnings.warn(f'GCS download failed ({gcs_prefix}): {exc}')

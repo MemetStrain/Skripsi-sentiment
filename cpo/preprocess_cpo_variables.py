@@ -114,7 +114,10 @@ def preprocess_cpo(filepath: str, freq_label: str) -> pd.DataFrame:
     raw['Date'] = pd.to_datetime(raw['Date'], format='%d/%m/%Y', dayfirst=True)
     for col in ['Close', 'Open', 'High', 'Low']:
         raw[col] = raw[col].apply(parse_id_number)
-    raw['Volume']     = raw['Volume'].apply(parse_volume)
+    # The Investing.com export of FCPO often ships with Vol. = '-' for every
+    # row. Treat unknown volume as 0 so the column doesn't poison df.dropna()
+    # downstream and wipe out every training sample.
+    raw['Volume']     = raw['Volume'].apply(parse_volume).fillna(0.0)
     raw['Change_Pct'] = raw['Change_Pct'].apply(parse_change_pct)
 
     # Sort chronologically (raw file is newest-first)

@@ -1,19 +1,26 @@
 """
-main.py — CPO Prediction Scheduler entry point.
+main.py — CPO Prediction Scheduler entry point (local-only).
 
 Usage:
-  python main.py --mode initial    # one-time historical data load
-  python main.py --mode daily      # incremental daily update (default)
+  python main.py --mode initial    # one-time bulk load from local CSVs to Firestore
+  python main.py --mode daily      # incremental: fetch price, scrape+score news,
+                                   #              recompute aggregates, refresh HMM
+
+Local CSVs are the source of truth. Firestore is a downstream mirror that the
+website reads. Predictions are no longer computed here — the website performs
+live inference using the offline-trained weights under prediction/saved_models/.
 
 Environment variables required:
-  FIREBASE_CREDENTIALS_JSON   Full JSON string of Firebase service account key
+  FIREBASE_CREDENTIALS_JSON       Full JSON string of Firebase service account key
   OR
-  GOOGLE_APPLICATION_CREDENTIALS  Path to the JSON file (for local/GCP runs)
+  GOOGLE_APPLICATION_CREDENTIALS  Path to the JSON file (for local runs)
 
-Optional:
-  CPO_CSV_PATH        Path to Data_CPO_Daily.csv  (default: /cpo/Data_CPO_Daily.csv)
-  NEWS_CSV_PATH       Path to mpob_news_fast.csv   (default: /news/mpob_news_fast.csv)
-  NEWS_SENT_CSV_PATH  Path to mpob_news_with_sentiment.csv
+Optional (paths):
+  CPO_CSV_PATH            Default: ../cpo/Data_CPO_Daily.csv
+  CPO_PREPROC_CSV_PATH    Default: ../cpo/output/cpo_variables_Daily.csv
+  NEWS_RAW_CSV_PATH       Default: ../news/mpob_news_fast.csv
+  NEWS_PREPROC_CSV_PATH   Default: ../news/mpob_news_preprocessed.csv
+  NEWS_SENT_CSV_PATH      Default: ../news/mpob_news_with_sentiment_tone.csv
 """
 
 import argparse
@@ -31,6 +38,28 @@ logger = logging.getLogger('scheduler')
 
 
 # ---------------------------------------------------------------------------
+# Path resolution
+# ---------------------------------------------------------------------------
+
+_BASE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _path(env_var: str, default_relative: str) -> str:
+    """Resolve a CSV path from env var, falling back to a path relative to scheduler/."""
+    return os.environ.get(env_var) or os.path.abspath(os.path.join(_BASE, default_relative))
+
+
+def _paths() -> dict:
+    return {
+        'cpo_raw':       _path('CPO_CSV_PATH',           '../cpo/Data_CPO_Daily.csv'),
+        'cpo_preproc':   _path('CPO_PREPROC_CSV_PATH',   '../cpo/output/cpo_variables_Daily.csv'),
+        'news_raw':      _path('NEWS_RAW_CSV_PATH',      '../news/mpob_news_fast.csv'),
+        'news_preproc':  _path('NEWS_PREPROC_CSV_PATH',  '../news/mpob_news_preprocessed.csv'),
+        'news_sent':     _path('NEWS_SENT_CSV_PATH',     '../news/mpob_news_with_sentiment_tone.csv'),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Firebase init
 # ---------------------------------------------------------------------------
 
@@ -43,43 +72,31 @@ def init_firebase():
 
     creds_json = os.environ.get('FIREBASE_CREDENTIALS_JSON', '').strip()
     if creds_json:
-        creds_dict = json.loads(creds_json)
-        cred = credentials.Certificate(creds_dict)
+        cred = credentials.Certificate(json.loads(creds_json))
         return firebase_admin.initialize_app(cred)
 
-    # GCP default credentials (when running as a Cloud Run service account)
     gac = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
     if gac and os.path.exists(gac):
-        cred = credentials.Certificate(gac)
-        return firebase_admin.initialize_app(cred)
+        return firebase_admin.initialize_app(credentials.Certificate(gac))
 
-    # Local fallback — firebase-credentials.json next to main.py or in website/
-    script_dir = os.path.dirname(os.path.abspath(__file__))
     for candidate in [
-        os.path.join(script_dir, 'firebase-credentials.json'),
-        os.path.join(script_dir, '..', 'website', 'firebase-credentials.json'),
+        os.path.join(_BASE, 'firebase-credentials.json'),
+        os.path.join(_BASE, '..', 'website', 'firebase-credentials.json'),
     ]:
         if os.path.exists(candidate):
-            cred = credentials.Certificate(os.path.abspath(candidate))
-            return firebase_admin.initialize_app(cred)
+            return firebase_admin.initialize_app(credentials.Certificate(os.path.abspath(candidate)))
 
-    # Application Default Credentials (e.g., on GCP Compute/Cloud Run)
-    return firebase_admin.initialize_app()
+    return firebase_admin.initialize_app()  # ADC fallback
 
 
 # ---------------------------------------------------------------------------
-# Initial load
+# Step-checkpoint helpers (initial load only)
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Step checkpoint helpers  (initial load only)
-# ---------------------------------------------------------------------------
-
-_PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'initial_load_progress.json')
+_PROGRESS_FILE = os.path.join(_BASE, 'initial_load_progress.json')
 
 
 def _load_progress() -> dict:
-    """Return dict of completed steps, e.g. {'step1': True, 'step2': True}."""
     if os.path.exists(_PROGRESS_FILE):
         try:
             with open(_PROGRESS_FILE) as f:
@@ -90,94 +107,77 @@ def _load_progress() -> dict:
 
 
 def _mark_done(progress: dict, step: str) -> None:
-    """Mark a step as done and persist to disk."""
     progress[step] = True
     with open(_PROGRESS_FILE, 'w') as f:
         json.dump(progress, f, indent=2)
 
 
 def _reset_progress() -> None:
-    """Delete the progress file so all steps re-run next time."""
     if os.path.exists(_PROGRESS_FILE):
         os.remove(_PROGRESS_FILE)
         logger.info(f'Progress file removed: {_PROGRESS_FILE}')
 
 
 # ---------------------------------------------------------------------------
-# Initial load
+# Initial load — bulk-mirror local CSVs into Firestore
 # ---------------------------------------------------------------------------
 
 def run_initial_load(db):
     """
-    Load ALL historical data into Firestore:
-    1. CPO prices from CSV → daily_prices
-    2. MPOB news (with sentiment if available) → news_articles
-    3. Sentiment aggregates → sentiment_aggregates
-    4. HMM states → hmm_states
-    5. All XGBoost predictions (1 model × 2 variants × 7 horizons = 14) → predictions
+    1. CPO prices  →  daily_prices
+    2. MPOB news   →  news_articles  (uses pre-computed sentiment in the tone CSV)
+    3. Aggregates  →  sentiment_aggregates  (recomputed from full news CSV)
+    4. HMM states  →  hmm_states
 
-    Each step is checkpointed to initial_load_progress.json next to main.py.
-    Re-running the script skips any already-completed steps.
-    Delete that file (or run with --reset-progress) to start fresh.
+    Each step is checkpointed; delete initial_load_progress.json (or run with
+    --reset-progress) to start fresh.
     """
     logger.info('=== INITIAL LOAD START ===')
     progress = _load_progress()
     if progress:
-        done = [k for k, v in progress.items() if v]
-        logger.info(f'  Resuming — already done: {done}')
+        logger.info(f'  Resuming — already done: {[k for k, v in progress.items() if v]}')
 
-    _base = os.path.dirname(os.path.abspath(__file__))
-    cpo_csv = os.environ.get('CPO_CSV_PATH', os.path.join(_base, '..', 'cpo', 'Data_CPO_Daily.csv'))
-    news_csv = os.environ.get('NEWS_CSV_PATH', os.path.join(_base, '..', 'news', 'mpob_news_fast.csv'))
-    news_sent_csv = os.environ.get('NEWS_SENT_CSV_PATH', os.path.join(_base, '..', 'news', 'mpob_news_with_sentiment.csv'))
+    paths = _paths()
 
-    # Step 1: CPO prices
+    # Step 1: CPO prices.
     if progress.get('step1'):
         logger.info('Step 1: SKIPPED (already done)')
     else:
         logger.info('Step 1: Loading CPO price data from CSV...')
         from price_fetcher import load_prices_from_csv
         from firestore_writer import write_prices_batch
-        prices = load_prices_from_csv(cpo_csv)
+        prices = load_prices_from_csv(paths['cpo_raw'])
         if prices:
             write_prices_batch(db, prices)
-            logger.info(f'  {len(prices)} price records written.')
-        else:
-            logger.warning('  No price data loaded.')
         _mark_done(progress, 'step1')
 
-    # Step 2: News articles (use pre-computed sentiment CSV to skip FinBERT)
+    # Step 2: News articles (the tone CSV already has Combined_* sentiment).
     if progress.get('step2'):
         logger.info('Step 2: SKIPPED (already done)')
-        # Re-load articles in memory so Step 3 can use them if needed
         from news_extractor import load_news_from_csv
-        articles = load_news_from_csv(news_csv, news_sent_csv)
+        articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
     else:
         logger.info('Step 2: Loading MPOB news from CSV...')
         from news_extractor import load_news_from_csv
         from firestore_writer import write_news_articles
-        articles = load_news_from_csv(news_csv, news_sent_csv)
+        articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
         if articles:
             write_news_articles(db, articles)
-            logger.info(f'  {len(articles)} articles written.')
-        else:
-            logger.warning('  No articles loaded.')
         _mark_done(progress, 'step2')
 
-    # Step 3: Sentiment aggregates
+    # Step 3: Sentiment aggregates (rebuild from full CSV).
     if progress.get('step3'):
         logger.info('Step 3: SKIPPED (already done)')
     else:
-        logger.info('Step 3: Computing sentiment aggregates...')
+        logger.info('Step 3: Computing sentiment aggregates from full news CSV...')
         from sentiment_runner import compute_sentiment_aggregates
         from firestore_writer import write_sentiment_aggregates
         aggregates = compute_sentiment_aggregates(articles)
         if aggregates:
             write_sentiment_aggregates(db, aggregates)
-            logger.info(f'  {len(aggregates)} aggregate records written.')
         _mark_done(progress, 'step3')
 
-    # Step 4: HMM states
+    # Step 4: HMM states.
     if progress.get('step4'):
         logger.info('Step 4: SKIPPED (already done)')
     else:
@@ -186,85 +186,159 @@ def run_initial_load(db):
         update_hmm_states(db)
         _mark_done(progress, 'step4')
 
-    # Step 5: Predictions
-    if progress.get('step5'):
-        logger.info('Step 5: SKIPPED (already done)')
-    else:
-        logger.info('Step 5: Computing all 14 XGBoost predictions...')
-        from prediction_updater import run_all_predictions
-        run_all_predictions(db)
-        _mark_done(progress, 'step5')
-
     logger.info('=== INITIAL LOAD COMPLETE ===')
     logger.info(f'  (Progress file: {_PROGRESS_FILE} — delete it to re-run from scratch)')
 
 
 # ---------------------------------------------------------------------------
-# Daily update
+# Daily update — incremental, CSV-as-source-of-truth
 # ---------------------------------------------------------------------------
+
+def _is_aggregates_empty(db) -> bool:
+    """True if the Firestore `sentiment_aggregates` collection has no documents."""
+    return not list(db.collection('sentiment_aggregates').limit(1).stream())
+
+
+def _step_price(db, paths: dict) -> bool:
+    """
+    Fetch the latest price; if newer than the local CSV, append the CSV,
+    re-run preprocessing, and upsert Firestore. Returns True if anything changed.
+    """
+    from price_fetcher import fetch_latest_price, most_recent_trading_day, preprocess_price_csv
+    from firestore_writer import write_price
+    from local_csv_writer import latest_price_date, append_price_row_indonesian
+
+    cutoff = most_recent_trading_day()
+    have   = latest_price_date(paths['cpo_raw'])
+    if have and have >= cutoff:
+        logger.info(f'  Price CSV is current (latest={have}, cutoff={cutoff}). Skip fetch.')
+        return False
+
+    logger.info(f'  Price CSV is stale (latest={have}, cutoff={cutoff}). Fetching...')
+    price = fetch_latest_price()
+    if not price:
+        logger.warning('  fetch_latest_price returned None.')
+        return False
+
+    if have and price['date'] <= have:
+        logger.info(f'  Fetched price {price["date"]} not newer than CSV ({have}). Skip.')
+        return False
+
+    if not append_price_row_indonesian(paths['cpo_raw'], price):
+        logger.info('  Price already present in CSV.')
+        return False
+
+    logger.info('  Re-running CPO preprocessing pipeline...')
+    preprocess_price_csv(paths['cpo_raw'], paths['cpo_preproc'])
+
+    write_price(db, price)
+    logger.info(f'  Mirrored price {price["date"]} to Firestore.')
+    return True
+
+
+def _step_news(paths: dict) -> tuple[list, bool]:
+    """
+    If the local tone CSV is older than the most recent trading day, scrape
+    new articles, preprocess, score, and append all three local CSVs.
+    Returns (new_articles_list, did_change).
+    """
+    from price_fetcher import most_recent_trading_day
+    from news_extractor import (
+        scrape_new_articles, preprocess_articles,
+        article_to_raw_row, article_to_sentiment_row, RAW_FIELDS, SENTIMENT_FIELDS,
+    )
+    from sentiment_runner import run_sentiment_on_articles
+    from local_csv_writer import latest_news_date, append_news_rows
+
+    cutoff = most_recent_trading_day()
+    have   = latest_news_date(paths['news_sent'])
+    if have and have >= cutoff:
+        logger.info(f'  News CSV is current (latest={have}, cutoff={cutoff}). Skip scrape.')
+        return [], False
+
+    logger.info(f'  News CSV is stale (latest={have}, cutoff={cutoff}). Scraping...')
+    raw = scrape_new_articles(have)
+    if not raw:
+        logger.info('  No new articles scraped.')
+        return [], False
+
+    # Append RAW first so we have a record of what was scraped before any
+    # downstream step can lose it (e.g. preprocessing dropping empty articles).
+    append_news_rows(paths['news_raw'], [article_to_raw_row(a) for a in raw], RAW_FIELDS)
+
+    cleaned = preprocess_articles(raw)  # mutates in place, drops empty
+    if not cleaned:
+        logger.info('  All scraped articles dropped during preprocessing.')
+        return [], False
+    append_news_rows(paths['news_preproc'], [article_to_raw_row(a) for a in cleaned], RAW_FIELDS)
+
+    scored = run_sentiment_on_articles(cleaned)
+    append_news_rows(paths['news_sent'],
+                     [article_to_sentiment_row(a) for a in scored], SENTIMENT_FIELDS)
+
+    return scored, True
+
 
 def run_daily_update(db):
     """
-    Incremental daily update:
-    1. Fetch latest CPO price → daily_prices
-    2. Scrape new MPOB articles → news_articles
-    3. Run FinBERT on new articles
-    4. Update sentiment aggregates
-    5. Re-run HMM states
-    6. Recompute all 14 XGBoost predictions (1 × 2 × 7)
+    Incremental update against the local CSVs and Firestore mirror:
+
+    1. Price: fetch, dedup against local CSV, append + preprocess if new.
+    2. News:  scrape since latest tone-CSV date, preprocess, score with FinBERT-Tone,
+              append to all three news CSVs.
+    3. Mirror new news articles into Firestore.
+    4. Recompute sentiment aggregates from the full local tone CSV → Firestore.
+    5. Recompute HMM states.
+
+    Predictions are NOT computed here — the website handles inference live.
     """
     logger.info('=== DAILY UPDATE START ===')
+    paths = _paths()
 
-    # Step 1: CPO price
-    logger.info('Step 1: Fetching latest CPO price...')
-    from price_fetcher import fetch_latest_price, is_price_stored
-    from firestore_writer import write_price
-    price = fetch_latest_price()
-    if price:
-        if not is_price_stored(db, price['date']):
-            write_price(db, price)
-            logger.info(f"  New price: {price['date']} close={price['close']}")
-        else:
-            logger.info(f"  Price for {price['date']} already stored, skipping.")
-    else:
-        logger.warning('  Failed to fetch latest price.')
+    # 1. Price.
+    logger.info('Step 1: Price update')
+    _step_price(db, paths)
 
-    # Step 2: Scrape new news
-    logger.info('Step 2: Scraping new MPOB articles...')
-    from firestore_writer import get_latest_article_date, write_news_articles
-    from news_extractor import scrape_new_articles
-    cutoff = get_latest_article_date(db)
-    new_articles = scrape_new_articles(cutoff)
-    logger.info(f'  {len(new_articles)} new articles scraped.')
+    # 2. News.
+    logger.info('Step 2: News update')
+    new_articles, news_changed = _step_news(paths)
 
-    if new_articles:
-        # Step 3: FinBERT on new articles
-        logger.info('Step 3: Running FinBERT sentiment on new articles...')
-        from sentiment_runner import run_sentiment_on_articles
-        new_articles = run_sentiment_on_articles(new_articles)
+    # 3. Mirror new news to Firestore.
+    if news_changed and new_articles:
+        from firestore_writer import write_news_articles
         write_news_articles(db, new_articles)
-        logger.info(f'  {len(new_articles)} articles with sentiment written.')
+        logger.info(f'  Mirrored {len(new_articles)} new articles to Firestore.')
 
-        # Step 4: Update sentiment aggregates for new dates
-        logger.info('Step 4: Updating sentiment aggregates...')
-        from sentiment_runner import compute_sentiment_aggregates
-        from firestore_writer import write_sentiment_aggregates
-        new_aggregates = compute_sentiment_aggregates(new_articles)
-        if new_aggregates:
-            write_sentiment_aggregates(db, new_aggregates)
-            logger.info(f'  {len(new_aggregates)} aggregate records updated.')
+    # 4. Sentiment aggregates — incremental, with one-shot rebuild on re-init.
+    logger.info('Step 4: Updating sentiment aggregates...')
+    from news_extractor import load_news_from_csv
+    from sentiment_runner import compute_sentiment_aggregates
+    from firestore_writer import write_sentiment_aggregates
+
+    if news_changed and new_articles:
+        # Recompute only the dates that received new articles, but include ALL
+        # articles on those dates (avoids undercounting when a date already
+        # had partial aggregates from a prior run).
+        affected_dates = {a['date'] for a in new_articles if a.get('date')}
+        all_articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
+        affected = [a for a in all_articles if a.get('date') in affected_dates]
+        aggregates = compute_sentiment_aggregates(affected)
+        if aggregates:
+            write_sentiment_aggregates(db, aggregates)
+            logger.info(f'  Updated aggregates for {len(aggregates)} affected date(s).')
+    elif _is_aggregates_empty(db):
+        logger.info('  Firestore aggregates empty (post-reinit). Rebuilding from full CSV...')
+        all_articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
+        aggregates = compute_sentiment_aggregates(all_articles)
+        if aggregates:
+            write_sentiment_aggregates(db, aggregates)
     else:
-        logger.info('Step 3–4: No new articles, skipping sentiment.')
+        logger.info('  No news change; aggregates already up to date.')
 
-    # Step 5: HMM states
+    # 5. HMM states.
     logger.info('Step 5: Updating HMM states...')
     from hmm_updater import update_hmm_states
     update_hmm_states(db)
-
-    # Step 6: Predictions
-    logger.info('Step 6: Recomputing all 14 XGBoost predictions...')
-    from prediction_updater import run_all_predictions
-    run_all_predictions(db)
 
     logger.info('=== DAILY UPDATE COMPLETE ===')
 
@@ -274,18 +348,11 @@ def run_daily_update(db):
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description='CPO Prediction Scheduler')
-    parser.add_argument(
-        '--mode',
-        choices=['initial', 'daily'],
-        default='daily',
-        help='initial = first-run historical load; daily = incremental update',
-    )
-    parser.add_argument(
-        '--reset-progress',
-        action='store_true',
-        help='Delete the initial load checkpoint file and exit (next --mode initial runs all steps)',
-    )
+    parser = argparse.ArgumentParser(description='CPO Prediction Scheduler (local)')
+    parser.add_argument('--mode', choices=['initial', 'daily'], default='daily',
+                        help='initial = bulk-load CSVs to Firestore; daily = incremental update')
+    parser.add_argument('--reset-progress', action='store_true',
+                        help='Delete the initial-load checkpoint file and exit')
     args = parser.parse_args()
 
     if args.reset_progress:

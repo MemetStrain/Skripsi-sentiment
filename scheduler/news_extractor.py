@@ -1,13 +1,16 @@
 """
 news_extractor.py — Scrape MPOB news articles and load them to Firestore.
 
-Initial load: reads mpob_news_with_sentiment.csv (already has sentiment).
-Incremental: scrapes MPOB website for articles newer than the last stored date.
+Initial load: reads mpob_news_with_sentiment_tone.csv (already has sentiment).
+Incremental: scrapes MPOB website for articles newer than the last stored date,
+preprocesses them, and exposes helpers for the scheduler to append the full
+article record to all three local CSVs (raw / preprocessed / sentiment).
 """
 
 import csv
 import logging
 import os
+import sys
 import time
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,6 +29,117 @@ SEARCH_KEYWORDS = ['cpo', 'crude palm oil']
 REQUEST_TIMEOUT = 15
 MAX_WORKERS = 4
 RETRY_LIMIT = 3
+
+# Make the standalone news_preprocessing module importable from `news/`.
+_NEWS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'news'))
+if _NEWS_DIR not in sys.path:
+    sys.path.insert(0, _NEWS_DIR)
+
+
+# ---------------------------------------------------------------------------
+# Preprocessing — bridge to news/news_preprocessing.py NewsPreprocessor
+# ---------------------------------------------------------------------------
+
+_preprocessor = None
+
+
+def _get_preprocessor():
+    """Lazy-load NewsPreprocessor so import cost is paid only when used."""
+    global _preprocessor
+    if _preprocessor is None:
+        from news_preprocessing import NewsPreprocessor  # type: ignore
+        _preprocessor = NewsPreprocessor()
+    return _preprocessor
+
+
+def preprocess_articles(articles: list[dict]) -> list[dict]:
+    """
+    Apply NewsPreprocessor to title and content of each article in-place,
+    drop any whose title and content are both empty after cleaning.
+    Returns the surviving list.
+    """
+    if not articles:
+        return articles
+    pp = _get_preprocessor()
+    kept = []
+    for a in articles:
+        a['title'] = pp.preprocess_title(a.get('title', ''))
+        a['content'] = pp.preprocess_text(a.get('content', ''))
+        if not a.get('snippet'):
+            a['snippet'] = (a['content'][:200].rsplit(' ', 1)[0] + '…') if a['content'] else ''
+        if a['title'] or a['content']:
+            kept.append(a)
+    logger.info(f'Preprocessed {len(kept)}/{len(articles)} articles (dropped empty)')
+    return kept
+
+
+# ---------------------------------------------------------------------------
+# CSV row mappers — convert article dict (snake_case) ↔ CSV row (PascalCase)
+# ---------------------------------------------------------------------------
+
+RAW_FIELDS = ['Date', 'Title', 'Category', 'Content', 'Snippet', 'URL']
+
+SENTIMENT_FIELDS = RAW_FIELDS + [
+    'Title_Sentiment', 'Title_Confidence',
+    'Title_Positive_Prob', 'Title_Negative_Prob', 'Title_Neutral_Prob',
+    'Content_Sentiment', 'Content_Confidence',
+    'Content_Positive_Prob', 'Content_Negative_Prob', 'Content_Neutral_Prob',
+    'Combined_Sentiment', 'Combined_Confidence',
+    'Combined_Positive_Prob', 'Combined_Negative_Prob', 'Combined_Neutral_Prob',
+    'Content_Sentence_Count', 'Content_Sentence_Used', 'Content_Filter_Fallback',
+]
+
+
+def article_to_raw_row(article: dict) -> dict:
+    """Map an article dict to a raw / preprocessed CSV row (PascalCase)."""
+    return {
+        'Date':     article.get('date', ''),
+        'Title':    article.get('title', ''),
+        'Category': article.get('category', ''),
+        'Content':  article.get('content', ''),
+        'Snippet':  article.get('snippet', ''),
+        'URL':      article.get('url', ''),
+    }
+
+
+def article_to_sentiment_row(article: dict) -> dict:
+    """Map an article (with sentiment fields) to a tone-CSV row.
+
+    Per-title and per-content fields are written when present (the sentiment
+    runner exposes them); otherwise left blank. Combined_* mirrors the
+    in-memory snake_case fields (sentiment_label, positive_prob, ...).
+    """
+    row = article_to_raw_row(article)
+    row.update({
+        'Title_Sentiment':       article.get('title_sentiment', ''),
+        'Title_Confidence':      _fmt_float(article.get('title_confidence')),
+        'Title_Positive_Prob':   _fmt_float(article.get('title_positive_prob')),
+        'Title_Negative_Prob':   _fmt_float(article.get('title_negative_prob')),
+        'Title_Neutral_Prob':    _fmt_float(article.get('title_neutral_prob')),
+        'Content_Sentiment':     article.get('content_sentiment', ''),
+        'Content_Confidence':    _fmt_float(article.get('content_confidence')),
+        'Content_Positive_Prob': _fmt_float(article.get('content_positive_prob')),
+        'Content_Negative_Prob': _fmt_float(article.get('content_negative_prob')),
+        'Content_Neutral_Prob':  _fmt_float(article.get('content_neutral_prob')),
+        'Combined_Sentiment':       article.get('sentiment_label', ''),
+        'Combined_Confidence':      _fmt_float(article.get('combined_confidence')),
+        'Combined_Positive_Prob':   _fmt_float(article.get('positive_prob')),
+        'Combined_Negative_Prob':   _fmt_float(article.get('negative_prob')),
+        'Combined_Neutral_Prob':    _fmt_float(article.get('neutral_prob')),
+        'Content_Sentence_Count':   article.get('content_sentence_count', ''),
+        'Content_Sentence_Used':    article.get('content_sentence_used', ''),
+        'Content_Filter_Fallback':  article.get('content_filter_fallback', ''),
+    })
+    return row
+
+
+def _fmt_float(v) -> str:
+    if v is None or v == '':
+        return ''
+    try:
+        return f'{float(v):.4f}'
+    except (TypeError, ValueError):
+        return ''
 
 
 # ---------------------------------------------------------------------------

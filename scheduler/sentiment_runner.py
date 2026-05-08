@@ -173,7 +173,8 @@ def run_sentiment_on_articles(articles: list[dict]) -> list[dict]:
                 title_passed = float(title_probs.max()) >= SENTENCE_CONFIDENCE_THRESHOLD
 
             # Content: aggregate with filter (and fallback to all-sentences if all filtered).
-            content_mean, _, _, _ = _aggregate_content(probs[content_start:content_end])
+            content_mean, n_total, n_used, fallback = _aggregate_content(
+                probs[content_start:content_end])
 
             # Combine. Order: [Neutral, Positive, Negative].
             if content_mean is not None and title_passed:
@@ -196,7 +197,33 @@ def run_sentiment_on_articles(articles: list[dict]) -> list[dict]:
                 'positive_prob': round(pos, 4),
                 'negative_prob': round(neg, 4),
                 'neutral_prob': round(neu, 4),
+                'combined_confidence': round(float(combined.max()), 4),
+                'content_sentence_count': int(n_total),
+                'content_sentence_used':  int(n_used),
+                'content_filter_fallback': bool(fallback),
             })
+
+            # Per-title diagnostics (for parity with the offline tone CSV schema).
+            if title_probs is not None:
+                t_idx = int(np.argmax(title_probs))
+                a.update({
+                    'title_sentiment':     LABELS[t_idx],
+                    'title_confidence':    round(float(title_probs.max()), 4),
+                    'title_neutral_prob':  round(float(title_probs[0]), 4),
+                    'title_positive_prob': round(float(title_probs[1]), 4),
+                    'title_negative_prob': round(float(title_probs[2]), 4),
+                })
+
+            # Per-content diagnostics.
+            if content_mean is not None:
+                c_idx = int(np.argmax(content_mean))
+                a.update({
+                    'content_sentiment':     LABELS[c_idx],
+                    'content_confidence':    round(float(content_mean.max()), 4),
+                    'content_neutral_prob':  round(float(content_mean[0]), 4),
+                    'content_positive_prob': round(float(content_mean[1]), 4),
+                    'content_negative_prob': round(float(content_mean[2]), 4),
+                })
 
         if (i // BATCH_SIZE) % 10 == 0:
             logger.info('Sentiment progress: %d/%d', min(i + BATCH_SIZE, len(articles)), len(articles))

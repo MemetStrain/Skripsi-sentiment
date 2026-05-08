@@ -12,6 +12,8 @@ import os
 from datetime import datetime, date, timedelta
 from typing import Optional
 
+import pandas as pd
+
 logger = logging.getLogger(__name__)
 
 # Investing.com asset ID for CPO (Palm Oil Futures)
@@ -199,3 +201,48 @@ def is_price_stored(db, trade_date: str) -> bool:
     """Check if a price document already exists in `daily_prices`."""
     doc = db.collection('daily_prices').document(trade_date).get()
     return doc.exists
+
+
+# ---------------------------------------------------------------------------
+# Trading-day helper — used by the daily flow to decide if data is stale
+# ---------------------------------------------------------------------------
+
+def most_recent_trading_day(today: Optional[date] = None) -> str:
+    """
+    Return the most recent weekday on or before `today` as YYYY-MM-DD.
+
+    This is the cutoff the scheduler compares against when deciding whether
+    the local price/news CSVs are up to date. We don't keep a Malaysian
+    holiday calendar — weekday-only is the practical floor; on a Monday
+    public holiday the scheduler will harmlessly try once and find no new
+    data, which is fine for an ad-hoc local run.
+    """
+    today = today or date.today()
+    # Saturday=5, Sunday=6 → step back to Friday.
+    while today.weekday() >= 5:
+        today = today - timedelta(days=1)
+    return today.isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Preprocessing — bridge to cpo/preprocess_cpo_variables.py
+# ---------------------------------------------------------------------------
+
+def preprocess_price_csv(csv_path: str, output_path: str) -> None:
+    """
+    Run the offline preprocessing pipeline on the local price CSV and write
+    the engineered features to `output_path` (typically cpo/output/cpo_variables_Daily.csv).
+
+    The website's prediction code reads the engineered CSV; the scheduler
+    re-runs this whenever a new daily price row is appended.
+    """
+    import sys
+    cpo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cpo'))
+    if cpo_dir not in sys.path:
+        sys.path.insert(0, cpo_dir)
+    from preprocess_cpo_variables import preprocess_cpo  # type: ignore
+
+    df: pd.DataFrame = preprocess_cpo(csv_path, 'Daily')
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)) or '.', exist_ok=True)
+    df.to_csv(output_path, index=False, float_format='%.6f')
+    logger.info(f'Wrote engineered price CSV: {output_path} ({len(df)} rows)')

@@ -39,36 +39,13 @@
             </div>
         </div>
 
-        <!-- Prediction Panel -->
+        <!-- Forecast Configuration (auto-picked per horizon) -->
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-5">
-            <h3 class="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wide">Run Prediction</h3>
-
-            <div class="space-y-3">
-                <input type="hidden" id="pred-model" value="xgboost">
-                <input type="hidden" id="pred-frequency" value="Daily">
-                <div>
-                    <label class="block text-xs font-medium text-slate-600 mb-1">Horizon</label>
-                    <select id="pred-horizon" class="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary">
-                        <!-- Populated by JS -->
-                    </select>
-                    <p class="mt-1 text-[11px] text-slate-400">All horizons up to the selected one are plotted using the variant with the lowest MAPE per horizon.</p>
-                </div>
-                <button id="run-prediction"
-                    class="w-full bg-primary hover:bg-teal-800 text-white text-sm font-medium py-2 rounded-lg transition-colors">
-                    Get Prediction
-                </button>
+            <h3 class="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wide">Forecast Models</h3>
+            <p class="text-xs text-slate-500 mb-3">Auto-picked per horizon (lowest BASE MAPE). Inference uses the chosen config's CSA model.</p>
+            <div id="winners-summary" class="space-y-1.5 text-xs">
+                <!-- Populated from winners_data on render -->
             </div>
-
-            <!-- Result area -->
-            <div id="prediction-result" class="hidden mt-4 border-t border-slate-100 pt-3 space-y-2">
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-500 text-xs">Last Actual</span>
-                    <span id="res-last-price" class="font-semibold text-slate-800 text-xs"></span>
-                </div>
-                <div id="res-horizons" class="space-y-1.5"></div>
-            </div>
-            <div id="prediction-error" class="hidden mt-3 text-xs text-red-600 bg-red-50 rounded p-2"></div>
-            <div id="prediction-loading" class="hidden mt-3 text-xs text-slate-500 text-center">Loading…</div>
         </div>
 
     </div><!-- /Sidebar -->
@@ -76,49 +53,26 @@
     <!-- Main Content -->
     <div class="lg:col-span-3 space-y-5">
 
-        <!-- Chart -->
+        <!-- Price Chart with Rolling Forecast Trails -->
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <h3 class="text-base font-bold text-slate-800 mb-4">Price History &amp; Market State</h3>
-            <div class="relative h-[380px] w-full">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Price History &amp; Rolling Forecasts</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Each horizon's CSA model produces a rolling forecast trail across the visible window.</p>
+                </div>
+                <div id="forecasts-status" class="text-xs text-slate-400">Loading forecasts…</div>
+            </div>
+            <div class="relative h-[420px] w-full">
                 <canvas id="priceChart"></canvas>
             </div>
-            <!-- State legend -->
-            <div class="flex flex-wrap gap-5 mt-3 text-xs text-slate-500">
+            <!-- State + horizon legend -->
+            <div class="flex flex-wrap gap-4 mt-3 text-xs text-slate-500">
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-green-200 inline-block"></span> Bullish</span>
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-red-200 inline-block"></span> Bearish</span>
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-slate-200 inline-block"></span> Neutral</span>
-                <span id="pred-legend" class="hidden flex items-center gap-1">
-                    <span class="inline-block w-5 h-0 border-t-2 border-dashed border-amber-400"></span> Prediction
-                </span>
+                <span class="text-slate-300">|</span>
+                <span id="horizon-legend" class="flex flex-wrap gap-3"></span>
             </div>
-        </div>
-
-        <!-- Model Metrics (pre-computed best at h=1 Daily) -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-                <p class="text-xs text-slate-500 mb-1">Best Model (h=1)</p>
-                <h4 class="text-sm font-bold text-slate-800 leading-tight">{{ metrics.best_model }}</h4>
-            </div>
-            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-                <p class="text-xs text-slate-500 mb-1">MAPE</p>
-                <h4 class="text-xl font-bold text-slate-800">{{ metrics.mape }}%</h4>
-            </div>
-            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-                <p class="text-xs text-slate-500 mb-1">R²</p>
-                <h4 class="text-xl font-bold text-slate-800">{{ metrics.r2 }}</h4>
-            </div>
-            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-                <p class="text-xs text-slate-500 mb-1">Directional Acc.</p>
-                <h4 class="text-xl font-bold text-slate-800">{{ metrics.accuracy }}%</h4>
-            </div>
-        </div>
-
-        <!-- Per-Horizon Model Performance -->
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <h3 class="text-base font-bold text-slate-800 mb-1">Per-Horizon Model Performance</h3>
-            <p class="text-xs text-slate-400 mb-4">Click a horizon card to compare Base vs CSA metrics</p>
-            <div id="horizon-cards" class="grid grid-cols-4 sm:grid-cols-7 gap-2 mb-4"></div>
-            <div id="horizon-detail" class="hidden border-t border-slate-100 pt-4"></div>
         </div>
 
         <!-- Sentiment Trend Chart (Daily, 90d) -->
@@ -130,6 +84,46 @@
             </div>
         </div>
 
+        <!-- Model Metrics Summary (winning CSA at h=1) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+                <p class="text-xs text-slate-500 mb-1">Best Model (h=1)</p>
+                <h4 class="text-sm font-bold text-slate-800 leading-tight">{{ metrics.best_model }}</h4>
+            </div>
+            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+                <p class="text-xs text-slate-500 mb-1">MAPE</p>
+                <h4 class="text-xl font-bold text-slate-800">{{ metrics.mape }}%</h4>
+            </div>
+            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+                <p class="text-xs text-slate-500 mb-1">R² (price)</p>
+                <h4 class="text-xl font-bold text-slate-800">{{ metrics.r2 }}</h4>
+            </div>
+            <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+                <p class="text-xs text-slate-500 mb-1">Directional Acc.</p>
+                <h4 class="text-xl font-bold text-slate-800">{{ metrics.accuracy }}%</h4>
+            </div>
+        </div>
+
+        <!-- Ablation × Horizon Metrics Comparison -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <div class="flex items-start justify-between mb-3 flex-wrap gap-2">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Configuration Comparison</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Test-set metrics for every (config, horizon, variant). Winning BASE per horizon highlighted.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-500">Metric:</label>
+                    <select id="metric-select" class="text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-primary">
+                        <option value="mape" selected>MAPE (%)</option>
+                        <option value="rmse">RMSE</option>
+                        <option value="r2_price">R² (price)</option>
+                        <option value="da">Directional Acc. (%)</option>
+                    </select>
+                </div>
+            </div>
+            <div id="metrics-table" class="overflow-x-auto"></div>
+        </div>
+
     </div><!-- /Main Content -->
 </div>
 {% endblock %}
@@ -137,28 +131,43 @@
 {% block extra_js %}
 <script>
     // -----------------------------------------------------------------------
-    // Price chart
+    // Constants
     // -----------------------------------------------------------------------
-    const chartData = JSON.parse('{{ chart_data|safe }}');
+    const HORIZON_COLORS = {
+        1: '#f59e0b', 2: '#ec4899', 3: '#8b5cf6', 4: '#06b6d4',
+        5: '#10b981', 6: '#6366f1', 7: '#84cc16',
+    };
+    const TAGS = ['cpo_only', 'cpo_hmm', 'cpo_sentiment', 'full'];
+    const TAG_LABEL = {cpo_only: 'C1', cpo_hmm: 'C2', cpo_sentiment: 'C3', full: 'C4'};
+
+    // -----------------------------------------------------------------------
+    // Server-rendered context
+    // -----------------------------------------------------------------------
+    const chartData    = JSON.parse('{{ chart_data|safe }}');
+    const winnersData  = JSON.parse('{{ winners_data|safe }}');
+    const sentimentData = JSON.parse('{{ sentiment_data|safe }}');
+
     const labels = chartData.map(d => d.date);
     const prices = chartData.map(d => d.actual);
 
+    // -----------------------------------------------------------------------
+    // Price chart — actual close + state bands; trails added after fetch
+    // -----------------------------------------------------------------------
     const annotations = {};
     let curState = null, stateStart = 0;
     const stateColors = {
-        0: 'rgba(239,68,68,0.12)',
-        1: 'rgba(34,197,94,0.12)',
-        2: 'rgba(148,163,184,0.10)'
+        0: 'rgba(239,68,68,0.18)',   // Bearish — red
+        1: 'rgba(34,197,94,0.18)',   // Bullish — green
+        2: 'rgba(148,163,184,0.12)', // Neutral — gray
     };
-
+    const _noStateBg = 'rgba(255,255,255,0)'; // unknown/missing — transparent white
     chartData.forEach((pt, i) => {
         if (curState !== pt.state) {
             if (curState !== null && stateStart < i) {
                 annotations[`s_${stateStart}`] = {
-                    type: 'box',
-                    xMin: labels[stateStart], xMax: labels[i - 1],
-                    backgroundColor: stateColors[curState],
-                    borderWidth: 0, drawTime: 'beforeDatasetsDraw'
+                    type: 'box', xMin: labels[stateStart], xMax: labels[i - 1],
+                    backgroundColor: stateColors[curState] ?? _noStateBg,
+                    borderWidth: 0, drawTime: 'beforeDatasetsDraw',
                 };
             }
             curState = pt.state;
@@ -167,10 +176,9 @@
     });
     if (curState !== null && stateStart < chartData.length) {
         annotations[`s_${stateStart}_end`] = {
-            type: 'box',
-            xMin: labels[stateStart], xMax: labels[labels.length - 1],
-            backgroundColor: stateColors[curState],
-            borderWidth: 0, drawTime: 'beforeDatasetsDraw'
+            type: 'box', xMin: labels[stateStart], xMax: labels[labels.length - 1],
+            backgroundColor: stateColors[curState] ?? _noStateBg,
+            borderWidth: 0, drawTime: 'beforeDatasetsDraw',
         };
     }
 
@@ -178,17 +186,16 @@
     const priceChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels,
+            labels: [...labels],
             datasets: [{
-                label: 'Close Price',
-                data: prices,
+                label: 'Close Price', data: [...prices],
                 borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59,130,246,0.05)',
                 borderWidth: 2, fill: true, tension: 0.4,
                 pointRadius: 0, pointHoverRadius: 5,
                 pointHoverBackgroundColor: '#3b82f6',
-                pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2
-            }]
+                pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+            }],
         },
         options: {
             responsive: true, maintainAspectRatio: false,
@@ -200,398 +207,250 @@
                     titleColor: '#f8fafc', bodyColor: '#f8fafc',
                     borderColor: '#334155', borderWidth: 1, padding: 10,
                     callbacks: {
-                        title: (ctx) => {
-                            const d = chartData[ctx[0].dataIndex];
-                            if (!d) return ctx[0].label + '  |  Forecast';
-                            return `${d.date}  |  ${d.state_label}`;
-                        },
-                        label: (ctx) => {
-                            const v = ctx.parsed.y;
+                        label: (c) => {
+                            const v = c.parsed.y;
                             if (v == null) return null;
-                            if (ctx.dataset.label === 'Prediction') {
-                                return `Predicted: MYR ${v.toLocaleString('id-ID')}`;
-                            }
-                            return `Close: MYR ${v.toLocaleString('id-ID')}`;
+                            return `${c.dataset.label}: MYR ${v.toLocaleString('id-ID')}`;
                         },
-                        afterBody: (ctx) => {
-                            const d = chartData[ctx[0].dataIndex];
-                            if (!d) return [];
-                            return [
-                                `Open: MYR ${d.open.toLocaleString('id-ID')}`,
-                                `High: MYR ${d.high.toLocaleString('id-ID')}`,
-                                `Low:  MYR ${d.low.toLocaleString('id-ID')}`,
-                            ];
-                        }
-                    }
+                    },
                 },
-                annotation: { annotations }
+                annotation: { annotations },
             },
             scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 }, color: '#64748b' }
-                },
-                y: {
-                    grid: { color: '#f1f5f9' },
-                    ticks: {
-                        callback: v => 'MYR ' + v.toLocaleString('id-ID'),
-                        font: { size: 11 }, color: '#64748b'
-                    }
-                }
-            }
-        }
+                x: { grid: { display: false },
+                     ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 }, color: '#64748b' } },
+                y: { grid: { color: '#f1f5f9' },
+                     ticks: { callback: v => 'MYR ' + v.toLocaleString('id-ID'), font: { size: 11 }, color: '#64748b' } },
+            },
+        },
     });
 
     // -----------------------------------------------------------------------
-    // Prediction panel — best variant per horizon, all horizons up to N
+    // Rolling forecast overlay — fetch /api/forecasts/ and add per-horizon datasets
     // -----------------------------------------------------------------------
-    const originalLabels = [...labels];
-    const originalPrices = [...prices];
+    function plotTrails(forecasts) {
+        const trails = forecasts.trails || [];
+        if (!trails.length) return;
 
-    // Distinct color per horizon (h=1..7). Avoids the bullish/bearish/neutral
-    // palette so prediction lines are visually separable from the state bands.
-    const HORIZON_COLORS = {
-        1: '#f59e0b', // amber
-        2: '#ec4899', // pink
-        3: '#8b5cf6', // violet
-        4: '#06b6d4', // cyan
-        5: '#10b981', // emerald
-        6: '#6366f1', // indigo
-        7: '#84cc16', // lime
-    };
-
-    function clearPredictionDatasets() {
-        priceChart.data.labels = [...originalLabels];
-        priceChart.data.datasets[0].data = [...originalPrices];
-        if (priceChart.data.datasets.length > 1) {
-            priceChart.data.datasets.splice(1);
+        // Build the union of dates across all trails + actuals so x-axis covers
+        // the future projection points from the longer horizons.
+        const dateSet = new Set(labels);
+        for (const t of trails) {
+            for (const p of t.points) dateSet.add(p.predicted_date);
         }
-        document.getElementById('pred-legend').classList.add('hidden');
-        priceChart.update();
-    }
+        const extLabels = [...dateSet].sort();
 
-    /**
-     * Plot one prediction dataset per horizon: a 2-point dotted line from
-     * the last actual close to the horizon's predicted price.
-     * `points` = [{ horizon, predDate, predPrice, color }, ...]
-     */
-    function plotPredictions(lastActualDate, lastActualPrice, points) {
-        const extLabels = [...originalLabels];
-        for (const p of points) {
-            if (!extLabels.includes(p.predDate)) extLabels.push(p.predDate);
-        }
-        // Keep prediction dates in chronological order on the x-axis.
-        extLabels.sort();
-
-        priceChart.data.labels = extLabels;
+        // Re-anchor the actual close dataset onto the extended labels.
         const closeData = new Array(extLabels.length).fill(null);
-        originalLabels.forEach((d, i) => {
+        labels.forEach((d, i) => {
             const idx = extLabels.indexOf(d);
-            if (idx !== -1) closeData[idx] = originalPrices[i];
+            if (idx !== -1) closeData[idx] = prices[i];
         });
+        priceChart.data.labels = extLabels;
         priceChart.data.datasets[0].data = closeData;
 
-        // Remove any previous prediction datasets.
-        if (priceChart.data.datasets.length > 1) {
-            priceChart.data.datasets.splice(1);
-        }
+        // Drop any prior trail datasets, keep dataset[0] (close).
+        priceChart.data.datasets.length = 1;
 
-        const lastIdx = extLabels.indexOf(lastActualDate);
-        for (const p of points) {
-            const predIdx = extLabels.indexOf(p.predDate);
-            const data = new Array(extLabels.length).fill(null);
-            if (lastIdx !== -1) data[lastIdx] = lastActualPrice;
-            if (predIdx !== -1) data[predIdx] = p.predPrice;
-
-            const pointRadii = new Array(extLabels.length).fill(0);
-            if (predIdx !== -1) pointRadii[predIdx] = 6;
-
+        for (const t of trails) {
+            const color = HORIZON_COLORS[t.horizon] || '#64748b';
+            const data  = new Array(extLabels.length).fill(null);
+            for (const p of t.points) {
+                const idx = extLabels.indexOf(p.predicted_date);
+                if (idx !== -1) data[idx] = p.predicted_price;
+            }
             priceChart.data.datasets.push({
-                label: `+${p.horizon}d (${p.variant})`,
+                label: `+${t.horizon}d (${t.config})`,
                 data,
-                borderColor: p.color,
-                backgroundColor: p.color + '14',
-                borderWidth: 2,
-                borderDash: [6, 3],
-                fill: false,
-                tension: 0,
-                spanGaps: true,
-                pointRadius: pointRadii,
-                pointHoverRadius: 6,
-                pointBackgroundColor: p.color,
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
+                borderColor: color,
+                backgroundColor: color + '14',
+                borderWidth: 1.6, borderDash: [5, 3], fill: false,
+                tension: 0.2, spanGaps: true,
+                pointRadius: 0, pointHoverRadius: 4,
+                pointBackgroundColor: color,
             });
         }
-
-        document.getElementById('pred-legend').classList.remove('hidden');
         priceChart.update();
     }
 
-    const HORIZONS = [1, 2, 3, 4, 5, 6, 7];
-    const VARIANTS = ['base', 'csa'];
-
-    function populateHorizons() {
-        const sel = document.getElementById('pred-horizon');
-        sel.innerHTML = '';
-        HORIZONS.forEach(h => {
-            const opt = document.createElement('option');
-            opt.value = h;
-            opt.textContent = `${h} day${h > 1 ? 's' : ''} ahead`;
-            sel.appendChild(opt);
-        });
+    function renderHorizonLegend(forecasts) {
+        const el = document.getElementById('horizon-legend');
+        if (!el) return;
+        const trails = forecasts.trails || [];
+        el.innerHTML = trails.map(t => `
+            <span class="flex items-center gap-1">
+                <span class="inline-block w-5 h-0 border-t-2 border-dashed" style="border-color:${HORIZON_COLORS[t.horizon]}"></span>
+                <span>+${t.horizon}d (${t.config})</span>
+            </span>
+        `).join('');
     }
 
-    populateHorizons();
+    function renderWinnersSummary(forecasts) {
+        const el = document.getElementById('winners-summary');
+        if (!el) return;
+        const winners = forecasts.winners || winnersData.winners_by_horizon || {};
+        const configs = forecasts.configs || winnersData.configs_by_horizon || {};
+        const rows = [];
+        for (let h = 1; h <= 7; h++) {
+            const tag = winners[h] || winners[String(h)];
+            const cfg = configs[h] || configs[String(h)] || (tag ? TAG_LABEL[tag] : '—');
+            rows.push(`
+                <div class="flex justify-between items-center">
+                    <span class="flex items-center gap-1.5 text-slate-600">
+                        <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${HORIZON_COLORS[h]}"></span>
+                        h=${h}
+                    </span>
+                    <span class="font-semibold text-slate-700">${cfg || '—'}</span>
+                </div>`);
+        }
+        el.innerHTML = rows.join('');
+    }
 
-    /**
-     * Fetch one (variant, horizon) prediction. Returns null on any failure
-     * so the per-horizon selector can fall back to the other variant.
-     */
-    async function fetchOne(model, variant, horizon) {
+    async function loadForecasts() {
+        const status = document.getElementById('forecasts-status');
         try {
-            const res = await fetch(
-                `/api/prediction/?model=${model}&variant=${variant}&frequency=Daily&horizon=${horizon}`
-            );
-            if (!res.ok) return null;
+            const res = await fetch('/api/forecasts/?max_horizon=7&window_days=90');
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `HTTP ${res.status}`);
+            }
             const data = await res.json();
-            if (data.error || data.predicted_price == null) return null;
-            return { variant, ...data };
-        } catch {
-            return null;
+            renderHorizonLegend(data);
+            renderWinnersSummary(data);
+            plotTrails(data);
+            status.textContent = `Forecasts updated · ${(data.trails || []).length} horizons`;
+            status.className = 'text-xs text-slate-400';
+        } catch (e) {
+            status.textContent = `Forecast unavailable: ${e.message}`;
+            status.className = 'text-xs text-red-500';
+            renderWinnersSummary({});  // fallback to server-rendered winnersData
         }
     }
 
-    /** Pick the candidate with the lowest MAPE; null-safe. */
-    function pickBest(candidates) {
-        const valid = candidates.filter(c => c && c.metrics && c.metrics.mape != null);
-        if (!valid.length) return candidates.find(c => c) || null;
-        valid.sort((a, b) =>
-            parseFloat(a.metrics.mape) - parseFloat(b.metrics.mape)
-        );
-        return valid[0];
-    }
+    // Render the static winners summary immediately (server-side data) so the
+    // sidebar isn't blank during the API round-trip.
+    renderWinnersSummary({});
 
-    function renderHorizonRows(picks) {
-        const container = document.getElementById('res-horizons');
-        container.innerHTML = '';
-        for (const p of picks) {
-            const row = document.createElement('div');
-            row.className = 'flex justify-between items-center text-xs gap-2';
-            const variantBadge = p.variant === 'csa' ? 'CSA' : 'Base';
-            const mapeStr = p.mape != null ? `${parseFloat(p.mape).toFixed(2)}%` : '—';
-            row.innerHTML = `
-                <span class="flex items-center gap-1.5 text-slate-600">
-                    <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${p.color}"></span>
-                    +${p.horizon}d
-                    <span class="text-slate-400">(${variantBadge})</span>
-                </span>
-                <span class="text-right">
-                    <span class="font-semibold text-slate-800">MYR ${parseFloat(p.predPrice).toLocaleString('id-ID')}</span>
-                    <span class="text-slate-400 ml-1">${mapeStr}</span>
-                </span>`;
-            container.appendChild(row);
-        }
-    }
-
-    document.getElementById('run-prediction').addEventListener('click', async () => {
-        const model = document.getElementById('pred-model').value;
-        const horizon = parseInt(document.getElementById('pred-horizon').value, 10);
-
-        const resultEl = document.getElementById('prediction-result');
-        const errorEl = document.getElementById('prediction-error');
-        const loadingEl = document.getElementById('prediction-loading');
-
-        resultEl.classList.add('hidden');
-        errorEl.classList.add('hidden');
-        loadingEl.classList.remove('hidden');
-
-        // Fan out: 2 variants × N horizons in parallel.
-        const requests = [];
-        for (let h = 1; h <= horizon; h++) {
-            for (const v of VARIANTS) requests.push(fetchOne(model, v, h));
-        }
-        const results = await Promise.all(requests);
-        loadingEl.classList.add('hidden');
-
-        // Group by horizon and pick the best variant per h.
-        const byHorizon = {};
-        results.forEach((r) => {
-            if (!r) return;
-            (byHorizon[r.horizon] = byHorizon[r.horizon] || []).push(r);
-        });
-
-        const picks = [];
-        for (let h = 1; h <= horizon; h++) {
-            const best = pickBest(byHorizon[h] || []);
-            if (!best) continue;
-            picks.push({
-                horizon: h,
-                variant: best.variant,
-                predDate: best.predicted_date,
-                predPrice: parseFloat(best.predicted_price),
-                mape: best.metrics?.mape,
-                color: HORIZON_COLORS[h] || '#f59e0b',
-            });
-        }
-
-        if (!picks.length) {
-            errorEl.textContent = 'Predictions unavailable for the selected horizons.';
-            errorEl.classList.remove('hidden');
-            clearPredictionDatasets();
-            return;
-        }
-
-        // All picks share the same last_actual_* (single live model run).
-        const anyResult = results.find(r => r);
-        const lastActualDate = anyResult.last_actual_date;
-        const lastActualPrice = parseFloat(anyResult.last_actual_price);
-
-        document.getElementById('res-last-price').textContent =
-            `MYR ${lastActualPrice.toLocaleString('id-ID')} (${lastActualDate})`;
-        renderHorizonRows(picks);
-        resultEl.classList.remove('hidden');
-
-        plotPredictions(lastActualDate, lastActualPrice, picks);
-    });
+    loadForecasts();
 
     // -----------------------------------------------------------------------
-    // Per-Horizon expandable cards
+    // Configuration Comparison Table — server-rendered from winnersData
     // -----------------------------------------------------------------------
-    const horizonData = JSON.parse('{{ horizon_data|safe }}');
-    let activeHorizon = null;
-
-    function fmtMetric(val, dec) {
-        return val == null ? '—' : parseFloat(val).toFixed(dec);
+    function fmtMetric(v, key) {
+        if (v == null) return '—';
+        const n = parseFloat(v);
+        if (isNaN(n)) return '—';
+        if (key === 'mape' || key === 'da') return n.toFixed(2);
+        return n.toFixed(4);
     }
 
-    function bestCls(bv, cv, lowerBetter) {
-        if (bv == null || cv == null) return ['', ''];
-        return (lowerBetter ? bv <= cv : bv >= cv)
-            ? ['font-bold text-green-600', '']
-            : ['', 'font-bold text-green-600'];
+    function isLowerBetter(key) {
+        return key === 'mape' || key === 'rmse';
     }
 
-    function renderHorizonCards() {
-        const container = document.getElementById('horizon-cards');
+    function renderMetricsTable() {
+        const container = document.getElementById('metrics-table');
         if (!container) return;
-        container.innerHTML = '';
-        horizonData.forEach(h => {
-            const isActive = activeHorizon === h.horizon;
-            const badgeColor = h.best_variant === 'csa'
-                ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-600';
-            const card = document.createElement('button');
-            card.type = 'button';
-            card.className = [
-                'flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-colors',
-                isActive ? 'border-primary bg-teal-50' : 'border-slate-200 hover:border-primary hover:bg-slate-50'
-            ].join(' ');
-            card.innerHTML = `
-                <span class="text-xs font-bold text-slate-700 mb-1">H${h.horizon}</span>
-                <span class="inline-block px-1.5 py-0.5 rounded text-xs font-medium ${badgeColor} mb-1">${h.best_variant ? h.best_variant.toUpperCase() : '—'}</span>
-                <span class="text-xs font-semibold text-slate-600">${h.best_mape != null ? parseFloat(h.best_mape).toFixed(2) + '%' : '—'}</span>
-            `;
-            card.addEventListener('click', () => toggleHorizonDetail(h.horizon));
-            container.appendChild(card);
-        });
-    }
+        const metric = document.getElementById('metric-select').value;
+        const metrics = winnersData.metrics || {};
+        const winners = winnersData.winners_by_horizon || {};
+        const horizons = winnersData.horizons || [1,2,3,4,5,6,7];
+        const lower = isLowerBetter(metric);
 
-    function renderHorizonDetail(horizonNum) {
-        const panel = document.getElementById('horizon-detail');
-        const h = horizonData.find(x => x.horizon === horizonNum);
-        if (!h || !panel) return;
-        const b = h.base, c = h.csa;
-        const rows = [
-            { label: 'MAPE',           bv: b?.mape,            cv: c?.mape,            fmt: v => fmtMetric(v,4)+'%',             lob: true  },
-            { label: 'RMSE',           bv: b?.rmse,            cv: c?.rmse,            fmt: v => fmtMetric(v,4),                  lob: true  },
-            { label: 'R²',             bv: b?.r2,              cv: c?.r2,              fmt: v => fmtMetric(v,4),                  lob: false },
-            { label: 'Dir. Accuracy',  bv: b?.da,              cv: c?.da,              fmt: v => fmtMetric(v,2)+'%',             lob: false },
-            { label: 'Predicted Price',bv: b?.predicted_price, cv: c?.predicted_price, fmt: v => v == null ? '—' : 'MYR '+parseFloat(v).toLocaleString('id-ID'), lob: null },
-            { label: 'Predicted Date', bv: b?.predicted_date,  cv: c?.predicted_date,  fmt: v => v || '—',                       lob: null  },
-        ];
-        const tableRows = rows.map(r => {
-            const [bc, cc] = r.lob != null ? bestCls(r.bv, r.cv, r.lob) : ['', ''];
-            return `<tr class="border-t border-slate-100">
-                <td class="py-2 pr-4 text-xs text-slate-500 font-medium whitespace-nowrap">${r.label}</td>
-                <td class="py-2 pr-4 text-xs text-slate-700 text-center ${bc}">${r.fmt(r.bv)}</td>
-                <td class="py-2 text-xs text-slate-700 text-center ${cc}">${r.fmt(r.cv)}</td>
-            </tr>`;
-        }).join('');
-        panel.innerHTML = `
-            <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-bold text-slate-700">Horizon ${horizonNum} — Base vs CSA</h4>
-                <button type="button" onclick="toggleHorizonDetail(${horizonNum})"
-                    class="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded hover:bg-slate-100">Collapse ×</button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[320px]">
-                    <thead><tr class="text-xs text-slate-400 uppercase tracking-wide">
-                        <th class="pb-2 pr-4 text-left font-medium">Metric</th>
-                        <th class="pb-2 pr-4 text-center font-medium">Base</th>
-                        <th class="pb-2 text-center font-medium">CSA</th>
-                    </tr></thead>
-                    <tbody>${tableRows}</tbody>
-                </table>
-            </div>`;
-        panel.classList.remove('hidden');
-    }
-
-    function toggleHorizonDetail(horizonNum) {
-        const panel = document.getElementById('horizon-detail');
-        if (activeHorizon === horizonNum) {
-            activeHorizon = null;
-            if (panel) panel.classList.add('hidden');
-        } else {
-            activeHorizon = horizonNum;
-            renderHorizonDetail(horizonNum);
+        let html = `<table class="w-full min-w-[640px] text-xs">
+            <thead>
+                <tr class="text-slate-400 uppercase tracking-wide">
+                    <th class="pb-2 pr-4 text-left font-medium">Config</th>
+                    <th class="pb-2 pr-4 text-left font-medium">Variant</th>`;
+        for (const h of horizons) {
+            html += `<th class="pb-2 px-2 text-center font-medium">h=${h}</th>`;
         }
-        renderHorizonCards();
+        html += `</tr></thead><tbody>`;
+
+        for (const tag of TAGS) {
+            for (const v of ['BASE', 'CSA']) {
+                const isWinnerRow = (v === 'BASE');  // winners are picked by base MAPE
+                html += `<tr class="border-t border-slate-100">
+                    <td class="py-1.5 pr-4 font-medium text-slate-700">${TAG_LABEL[tag]}</td>
+                    <td class="py-1.5 pr-4 text-slate-500">${v}</td>`;
+                for (const h of horizons) {
+                    const cell = (((metrics[tag] || {})[String(h)] || {})[v] || {})[metric];
+                    const isWinner = isWinnerRow && winners[String(h)] === tag;
+                    const cellCls = isWinner ? 'font-bold text-teal-700 bg-teal-50' : '';
+                    html += `<td class="py-1.5 px-2 text-center ${cellCls}">${fmtMetric(cell, metric)}</td>`;
+                }
+                html += `</tr>`;
+            }
+        }
+        html += `</tbody></table>`;
+        container.innerHTML = html;
     }
 
-    if (horizonData.length > 0) renderHorizonCards();
+    document.getElementById('metric-select').addEventListener('change', renderMetricsTable);
+    if (Object.keys(winnersData.metrics || {}).length > 0) {
+        renderMetricsTable();
+    } else {
+        document.getElementById('metrics-table').innerHTML =
+            `<div class="text-xs text-slate-400">No comparison data yet. Run prediction/compute_winners.py after the C1-C4 training scripts.</div>`;
+    }
 
     // -----------------------------------------------------------------------
-    // Sentiment Trend Chart
+    // Sentiment Trend Chart — x-axis aligned to price chart, forward-filled
     // -----------------------------------------------------------------------
-    const sentimentData = JSON.parse('{{ sentiment_data|safe }}');
     if (sentimentData.length > 0) {
+        // Index sentiment by date, then walk the price-chart labels in order,
+        // carrying the last known sentiment forward so gaps (e.g. latest price
+        // days without published news) still show a value rather than null.
+        const sentByDate = {};
+        for (const d of sentimentData) sentByDate[d.date] = d;
+
+        let lastSent = null;
+        const sentAligned = labels.map(date => {
+            if (sentByDate[date]) lastSent = sentByDate[date];
+            return lastSent
+                ? { positive_prob: lastSent.positive_prob,
+                    negative_prob: lastSent.negative_prob,
+                    neutral_prob:  lastSent.neutral_prob }
+                : { positive_prob: null, negative_prob: null, neutral_prob: null };
+        });
+
         const sCtx = document.getElementById('sentimentChart').getContext('2d');
         new Chart(sCtx, {
             type: 'line',
             data: {
-                labels: sentimentData.map(d => d.date),
+                labels: labels,   // same x-axis as price chart
                 datasets: [
-                    { label: 'Positive', data: sentimentData.map(d => d.positive_prob),
+                    { label: 'Positive', data: sentAligned.map(d => d.positive_prob),
                       borderColor: '#22c55e', backgroundColor: 'transparent',
                       borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4 },
-                    { label: 'Negative', data: sentimentData.map(d => d.negative_prob),
+                    { label: 'Negative', data: sentAligned.map(d => d.negative_prob),
                       borderColor: '#ef4444', backgroundColor: 'transparent',
                       borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4 },
-                    { label: 'Neutral',  data: sentimentData.map(d => d.neutral_prob),
+                    { label: 'Neutral',  data: sentAligned.map(d => d.neutral_prob),
                       borderColor: '#94a3b8', backgroundColor: 'transparent',
                       borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4 },
-                ]
+                ],
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: true, position: 'top',
-                        labels: { boxWidth: 12, font: { size: 11 }, color: '#475569' } },
+                              labels: { boxWidth: 12, font: { size: 11 }, color: '#475569' } },
                     annotation: { annotations: {} },
                     tooltip: {
                         backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#f8fafc',
                         bodyColor: '#f8fafc', borderColor: '#334155', borderWidth: 1, padding: 10,
-                        callbacks: { label: ctx => ctx.parsed.y == null ? null : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)}` }
-                    }
+                        callbacks: { label: c => c.parsed.y == null ? null : `${c.dataset.label}: ${c.parsed.y.toFixed(4)}` },
+                    },
                 },
                 scales: {
                     x: { grid: { display: false },
                          ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 }, color: '#64748b' } },
                     y: { min: 0, max: 1, grid: { color: '#f1f5f9' },
-                         ticks: { callback: v => v.toFixed(2), stepSize: 0.2, font: { size: 11 }, color: '#64748b' } }
-                }
-            }
+                         ticks: { callback: v => v.toFixed(2), stepSize: 0.2, font: { size: 11 }, color: '#64748b' } },
+                },
+            },
         });
     }
 </script>

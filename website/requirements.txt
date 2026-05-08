@@ -1,4 +1,11 @@
-# Web app only — no ML libraries (those live in scheduler/requirements.txt)
+# Web app — Django + Firestore + live XGBoost inference
 Django>=6.0,<7.0
 firebase-admin>=6.0
 google-cloud-firestore>=2.13
+
+# Live prediction inference (loads prediction/saved_models/*/xgboost_csa/)
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.4
+xgboost>=2.0
+joblib>=1.3
