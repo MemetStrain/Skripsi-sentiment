@@ -2,16 +2,16 @@
 
 Reads ``news/lm_finbert_comparison.csv`` (per-article FinBERT and L-M labels)
 and ``cpo/Data_CPO_Daily.csv`` (daily CPO close), aggregates sentiment to a
-daily signed score per method, aligns with same-day and next-trading-day
-returns, and reports which method tracks price moves better.
+daily signed score per method, then sweeps lags 0..MAX_LAG to find the lag
+at which sentiment best predicts future price returns.
 
 Outputs:
     - ``news/output/daily_sentiment_vs_price.csv``: merged daily frame.
+    - ``news/output/lag_search_results.csv``: correlation stats for every lag.
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -22,9 +22,12 @@ from scipy.stats import pearsonr, spearmanr
 COMPARISON_CSV = "news/lm_finbert_comparison.csv"
 CPO_CSV = "cpo/Data_CPO_Daily.csv"
 OUTPUT_CSV = "news/output/daily_sentiment_vs_price.csv"
+LAG_CSV = "news/output/lag_search_results.csv"
 
-# Map sentiment labels to a signed score so we can average per day.
 LABEL_TO_SCORE = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
+
+# Maximum lag (in trading days) to search. Lag 0 = same-day.
+MAX_LAG = 30
 
 
 def load_sentiment(path: Path) -> pd.DataFrame:
@@ -37,15 +40,11 @@ def load_sentiment(path: Path) -> pd.DataFrame:
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce", dayfirst=True)
     df = df.dropna(subset=["Date"])
     df["finbert_score"] = df["Combined_Sentiment"].str.lower().map(LABEL_TO_SCORE)
-    # Re-derive the L-M label from raw polarity with a strict 0 dead-band so
-    # the price-tracking comparison is independent of NEUTRAL_TOLERANCE used
-    # in the agreement script.
     df["lm_score"] = np.sign(df["LM_Polarity"].astype(float)).astype(float)
     return df
 
 
 def aggregate_daily(df: pd.DataFrame) -> pd.DataFrame:
-    """Mean signed sentiment per day for each method, plus article count."""
     daily = (
         df.groupby(df["Date"].dt.normalize())
         .agg(
@@ -70,26 +69,18 @@ def _parse_locale_number(value: str) -> float:
         return np.nan
 
 
-FORWARD_HORIZONS = (1, 2, 3, 4, 5,6,7)  # cumulative trading-day windows after t
-
-
 def load_prices(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
     if "Tanggal" not in df.columns or "Terakhir" not in df.columns:
-        raise SystemExit(f"ERROR: CPO CSV missing Tanggal/Terakhir columns")
+        raise SystemExit("ERROR: CPO CSV missing Tanggal/Terakhir columns")
     df["Date"] = pd.to_datetime(df["Tanggal"], format="%d/%m/%Y", errors="coerce")
     df = df.dropna(subset=["Date"]).sort_values("Date").reset_index(drop=True)
     df["close"] = df["Terakhir"].map(_parse_locale_number)
-    df["return_t"] = df["close"].pct_change()  # return on day t (close vs prev close)
-    # Cumulative forward returns: close[t+N] / close[t] - 1 for each horizon.
-    for n in FORWARD_HORIZONS:
-        df[f"cum_{n}d"] = df["close"].shift(-n) / df["close"] - 1.0
-    cols = ["Date", "close", "return_t"] + [f"cum_{n}d" for n in FORWARD_HORIZONS]
-    return df[cols]
+    df["return_t"] = df["close"].pct_change()
+    return df[["Date", "close", "return_t"]]
 
 
 def directional_accuracy(sent: pd.Series, ret: pd.Series) -> float:
-    """Share of days where signs match, ignoring rows where either is zero/NaN."""
     mask = sent.notna() & ret.notna() & (sent != 0) & (ret != 0)
     if mask.sum() == 0:
         return float("nan")
@@ -98,24 +89,59 @@ def directional_accuracy(sent: pd.Series, ret: pd.Series) -> float:
     return float((s == r).mean())
 
 
-def report_method(name: str, sent: pd.Series, returns: dict[str, pd.Series]) -> None:
-    print(f"\n--- {name} ---")
-    for ret_name, ret in returns.items():
-        mask = sent.notna() & ret.notna()
-        n = int(mask.sum())
-        if n < 3:
-            print(f"  {ret_name:<10}: too few overlapping days ({n})")
-            continue
-        pear_r, pear_p = pearsonr(sent[mask], ret[mask])
-        spear_r, spear_p = spearmanr(sent[mask], ret[mask])
-        dacc = directional_accuracy(sent, ret)
-        dacc_str = "n/a" if np.isnan(dacc) else f"{dacc:.2%}"
+def _corr_at_lag(sent: pd.Series, ret: pd.Series, lag: int) -> dict:
+    """Return Pearson r, Spearman rho, and dir.acc for sentiment vs return at lag."""
+    shifted_ret = ret.shift(-lag)  # return that occurs `lag` trading days after t
+    mask = sent.notna() & shifted_ret.notna()
+    n = int(mask.sum())
+    if n < 5:
+        return dict(lag=lag, n=n, pearson_r=np.nan, pearson_p=np.nan,
+                    spearman_r=np.nan, spearman_p=np.nan, dir_acc=np.nan)
+    s = sent[mask]
+    r = shifted_ret[mask]
+    pear_r, pear_p = pearsonr(s, r)
+    spear_r, spear_p = spearmanr(s, r)
+    dacc = directional_accuracy(sent, shifted_ret)
+    return dict(lag=lag, n=n,
+                pearson_r=pear_r, pearson_p=pear_p,
+                spearman_r=spear_r, spearman_p=spear_p,
+                dir_acc=dacc)
+
+
+def find_best_lag(name: str, sent: pd.Series, ret: pd.Series, max_lag: int) -> pd.DataFrame:
+    """Sweep lags 0..max_lag, print a table, and return the results DataFrame."""
+    rows = [_corr_at_lag(sent, ret, lag) for lag in range(max_lag + 1)]
+    results = pd.DataFrame(rows)
+    results["method"] = name
+
+    print(f"\n{'='*72}")
+    print(f"  {name}  — lag sweep (0..{max_lag} trading days)")
+    print(f"{'='*72}")
+    print(f"  {'lag':>4}  {'n':>5}  {'pearson r':>10}  {'p':>7}  "
+          f"{'spearman':>10}  {'p':>7}  {'dir.acc':>8}")
+    print(f"  {'-'*4}  {'-'*5}  {'-'*10}  {'-'*7}  {'-'*10}  {'-'*7}  {'-'*8}")
+
+    best_idx = results["pearson_r"].abs().idxmax() if results["pearson_r"].notna().any() else None
+
+    for _, row in results.iterrows():
+        marker = " <-- best" if row["lag"] == results.loc[best_idx, "lag"] else ""
+        dacc_str = "n/a" if np.isnan(row["dir_acc"]) else f"{row['dir_acc']:.2%}"
+        pear_str = "n/a" if np.isnan(row["pearson_r"]) else f"{row['pearson_r']:+.4f}"
+        spear_str = "n/a" if np.isnan(row["spearman_r"]) else f"{row['spearman_r']:+.4f}"
+        pear_p_str = "n/a" if np.isnan(row["pearson_p"]) else f"{row['pearson_p']:.4f}"
+        spear_p_str = "n/a" if np.isnan(row["spearman_p"]) else f"{row['spearman_p']:.4f}"
         print(
-            f"  {ret_name:<10}: n={n:<5} "
-            f"pearson r={pear_r:+.4f} (p={pear_p:.3f})  "
-            f"spearman rho={spear_r:+.4f} (p={spear_p:.3f})  "
-            f"dir.acc={dacc_str}"
+            f"  {int(row['lag']):>4}  {int(row['n']):>5}  {pear_str:>10}  "
+            f"{pear_p_str:>7}  {spear_str:>10}  {spear_p_str:>7}  {dacc_str:>8}{marker}"
         )
+
+    if best_idx is not None:
+        best = results.loc[best_idx]
+        print(f"\n  >> Best lag for {name}: {int(best['lag'])} trading day(s)  "
+              f"pearson r={best['pearson_r']:+.4f} (p={best['pearson_p']:.4f})  "
+              f"spearman rho={best['spearman_r']:+.4f} (p={best['spearman_p']:.4f})")
+
+    return results
 
 
 def main() -> None:
@@ -123,6 +149,7 @@ def main() -> None:
     sent_path = root / COMPARISON_CSV
     cpo_path = root / CPO_CSV
     out_path = root / OUTPUT_CSV
+    lag_path = root / LAG_CSV
 
     if not sent_path.exists():
         raise SystemExit(f"ERROR: not found: {sent_path}")
@@ -133,31 +160,36 @@ def main() -> None:
     daily_sent = aggregate_daily(articles)
     prices = load_prices(cpo_path)
 
-    merged = daily_sent.merge(prices, on="Date", how="inner").sort_values("Date").reset_index(drop=True)
+    merged = (
+        daily_sent.merge(prices, on="Date", how="inner")
+        .sort_values("Date")
+        .reset_index(drop=True)
+    )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(out_path, index=False)
 
-    print("=" * 70)
-    print("Daily sentiment vs CPO price movement")
-    print("=" * 70)
+    print("=" * 72)
+    print("Daily sentiment vs CPO price — best-lag search")
+    print("=" * 72)
     print(f"Article rows           : {len(articles)}")
     print(f"Distinct news days     : {len(daily_sent)}")
     print(f"Trading days w/ news   : {len(merged)}")
     print(f"Date range             : {merged['Date'].min().date()} -> {merged['Date'].max().date()}")
-    print(f"Merged daily frame -> {out_path}")
+    print(f"Lag range searched     : 0 .. {MAX_LAG} trading days")
+    print(f"Merged daily frame  -> {out_path}")
 
-    returns = {"same-day": merged["return_t"]}  # news on day t vs return on day t
-    for n in FORWARD_HORIZONS:
-        # Cumulative return from close[t] to close[t+n].
-        returns[f"+{n}d cum"] = merged[f"cum_{n}d"]
+    fb_results = find_best_lag("FinBERT", merged["finbert_daily"], merged["return_t"], MAX_LAG)
+    lm_results = find_best_lag("Loughran-McDonald", merged["lm_daily"], merged["return_t"], MAX_LAG)
 
-    report_method("FinBERT", merged["finbert_daily"], returns)
-    report_method("Loughran-McDonald", merged["lm_daily"], returns)
+    all_results = pd.concat([fb_results, lm_results], ignore_index=True)
+    all_results.to_csv(lag_path, index=False)
+    print(f"\nFull lag results -> {lag_path}")
 
     print()
-    print("Note: 'dir.acc' = share of days where sign(sentiment) matches sign(return),")
-    print("      ignoring days where either side is exactly 0 or missing.")
+    print("Note: lag k means sentiment on day t is compared to the return on day t+k.")
+    print("      dir.acc = share of days where sign(sentiment) == sign(return),")
+    print("      excluding days where either value is exactly 0 or missing.")
 
 
 if __name__ == "__main__":
