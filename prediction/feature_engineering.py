@@ -23,7 +23,7 @@ Key design notes:
   trigger a clear error.
 """
 
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -114,10 +114,24 @@ def add_hmm_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Lag periods used by the ablation scripts. The training-time filter
-# `safe_lags = [l for l in BASE_LAG_PERIODS if l >= horizon]` happens
-# in `engineer_features_for_horizon`; at inference we compute all lags
-# and let `feature_cols` drive selection.
+# Per-source lag config — the union across the four C-script LAG_CONFIGs.
+# At inference time we generate all of these so any C{1..4} model's
+# `feature_cols` can be sliced from the resulting superset.
+#
+# Mirrors:
+#   C1 (cpo_only)      → Log_Return [1, 2, 3]
+#   C2 (cpo_hmm)       → HMM_State [1..14] + Log_Return [1, 2, 3]
+#   C3 (cpo_sentiment) → Sentiment_Score [44] + Log_Return [1, 2, 3]
+#   C4 (full)          → all of the above
+LAG_CONFIG: List[Dict] = [
+    {'source': 'HMM_State',       'lags': list(range(1, 15))},
+    {'source': 'Sentiment_Score', 'lags': [44]},
+    {'source': 'Log_Return',      'lags': [1, 2, 3]},
+]
+
+# Legacy uniform-lag list. Retained only for the deprecated training-time
+# `engineer_features_for_horizon` below, which is no longer called by the
+# C{1..4} ablation scripts (each now defines its own LAG_CONFIG inline).
 BASE_LAG_PERIODS = [1, 2, 3, 5, 10, 20]
 
 
@@ -197,17 +211,22 @@ def merge_inputs(
 
 def engineer_all_features(
     df: pd.DataFrame,
-    lag_periods: List[int] = BASE_LAG_PERIODS,
+    lag_config: Optional[List[Dict]] = None,
 ) -> pd.DataFrame:
     """
-    Add cyclical seasonality, all lags, and all interaction terms.
+    Add cyclical seasonality, per-source lags, and interaction terms.
 
     The output is the *superset* of columns any of the four ablations could
     have consumed at training time. The website inference path slices this
     superset by the trained model's `feature_cols` to get the exact input
     matrix shape the model expects.
+
+    `lag_config` defaults to the union of the four C-script configs. Pass
+    a custom list (same shape: ``[{'source': 'X', 'lags': [...]}, ...]``)
+    only if you've trained a model with a non-standard lag set.
     """
     df = df.copy()
+    cfg = lag_config if lag_config is not None else LAG_CONFIG
 
     # Cyclical seasonality.
     df['Month_Sin']      = np.sin(2 * np.pi * df['Date'].dt.month / 12)
@@ -217,13 +236,14 @@ def engineer_all_features(
     df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
     df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
 
-    # Lags. Only generate columns for signals actually present in the frame
-    # (so C1 — price-only — won't grow Sentiment / HMM lag columns).
-    candidate_lag_cols = ['Close', 'Sentiment_Score', 'HMM_State']
-    for col in candidate_lag_cols:
+    # Per-source lags. Sources missing from the frame are silently skipped
+    # (so C1 — price-only — won't grow Sentiment_Score / HMM_State lag columns).
+    for entry in cfg:
+        col  = entry['source']
+        lags = entry['lags']
         if col not in df.columns:
             continue
-        for lag in lag_periods:
+        for lag in lags:
             df[f'{col}_lag{lag}'] = df[col].shift(lag)
 
     # Interactions.

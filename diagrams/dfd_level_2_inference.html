@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFD Level 2 — Inference Pipeline — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">CPO Price Prediction System · Thesis Documentation</p>
+      <h1 class="text-2xl font-bold mt-1">DFD Level 2 — Inference Pipeline (Process 2.0)</h1>
+      <p class="text-teal-100 text-sm mt-1">What happens inside the live forecast endpoint, broken into five sub-processes.</p>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="max-w-6xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="dfd_level_0_context.html" class="nav-pill">Level 0 — Context</a>
+    <a href="dfd_level_1_detailed.html" class="nav-pill">Level 1 — Detailed</a>
+    <a href="dfd_level_2_inference.html" class="nav-pill">Level 2 — Inference</a>
+    <a href="README_DFD.md" class="nav-pill">README</a>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+
+    <!-- ── Diagram ─────────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Inference Pipeline (decomposition of Process 2.0)</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Triggered by <code>GET /api/forecasts/?max_horizon=7&amp;window_days=90</code>.
+        Five internal sub-processes turn raw Firestore data into a list of
+        rolling forecast trails (one per horizon). All file-loading sub-processes
+        cache via <code>functools.lru_cache</code> so repeat calls within the
+        same Vercel function instance are essentially free.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TB
+    %% ─── External callers / boundary ───
+    P1["1.0 Web Frontend<br/>(views.forecasts_api)"]:::proc
+
+    %% ─── Sub-processes ───
+    P21(("2.1<br/>Load Winners<br/>load_winners()"))
+    P22(("2.2<br/>Build Inference<br/>Frame<br/>build_inference_frame()"))
+    P23(("2.3<br/>Load Models<br/>load_model() · cached"))
+    P24(("2.4<br/>Compute Rolling<br/>Trails<br/>compute_forecast_trails()"))
+    P25(("2.5<br/>Format JSON<br/>Response"))
+
+    %% ─── Data stores read ───
+    D1[("D1<br/>daily_prices")]
+    D2[("D2<br/>hmm_states")]
+    D3[("D3<br/>sentiment_aggregates")]
+    D6[("D6<br/>winners.json")]
+    D7[("D7<br/>saved_models/<br/>model.pkl · scaler.pkl<br/>meta.json")]
+
+    %% ─── Inputs ───
+    P1 -- "(max_horizon, window_days)" --> P24
+
+    %% ─── Sub-process flows ───
+    P24 -- "needs winners + configs" --> P21
+    P21 -. "read once · cached" .-> D6
+    D6 -. "winners_by_horizon<br/>configs_by_horizon<br/>metrics" .-> P21
+    P21 -- "winners[h] = tag<br/>configs[h] = C1..C4" --> P24
+
+    P24 -- "needs feature frame" --> P22
+    P22 -. "OHLCV history" .-> D1
+    P22 -. "HMM_State per date<br/>(label only · features re-derived)" .-> D2
+    P22 -. "Article_Count, *_Prob,<br/>Sentiment_Score, Confidence" .-> D3
+    P22 -- "DataFrame:<br/>price + lags + RSI + MACD<br/>+ HMM dummies + sentiment<br/>+ cyclical seasonality" --> P24
+
+    P24 -- "for each h ∈ {1..7}:<br/>load (model, scaler, feature_cols)" --> P23
+    P23 -. "tag = winners[h]<br/>variant = csa" .-> D7
+    D7 -. "joblib.load<br/>(cached)" .-> P23
+    P23 -- "(model, scaler, feature_cols)" --> P24
+
+    P24 -- "rolling per anchor date:<br/>scaler.transform → model.predict<br/>→ price = anchor × exp(log_ret)" --> P25
+    P25 -- "{horizons, winners, configs,<br/>trails: [{horizon, tag, config,<br/>points: [...]}], metrics}" --> P1
+    P1 -- "HTTP 200 application/json" --> X((Browser))
+
+    %% ─── Styling ───
+    classDef proc fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#e0f2fe,stroke:#0369a1,stroke-width:1.5px,color:#0c4a6e
+    classDef ext fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+    class P21,P22,P23,P24,P25 proc
+    class D1,D2,D3,D6,D7 store
+    class X ext
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">Solid = control / data passed during a single request. Dashed = cached file/Firestore read (LRU-cached at module level).</p>
+    </section>
+
+    <!-- ── Sub-processes ────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Sub-Processes</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Name</th><th>Function</th><th>Inputs</th><th>Outputs</th><th>Cached?</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>2.1</strong></td>
+              <td>Load Winners</td>
+              <td><code>load_winners()</code> in <code>predictor.py</code></td>
+              <td>D6 (<code>winners.json</code>)</td>
+              <td><code>winners_by_horizon</code> (h → tag), <code>configs_by_horizon</code> (h → C1..C4), full metrics matrix</td>
+              <td>Yes — <code>@lru_cache(maxsize=1)</code></td>
+            </tr>
+            <tr>
+              <td><strong>2.2</strong></td>
+              <td>Build Inference Frame</td>
+              <td><code>build_inference_frame(db)</code></td>
+              <td>D1, D2, D3 — full Firestore history</td>
+              <td>Pandas DataFrame with all 100+ columns the offline training pipeline used: price OHLCV, technical indicators (RSI, MACD, Bollinger), HMM-derived features (recomputed locally to avoid the z-score-vs-raw mismatch with stored values), HMM state dummies, sentiment fields, cyclical date features, lags, interactions</td>
+              <td>No — re-runs every request (Firestore data may have changed)</td>
+            </tr>
+            <tr>
+              <td><strong>2.3</strong></td>
+              <td>Load Models</td>
+              <td><code>load_model(tag, h, variant='csa')</code></td>
+              <td>D7 (<code>prediction/saved_models/{tag}/Daily/h{h}/xgboost_csa/</code>)</td>
+              <td>Tuple of (XGBRegressor, RobustScaler, list of feature columns)</td>
+              <td>Yes — <code>@lru_cache(maxsize=64)</code> covers all (tag, h, variant) combos</td>
+            </tr>
+            <tr>
+              <td><strong>2.4</strong></td>
+              <td>Compute Rolling Trails</td>
+              <td><code>compute_forecast_trails(db, max_horizon, window_days)</code></td>
+              <td>Outputs of 2.1, 2.2, 2.3 + caller's <code>(max_horizon, window_days)</code></td>
+              <td>For each h: a list of <code>{anchor_date, anchor_price, predicted_date, predicted_price, log_return}</code> covering every date in the trailing <code>window_days</code> window</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td><strong>2.5</strong></td>
+              <td>Format JSON Response</td>
+              <td>Inline dict construction at the bottom of <code>compute_forecast_trails()</code></td>
+              <td>Outputs of 2.4 + winners metadata</td>
+              <td>Single JSON-serialisable dict: <code>{horizons, winners, configs, trails, metrics, tag_to_config, generated_at}</code></td>
+              <td>No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Step-by-step flow ───────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Per-Request Step-by-Step</h2>
+      <ol class="list-decimal pl-6 text-sm space-y-2 text-slate-700">
+        <li><strong>Boundary check.</strong> 1.0 clamps <code>max_horizon ∈ [1,7]</code> and <code>window_days ∈ [7,365]</code>, then calls 2.4.</li>
+        <li><strong>Winners lookup (2.1).</strong> First call: read <code>winners.json</code> from disk and cache it for the lifetime of the Vercel function instance. Subsequent calls return the cached dict.</li>
+        <li><strong>Feature frame (2.2).</strong> Pull all <code>daily_prices</code> docs and merge with <code>hmm_states</code> + <code>sentiment_aggregates</code>. Recompute price-derived (RSI, MACD, etc.) and HMM-derived features locally — this re-uses <code>prediction/feature_engineering.py</code>, the same code path that produced the offline training CSVs. Stored Firestore values for HMM-derived features are <em>ignored</em> on purpose to avoid scale mismatches.</li>
+        <li><strong>Per-horizon inference loop (2.4).</strong> For each h ∈ {1..max_horizon}:
+          <ul class="list-disc pl-6 mt-1 space-y-1">
+            <li>Pick <code>tag = winners[h]</code> (e.g. <code>"cpo_hmm"</code>). Skip horizon if no winner.</li>
+            <li>Call 2.3 to fetch <code>(model, scaler, feature_cols)</code> from D7. Cache hit on warm processes.</li>
+            <li>Walk every row in the trailing <code>window_days</code> window:
+              <ul class="list-disc pl-6 mt-1">
+                <li>Slice the row's feature columns into a 1×N matrix (<code>select_feature_matrix</code>). Skip if any NaN.</li>
+                <li>If a scaler is present: <code>X = scaler.transform(X)</code>.</li>
+                <li><code>log_ret = model.predict(X)[0]</code>; clip to ±10 for numerical safety.</li>
+                <li><code>pred_price = anchor_close × exp(log_ret)</code>.</li>
+                <li>Map the predicted date: if <code>i + h ≤ last_idx</code>, use the actual trading date; otherwise use the next weekday after the last actual (so all horizons converge at one shared future point).</li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>Format response (2.5).</strong> Bundle trails, winners metadata, and the full metrics matrix from <code>winners.json</code> into the response JSON.</li>
+        <li><strong>Return.</strong> 1.0 wraps the dict in <code>JsonResponse</code>. The browser plots each trail as a dashed line on the price chart and renders the horizon legend.</li>
+      </ol>
+    </section>
+
+    <!-- ── Why this design ─────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Design Decisions Visible in This DFD</h2>
+      <ul class="list-disc pl-6 space-y-2 text-sm text-slate-700">
+        <li><strong>Re-derive HMM-side features instead of trusting Firestore.</strong> 2.2 only consumes <code>HMM_State</code> + <code>HMM_State_Label</code> from D2 and recomputes the technical features locally. Firestore stores raw indicator values; the offline training CSV stored z-scored versions on a 252-day rolling window. Mixing the two breaks the model. Recomputing is cheap.</li>
+        <li><strong>Module-level <code>lru_cache</code> on file/joblib loads.</strong> Vercel reuses warm function instances; without caching, every request would pay the full <code>joblib.load</code> hit on 7 horizons × 1 winning model = 7 .pkl files (~40 MB total). With caching, only the first request after a cold start is slow.</li>
+        <li><strong>Live inference rather than precomputed predictions.</strong> The scheduler does <em>not</em> write a <code>predictions</code> collection. Doing so would mean the deployed app shows stale predictions until the next scheduler run, and the 4×7 metrics table couldn't reflect on-the-fly config changes. Live inference is acceptable because each horizon's call is &lt;100 ms after warmup.</li>
+        <li><strong>Trail truncation at the shared future point.</strong> Every horizon's last predicted date lands on the next trading day after the latest actual. Longer-horizon trails simply <em>start later</em> in the window so they all converge — this is what makes the chart's overlay visually coherent.</li>
+      </ul>
+    </section>
+
+    <p class="text-xs text-slate-500 mt-12">Diagram source: this file. Re-render by reloading in any modern browser. Mermaid 10 + TailwindCSS via CDN — no build step required.</p>
+  </main>
+
+</body>
+</html>

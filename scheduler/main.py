@@ -349,14 +349,27 @@ def run_daily_update(db):
 
 def main():
     parser = argparse.ArgumentParser(description='CPO Prediction Scheduler (local)')
-    parser.add_argument('--mode', choices=['initial', 'daily'], default='daily',
-                        help='initial = bulk-load CSVs to Firestore; daily = incremental update')
+    parser.add_argument('--mode', choices=['initial', 'daily', 'rebuild-hmm'],
+                        default='daily',
+                        help=('initial      = bulk-load CSVs to Firestore; '
+                              'daily        = incremental update; '
+                              'rebuild-hmm  = publish frozen HMM params + '
+                              'wipe & rebuild hmm_states from the offline CSV '
+                              '(run after re-training the offline HMM).'))
     parser.add_argument('--reset-progress', action='store_true',
                         help='Delete the initial-load checkpoint file and exit')
     args = parser.parse_args()
 
     if args.reset_progress:
         _reset_progress()
+        return
+
+    if args.mode == 'rebuild-hmm':
+        # Delegate to the dedicated migration script so its CLI args stay
+        # discoverable. Reset argv so argparse inside migrate_hmm sees no leftovers.
+        import migrate_hmm_to_firestore
+        sys.argv = ['migrate_hmm_to_firestore.py']
+        migrate_hmm_to_firestore.main()
         return
 
     try:

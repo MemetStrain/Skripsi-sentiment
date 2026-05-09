@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFD Level 1 — Detailed Process View — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">CPO Price Prediction System · Thesis Documentation</p>
+      <h1 class="text-2xl font-bold mt-1">DFD Level 1 — Detailed Process View</h1>
+      <p class="text-teal-100 text-sm mt-1">Three internal processes, eight data stores, and the data they exchange.</p>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="max-w-6xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="dfd_level_0_context.html" class="nav-pill">Level 0 — Context</a>
+    <a href="dfd_level_1_detailed.html" class="nav-pill">Level 1 — Detailed</a>
+    <a href="dfd_level_2_inference.html" class="nav-pill">Level 2 — Inference</a>
+    <a href="README_DFD.md" class="nav-pill">README</a>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+
+    <!-- ── Diagram ─────────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Decomposed Process View</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Process 0 (the entire system) is decomposed into three internal
+        processes: a <strong>read-only Web Frontend</strong> on Vercel,
+        a <strong>Live Inference Engine</strong> embedded in the same Django
+        app, and a <strong>Local Scheduler</strong> the maintainer runs ad-hoc
+        on their workstation. The Frontend and Inference Engine read from
+        Firestore and bundled model artefacts; only the Scheduler writes.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart LR
+    %% ─── External entities ───
+    USER["👤 Web Visitor"]
+    MAINT["🛠️ Maintainer"]
+    MPOB["📰 MPOB Website"]
+    INV["💱 Investing.com"]
+
+    %% ─── Processes ───
+    P1(("1.0<br/>Web Frontend<br/>Django on Vercel"))
+    P2(("2.0<br/>Live Inference<br/>Engine"))
+    P3(("3.0<br/>Local Scheduler<br/>scheduler/main.py"))
+
+    %% ─── Data stores (Firestore) ───
+    subgraph FS["☁️ Firestore (managed cloud DB)"]
+        D1[("D1<br/>daily_prices")]
+        D2[("D2<br/>hmm_states")]
+        D3[("D3<br/>sentiment_aggregates")]
+        D4[("D4<br/>news_articles")]
+        D5[("D5<br/>hmm_models<br/>frozen params")]
+    end
+
+    %% ─── Data stores (local files bundled with deploy) ───
+    subgraph LOC["💾 Bundled artefacts (read at runtime)"]
+        D6[("D6<br/>prediction/<br/>winners.json")]
+        D7[("D7<br/>prediction/<br/>saved_models/")]
+    end
+
+    subgraph CSV["📁 Local CSVs (workstation-only)"]
+        D8[("D8<br/>cpo + news CSVs<br/>source of truth")]
+    end
+
+    %% ─── User → Frontend ───
+    USER -- "GET / · /news/ · /about/<br/>?sentiment · ?page" --> P1
+    P1 -- "HTML pages · charts" --> USER
+    USER -- "GET /api/forecasts/<br/>?max_horizon · ?window_days" --> P1
+    P1 -- "Calls predictor" --> P2
+    P2 -- "Trail JSON<br/>(per-horizon predictions)" --> P1
+    P1 -- "JSON response" --> USER
+
+    %% ─── Frontend reads (90-day window) ───
+    D1 -. "OHLCV (last 90d)" .-> P1
+    D2 -. "state labels" .-> P1
+    D3 -. "daily aggregates" .-> P1
+    D4 -. "all articles<br/>(sort + paginate in Python)" .-> P1
+    D6 -. "metrics table data" .-> P1
+
+    %% ─── Inference engine reads ───
+    D1 -. "full price history" .-> P2
+    D2 -. "HMM state per date" .-> P2
+    D3 -. "sentiment per date" .-> P2
+    D6 -. "winning config per horizon" .-> P2
+    D7 -. "model.pkl · scaler.pkl<br/>meta.json (CSA)" .-> P2
+
+    %% ─── Maintainer → Scheduler ───
+    MAINT -- "CLI: --mode initial<br/>--mode daily<br/>--mode rebuild-hmm" --> P3
+    P3 -- "Logs · progress JSON" --> MAINT
+
+    %% ─── Scheduler ↔ external sources ───
+    INV -- "OHLCV quote" --> P3
+    MPOB -- "Article HTML" --> P3
+
+    %% ─── Scheduler ↔ local CSVs (source of truth) ───
+    D8 <-. "read latest date · append rows" .-> P3
+
+    %% ─── Scheduler writes Firestore ───
+    P3 == "upsert price doc<br/>id=YYYY-MM-DD" ==> D1
+    P3 == "upsert state doc<br/>id=Daily_YYYY-MM-DD" ==> D2
+    P3 == "upsert aggregate<br/>id=Daily_YYYY-MM-DD" ==> D3
+    P3 == "upsert article<br/>id=md5(url)" ==> D4
+    D5 -. "frozen params for decoding" .-> P3
+    P3 == "rebuild-hmm: republish params" ==> D5
+
+    %% ─── Styling ───
+    classDef ext fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+    classDef proc fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#e0f2fe,stroke:#0369a1,stroke-width:1.5px,color:#0c4a6e
+    class USER,MAINT,MPOB,INV ext
+    class P1,P2,P3 proc
+    class D1,D2,D3,D4,D5,D6,D7,D8 store
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        <strong>Legend.</strong>
+        Solid arrows (→) are commands or HTTP messages.
+        Double arrows (==&gt;) are <em>writes</em>.
+        Dashed arrows (-.-&gt;) are <em>reads</em>.
+        Yellow boxes = external entities. Teal circles = processes. Blue cylinders = data stores.
+      </p>
+    </section>
+
+    <!-- ── Processes ────────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Processes</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Process</th><th>Implementation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>1.0</strong></td>
+              <td>Web Frontend</td>
+              <td><code>website/web/views.py</code><br/><code>website/web/templates/*.html</code><br/>Django on Vercel (Python 3.11)</td>
+              <td>Renders the three pages (Dashboard, News, About). Reads a 90-day window from Firestore for the dashboard chart, paginates news articles, and proxies the forecast endpoint to process 2.0.</td>
+            </tr>
+            <tr>
+              <td><strong>2.0</strong></td>
+              <td>Live Inference Engine</td>
+              <td><code>website/web/predictor.py</code><br/><code>prediction/feature_engineering.py</code></td>
+              <td>On every <code>/api/forecasts/</code> call: re-engineers the full feature frame from Firestore, loads the winning ablation config + CSA model per horizon (cached via <code>lru_cache</code>), and emits rolling forecast trails for h ∈ {1..7}. Detailed in <a href="dfd_level_2_inference.html" class="text-teal-700 underline">Level 2</a>.</td>
+            </tr>
+            <tr>
+              <td><strong>3.0</strong></td>
+              <td>Local Scheduler</td>
+              <td><code>scheduler/main.py</code> (entry)<br/><code>price_fetcher.py</code> · <code>news_extractor.py</code> · <code>sentiment_runner.py</code> · <code>hmm_updater.py</code> · <code>firestore_writer.py</code></td>
+              <td>Run by the maintainer. Three modes: <code>initial</code> (bulk mirror CSV → Firestore), <code>daily</code> (fetch price, scrape news, score with FinBERT-Tone, recompute aggregates, decode HMM with frozen params), <code>rebuild-hmm</code> (re-publish offline-trained HMM params).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Data stores ──────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Data Stores</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Name</th><th>Backend</th><th>Doc / Row Key</th><th>Written by</th><th>Read by</th></tr></thead>
+          <tbody>
+            <tr><td><strong>D1</strong></td><td><code>daily_prices</code></td><td>Firestore collection</td><td><code>YYYY-MM-DD</code></td><td>3.0 (scheduler)</td><td>1.0, 2.0</td></tr>
+            <tr><td><strong>D2</strong></td><td><code>hmm_states</code></td><td>Firestore collection</td><td><code>Daily_YYYY-MM-DD</code></td><td>3.0</td><td>1.0, 2.0</td></tr>
+            <tr><td><strong>D3</strong></td><td><code>sentiment_aggregates</code></td><td>Firestore collection</td><td><code>Daily_YYYY-MM-DD</code></td><td>3.0</td><td>1.0, 2.0</td></tr>
+            <tr><td><strong>D4</strong></td><td><code>news_articles</code></td><td>Firestore collection</td><td><code>md5(url)</code></td><td>3.0</td><td>1.0 only</td></tr>
+            <tr><td><strong>D5</strong></td><td><code>hmm_models/Daily</code></td><td>Firestore document</td><td>Frozen GaussianHMM params (means, covars, transmat, startprob, z-score normaliser)</td><td>3.0 (rebuild-hmm mode only)</td><td>3.0 (every daily run for forward-filter decoding)</td></tr>
+            <tr><td><strong>D6</strong></td><td><code>prediction/winners.json</code></td><td>Local file (bundled)</td><td>Single JSON object: <code>winners_by_horizon</code>, <code>configs_by_horizon</code>, <code>metrics</code></td><td>Offline tool: <code>compute_winners.py</code></td><td>1.0, 2.0</td></tr>
+            <tr><td><strong>D7</strong></td><td><code>prediction/saved_models/{tag}/Daily/h{1..7}/xgboost_csa/</code></td><td>Local folder (bundled)</td><td><code>model.pkl</code> · <code>scaler.pkl</code> · <code>meta.json</code></td><td>Offline training: <code>horizon_forecast_C{1..4}_*.py</code></td><td>2.0</td></tr>
+            <tr><td><strong>D8</strong></td><td>Local CSVs (cpo + news)</td><td>Workstation files</td><td>One row per date / article</td><td>3.0 (append-only)</td><td>3.0 (latest-date check, full-rebuild fallback)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">D6, D7, D8 live <em>outside</em> Firestore. D6 + D7 are bundled into the Vercel deploy so the inference engine can mmap the .pkl files. D8 is the maintainer's local source of truth and is <strong>not</strong> part of the deployed runtime.</p>
+    </section>
+
+    <!-- ── Detailed flows ──────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Notable Data Flows</h2>
+
+      <div class="sub-heading">A. Dashboard Page Load (1.0)</div>
+      <ol class="list-decimal pl-6 text-sm space-y-1 text-slate-700">
+        <li>Visitor → 1.0: <code>GET /</code></li>
+        <li>1.0 reads D1 (90-day OHLCV), D2 (state labels filtered to <code>frequency=Daily</code>), D3 (sentiment aggregates), and D6 (winners.json for the metrics summary card and 4×7 metrics table).</li>
+        <li>1.0 renders <code>dashboard.html</code> with everything embedded as JSON in the page; the chart and trail overlay are drawn client-side.</li>
+        <li>The browser then makes a follow-up <code>GET /api/forecasts/?max_horizon=7&amp;window_days=90</code> which routes into 2.0.</li>
+      </ol>
+
+      <div class="sub-heading">B. Forecast API Call (1.0 → 2.0)</div>
+      <ol class="list-decimal pl-6 text-sm space-y-1 text-slate-700">
+        <li>Visitor → 1.0: <code>GET /api/forecasts/?max_horizon=7&amp;window_days=90</code></li>
+        <li>1.0 invokes <code>predictor.compute_forecast_trails(db, 7, 90)</code> which is process 2.0.</li>
+        <li>2.0 reads D1, D2, D3, D6, D7 (see Level 2 for the breakdown), runs the chosen CSA model per horizon, and returns a JSON-serialisable dict.</li>
+        <li>1.0 forwards the dict as the HTTP response.</li>
+      </ol>
+
+      <div class="sub-heading">C. News Page Load (1.0)</div>
+      <ol class="list-decimal pl-6 text-sm space-y-1 text-slate-700">
+        <li>Visitor → 1.0: <code>GET /news/?sentiment=Positive&amp;page=2</code></li>
+        <li>1.0 streams <strong>all</strong> documents from D4 (no date filter), then filters and sorts in Python — this avoids needing a composite Firestore index.</li>
+        <li>1.0 paginates 9 cards per page, computes sentiment counts, and renders <code>news.html</code>.</li>
+      </ol>
+
+      <div class="sub-heading">D. Daily Scheduler Run (3.0)</div>
+      <ol class="list-decimal pl-6 text-sm space-y-1 text-slate-700">
+        <li>Maintainer → 3.0: <code>python scheduler/main.py --mode daily</code></li>
+        <li>3.0 reads D8 to learn the latest local date.</li>
+        <li>If stale, 3.0 fetches new data from Investing.com and MPOB, appends to D8, mirrors fresh rows into D1 (price) and D4 (articles).</li>
+        <li>3.0 recomputes aggregates from D8 + writes D3.</li>
+        <li>3.0 reads D5 (frozen HMM params), runs forward-filter decoding on the full price series, writes new state docs into D2.</li>
+        <li>Predictions are <strong>not</strong> written. They are produced live by 2.0 on demand.</li>
+      </ol>
+
+      <div class="sub-heading">E. Initial Bulk Load (3.0)</div>
+      <ol class="list-decimal pl-6 text-sm space-y-1 text-slate-700">
+        <li>Maintainer runs <code>--mode initial</code> once to seed Firestore from D8.</li>
+        <li>Each step (price → news → aggregates → HMM) is checkpointed in <code>scheduler/initial_load_progress.json</code> so the run is resumable.</li>
+      </ol>
+    </section>
+
+    <p class="text-xs text-slate-500 mt-12">Diagram source: this file. Re-render by reloading in any modern browser. Mermaid 10 + TailwindCSS via CDN — no build step required.</p>
+  </main>
+
+</body>
+</html>

@@ -9,9 +9,11 @@ helpers and Bayesian optimisation hooks are no longer present.
 
 import json
 import os
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import joblib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
@@ -38,7 +40,8 @@ BASE_PARAMS = {
     'xgboost': {
         'n_estimators': 2000, 'max_depth': 6, 'learning_rate': 0.001,
         'subsample': 0.9, 'colsample_bytree': 0.9, 'min_child_weight': 1,
-        'random_state': RANDOM_STATE, 'verbose' : True,
+        'early_stopping_rounds': 50,
+        'random_state': RANDOM_STATE, 'verbose': True,
     },
 }
 
@@ -56,6 +59,21 @@ CSA_PARAM_SPACES = {
 
 # Hard cutoff: data before this date = train+test; from this date onwards = validation
 VAL_CUTOFF = pd.Timestamp('2026-01-01')
+
+
+# Raw same-day OHLCV columns from the CPO file. These should be dropped at load
+# time — feeding them to the model alongside Target = log(Close[t+h]/Close[t])
+# is a leakage path. The lagged returns / spreads / SMAs in CPO_TECH_COLS
+# already encode the safe price information.
+CPO_VARS_DROP = {'Open', 'High', 'Low', 'Volume', 'Change_Pct'}
+
+# Curated CPO technical-indicator whitelist (end-of-day, lag-1 or derived).
+CPO_TECH_COLS = [
+    'Return_t-1', 'Return_t-2', 'Volume_t-1',
+    'High_Low_Spread', 'Open_Close_Spread',
+    'SMA_3', 'SMA_6', 'EMA_3', 'EMA_6',
+    'RSI', 'MACD', 'MACD_Signal', 'Bollinger_Band_Width',
+]
 
 
 # =============================================================================
@@ -139,6 +157,69 @@ def prepare_train_test_val(df: pd.DataFrame, feature_cols: List[str],
         'train_dates': train_dates, 'test_dates': test_dates, 'val_dates': dates_val,
         'scaler': scaler,       'feature_names': feature_cols,
         'close_train': close_train, 'close_test': close_test, 'close_val': close_val,
+    }
+
+
+def prepare_cv_test_split(df: pd.DataFrame, feature_cols: List[str],
+                          n_cv_folds: int,
+                          val_cutoff: pd.Timestamp = VAL_CUTOFF) -> Dict:
+    """Time-series cross-validation split.
+
+    - pre-test rows (Date < val_cutoff): TimeSeriesSplit into n_cv_folds folds
+    - test rows    (Date >= val_cutoff): final holdout
+
+    One global RobustScaler is fit on all pre-test data and reused across folds
+    and the final model — matches horizon_forecast_configurable._build_data.
+    """
+    pre  = df[df['Date'] < val_cutoff].reset_index(drop=True)
+    test = df[df['Date'] >= val_cutoff].reset_index(drop=True)
+
+    assert len(pre) > 0, f"No pre-{val_cutoff.year} rows found — check the Date column"
+
+    X_pre_raw  = pre[feature_cols].values
+    y_pre      = pre['Target'].values
+    dates_pre  = pre['Date'].values
+    close_pre  = pre['Close'].values
+
+    n_feat = len(feature_cols)
+    if len(test):
+        X_test_raw  = test[feature_cols].values
+        y_test      = test['Target'].values
+        dates_test  = test['Date'].values
+        close_test  = test['Close'].values
+    else:
+        X_test_raw = np.empty((0, n_feat))
+        y_test = dates_test = close_test = np.array([])
+
+    scaler   = RobustScaler()
+    X_pre_s  = scaler.fit_transform(X_pre_raw)
+    X_test_s = scaler.transform(X_test_raw) if len(X_test_raw) else X_test_raw
+
+    tscv = TimeSeriesSplit(n_splits=n_cv_folds)
+    cv_splits = []
+    for fold_idx, (train_idx, cv_idx) in enumerate(tscv.split(X_pre_s)):
+        cv_splits.append({
+            'fold':        fold_idx + 1,
+            'X_train':     X_pre_s[train_idx],
+            'y_train':     y_pre[train_idx],
+            'dates_train': dates_pre[train_idx],
+            'close_train': close_pre[train_idx],
+            'X_cv':        X_pre_s[cv_idx],
+            'y_cv':        y_pre[cv_idx],
+            'dates_cv':    dates_pre[cv_idx],
+            'close_cv':    close_pre[cv_idx],
+        })
+
+    return {
+        'X_pre': X_pre_s,   'y_pre': y_pre,
+        'dates_pre': dates_pre, 'close_pre': close_pre,
+        'X_pre_raw': X_pre_raw,
+        'X_test': X_test_s, 'y_test': y_test,
+        'dates_test': dates_test, 'close_test': close_test,
+        'X_test_raw': X_test_raw,
+        'cv_splits': cv_splits,
+        'scaler':    scaler,
+        'feature_names': feature_cols,
     }
 
 
@@ -315,3 +396,59 @@ def load_model_artifacts(load_dir: str) -> Optional[Dict]:
         'params':       meta['params'],
         'saved_at':     meta.get('saved_at'),
     }
+
+
+# =============================================================================
+# Feature importance
+# =============================================================================
+
+def save_feature_importance(model: XGBRegressor, feature_cols: List[str],
+                            out_dir, horizon: int, top_n: int = 20,
+                            tag: str = 'BASE') -> None:
+    """Save XGBoost feature importance (gain + weight) as CSV and bar chart.
+
+    The model is trained on a numpy array, so XGBoost names features f0, f1, …
+    internally — we remap to actual column names before lookup.
+    """
+    out_dir = Path(out_dir)
+    booster = model.get_booster()
+
+    gain_raw   = booster.get_score(importance_type='gain')
+    weight_raw = booster.get_score(importance_type='weight')
+    gain   = {feature_cols[int(k[1:])]: v for k, v in gain_raw.items()}
+    weight = {feature_cols[int(k[1:])]: v for k, v in weight_raw.items()}
+
+    rows = [
+        {'Feature': feat,
+         'Importance_Gain':   gain.get(feat, 0.0),
+         'Importance_Weight': weight.get(feat, 0.0)}
+        for feat in feature_cols
+    ]
+    df_imp = (pd.DataFrame(rows)
+              .sort_values('Importance_Gain', ascending=False)
+              .reset_index(drop=True))
+    df_imp.insert(0, 'Rank', df_imp.index + 1)
+
+    tag_lower = tag.lower()
+    df_imp.to_csv(out_dir / f'feature_importance_{tag_lower}_h{horizon}.csv',
+                  index=False)
+
+    top = df_imp.head(top_n)
+    fig, ax = plt.subplots(figsize=(10, max(4, len(top) * 0.4)))
+    ax.barh(top['Feature'][::-1], top['Importance_Gain'][::-1], color='#2E86AB')
+    ax.set_xlabel('Importance (Gain)')
+    ax.set_title(f'Feature Importance ({tag}) — Horizon {horizon} '
+                 f'(top {len(top)} by gain)',
+                 fontsize=13, fontweight='bold')
+    ax.grid(True, axis='x', alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out_dir / f'feature_importance_{tag_lower}_h{horizon}.png',
+                dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+    print(f"\n  Feature importance [{tag}] (top {min(top_n, len(df_imp))} by gain):")
+    print(f"  {'Rank':>4}  {'Feature':<35}  {'Gain':>10}  {'Weight':>8}")
+    print(f"  {'-'*4}  {'-'*35}  {'-'*10}  {'-'*8}")
+    for _, row in df_imp.head(top_n).iterrows():
+        print(f"  {int(row['Rank']):>4}  {row['Feature']:<35}  "
+              f"{row['Importance_Gain']:>10.4f}  {int(row['Importance_Weight']):>8}")

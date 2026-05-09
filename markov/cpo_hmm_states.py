@@ -41,6 +41,7 @@ State interpretation:
     4+ states → Bullish-1, Bullish-2 … Neutral … Bearish-2, Bearish-1
 """
 
+import json
 import os
 import warnings
 import numpy as np
@@ -85,6 +86,12 @@ N_ITER      = 1000   # Max EM iterations per restart (≥ 200 required)
 N_RESTARTS  = 50     # Independent K-Means-seeded restarts; best log-L is kept
 TOL         = 1e-4   # EM convergence tolerance
 RANDOM_SEED = 42
+
+# Causal filtering: HMM is fit on Date < FIT_CUTOFF only, and states are
+# decoded for all dates via online forward filter (no Viterbi smoothing).
+# This eliminates lookahead bias in HMM features used by downstream price
+# prediction models — must match VAL_CUTOFF in prediction/utils/forecast_utils.
+FIT_CUTOFF = pd.Timestamp("2026-01-01")
 
 # Output
 OUTPUT_DIR = "output"
@@ -275,6 +282,38 @@ def fit_hmm_with_restarts(X: np.ndarray, n_states: int, cov_type: str,
             best_score, best_model = score, model
 
     return best_model, best_score
+
+
+def forward_filter(model, X: np.ndarray) -> np.ndarray:
+    """Online forward filter — returns the MAP filtered state path.
+
+    For each time step t, returns argmax_i P(q_t = i | O_1, …, O_t) using
+    only observations up to and including t.
+
+    This is the *causal* alternative to ``model.predict(X)``. ``predict``
+    runs the Viterbi algorithm, which decodes the most likely full state
+    sequence given the *entire* observation sequence — every state
+    assignment depends on observations both before and after t (lookahead).
+
+    The forward algorithm propagates α_t(j) = P(O_1..O_t, q_t = j | λ).
+    Working in log-space avoids underflow on long sequences.
+    """
+    from scipy.special import logsumexp
+
+    log_emit  = model._compute_log_likelihood(X)               # (T, K)
+    log_start = np.log(np.maximum(model.startprob_, 1e-300))   # (K,)
+    log_trans = np.log(np.maximum(model.transmat_, 1e-300))    # (K, K)
+
+    T, K = log_emit.shape
+    log_alpha = np.empty((T, K))
+    log_alpha[0] = log_start + log_emit[0]
+    for t in range(1, T):
+        # log α_t(j) = logsumexp_i ( log α_{t-1}(i) + log A[i, j] ) + log B_j(O_t)
+        log_alpha[t] = logsumexp(
+            log_alpha[t - 1][:, None] + log_trans, axis=0
+        ) + log_emit[t]
+
+    return np.argmax(log_alpha, axis=1)
 
 
 def count_free_params(n_states: int, n_features: int, cov_type: str) -> int:
@@ -744,11 +783,25 @@ def run_frequency(frequency: str) -> dict:
     X = df[feat_cols].values.astype(np.float64)
     cov_type = COVARIANCE_TYPE
 
-    # 3. Model selection or manual
+    # 2b. Causal split: HMM is fit on pre-cutoff data only; states for the
+    # full series are decoded via online forward filter (no Viterbi smoothing).
+    train_mask = (df["Date"] < FIT_CUTOFF).values
+    X_train = X[train_mask]
+    print(
+        f"\n  Causal HMM training:\n"
+        f"    Training rows  (Date < {FIT_CUTOFF.date()}): {len(X_train):,}\n"
+        f"    Forward-filtered rows (full series)       : {len(X):,}"
+    )
+    if len(X_train) < 50:
+        raise ValueError(
+            f"Too few training rows ({len(X_train)}) — adjust FIT_CUTOFF"
+        )
+
+    # 3. Model selection or manual — fit on TRAINING data only
     if AUTO_OPTIMIZE:
-        print(f"\n  Searching for optimal states via BIC…")
+        print(f"\n  Searching for optimal states via BIC (training data only)…")
         n_opt, bic_scores, best_model = optimize_states_bic(
-            X,
+            X_train,
             max_states=MAX_STATES,
             cov_type=cov_type,
             frequency=frequency,
@@ -762,7 +815,7 @@ def run_frequency(frequency: str) -> dict:
         n_opt      = N_STATES_MANUAL
         bic_scores = {}
         print(f"\n  Using fixed state count: {n_opt}  ({N_RESTARTS} K-Means-seeded restarts)")
-        best_model, log_L = fit_hmm_with_restarts(X, n_opt, cov_type)
+        best_model, log_L = fit_hmm_with_restarts(X_train, n_opt, cov_type)
         if best_model is None:
             raise RuntimeError(
                 f"All HMM fits failed for {frequency}. "
@@ -771,17 +824,20 @@ def run_frequency(frequency: str) -> dict:
         print(f"  Best restart log-likelihood = {log_L:.2f}  "
               f"converged = {getattr(best_model.monitor_, 'converged', '?')}")
 
-    # 4. Decode states
-    states = best_model.predict(X)
+    # 4. Decode states via online forward filter (causal — no lookahead)
+    print("\n  Decoding states via online forward filter (no Viterbi smoothing)…")
+    states       = forward_filter(best_model, X)
+    states_train = states[train_mask]
 
-    # 5. Analyse
-    state_stats = characterize_states(df, states, n_opt, frequency)
+    # 5. Analyse — labels assigned from training-period behaviour only
+    df_train = df.loc[train_mask].reset_index(drop=True)
+    state_stats = characterize_states(df_train, states_train, n_opt, frequency)
     trans_df    = analyze_transition_matrix(best_model, state_stats, frequency)
 
-    # 5b. Post-fit validation (means, covariances, occupancy, AIC/BIC, warnings)
-    val = validate_model(best_model, X, states, feat_cols, cov_type, frequency)
+    # 5b. Post-fit validation on training data
+    val = validate_model(best_model, X_train, states_train, feat_cols, cov_type, frequency)
 
-    # 6. Merge labels back into df
+    # 6. Merge labels back into df (label map derived from training stats)
     state_to_label = dict(zip(state_stats["State"].astype(int),
                                state_stats["Label"]))
     df["State"]       = states
@@ -806,10 +862,34 @@ def run_frequency(frequency: str) -> dict:
         pd.DataFrame(list(bic_scores.items()),
                      columns=["n_states", "BIC"]).to_csv(out_bic, index=False)
 
+    # 7b. Persist fitted parameters so the daily scheduler can decode new
+    # observations with the same model — never re-fit at serve time.
+    out_params = os.path.join(OUTPUT_DIR, f"hmm_params_{frequency}.json")
+    params_payload = {
+        "fit_cutoff":        str(FIT_CUTOFF.date()),
+        "fit_seed":          RANDOM_SEED,
+        "fit_timestamp":     pd.Timestamp.now().isoformat(),
+        "covariance_type":   cov_type,
+        "n_components":      int(n_opt),
+        "feat_cols":         feat_cols,
+        "startprob_":        best_model.startprob_.tolist(),
+        "transmat_":         best_model.transmat_.tolist(),
+        "means_":            best_model.means_.tolist(),
+        "covars_":           best_model.covars_.tolist(),
+        "state_to_label":    {str(k): v for k, v in state_to_label.items()},
+        "volatility_window": VOLATILITY_WINDOW,
+        "norm_window":       NORM_WINDOW,
+        "training_log_likelihood": float(best_model.score(X_train)),
+        "training_n_obs":    int(len(X_train)),
+    }
+    with open(out_params, "w") as fh:
+        json.dump(params_payload, fh, indent=2)
+
     print(f"\n  Outputs:")
     print(f"    State assignments  → {out_states}")
     print(f"    State statistics   → {out_stats}")
     print(f"    Transition matrix  → {out_trans}")
+    print(f"    Fitted parameters  → {out_params}")
     if bic_scores:
         print(f"    BIC scores         → {out_bic}")
 

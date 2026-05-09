@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFD Level 0 — Context Diagram — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">CPO Price Prediction System · Thesis Documentation</p>
+      <h1 class="text-2xl font-bold mt-1">DFD Level 0 — Context Diagram</h1>
+      <p class="text-teal-100 text-sm mt-1">The whole system as a single process; everything that interacts with it from the outside.</p>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="dfd_level_0_context.html" class="nav-pill">Level 0 — Context</a>
+    <a href="dfd_level_1_detailed.html" class="nav-pill">Level 1 — Detailed</a>
+    <a href="dfd_level_2_inference.html" class="nav-pill">Level 2 — Inference</a>
+    <a href="README_DFD.md" class="nav-pill">README</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-10">
+
+    <!-- ── Diagram ─────────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Context Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Treats the entire CPO Prediction System as a single black box (process 0).
+        Shows the four external entities that exchange data with it and the
+        information they exchange. No internal processes or data stores are
+        revealed at this level.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart LR
+    %% External entities
+    USER["👤 Web Visitor<br/>(public, no auth)"]
+    MAINT["🛠️ Maintainer<br/>(runs scheduler)"]
+    MPOB["📰 MPOB Website<br/>(news source)"]
+    INV["💱 Investing.com<br/>(price source)"]
+
+    %% Single process
+    SYS(("0<br/>CPO Prediction<br/>System"))
+
+    %% Visitor flows
+    USER -- "HTTP GET / · /news/ · /about/<br/>?sentiment · ?page · ?max_horizon" --> SYS
+    SYS  -- "HTML pages · charts<br/>forecast trail JSON" --> USER
+
+    %% Maintainer flows
+    MAINT -- "CLI: python main.py --mode daily<br/>--mode initial · --mode rebuild-hmm" --> SYS
+    SYS   -- "Stdout logs · progress JSON" --> MAINT
+
+    %% Data sources
+    MPOB -- "Article HTML<br/>(title, body, date)" --> SYS
+    INV  -- "Daily OHLCV quote<br/>(open, high, low, close, volume)" --> SYS
+
+    %% Styling
+    classDef ext fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#78350f
+    classDef proc fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    class USER,MAINT,MPOB,INV ext
+    class SYS proc
+        </pre>
+      </div>
+    </section>
+
+    <!-- ── External Entities ──────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">External Entities</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Entity</th><th>Role</th><th>Direction</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Web Visitor</strong></td>
+              <td>End user of the public dashboard</td>
+              <td>Two-way (HTTP request / HTTP response)</td>
+              <td>No authentication. Anyone with the URL can browse the dashboard, news, and call the forecast API.</td>
+            </tr>
+            <tr>
+              <td><strong>Maintainer</strong></td>
+              <td>Operator who refreshes data</td>
+              <td>Two-way (CLI invocation / log output)</td>
+              <td>Runs <code>scheduler/main.py</code> manually on a workstation. Not part of the deployed runtime.</td>
+            </tr>
+            <tr>
+              <td><strong>MPOB Website</strong></td>
+              <td>News article source</td>
+              <td>Inbound (scraped HTML)</td>
+              <td>Public site at the Malaysian Palm Oil Board. Pulled by the scheduler's news scraper.</td>
+            </tr>
+            <tr>
+              <td><strong>Investing.com</strong></td>
+              <td>CPO price quote source</td>
+              <td>Inbound (HTTP / library call)</td>
+              <td>Daily OHLCV pulled via <code>investiny</code>. Provides the canonical close used for forecasting.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Data Flows ─────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Data Flows In / Out of the System</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>From</th><th>To</th><th>Data</th><th>Trigger</th></tr></thead>
+          <tbody>
+            <tr><td>F1</td><td>Web Visitor</td><td>System</td><td>Page request (path + query string)</td><td>Browser navigation / fetch()</td></tr>
+            <tr><td>F2</td><td>System</td><td>Web Visitor</td><td>Rendered HTML (Dashboard, News, About) and forecast JSON for <code>/api/forecasts/</code></td><td>Response to F1</td></tr>
+            <tr><td>F3</td><td>Maintainer</td><td>System</td><td>CLI command + env vars (<code>FIREBASE_CREDENTIALS_JSON</code>, CSV paths)</td><td>Manual run, ad-hoc</td></tr>
+            <tr><td>F4</td><td>System</td><td>Maintainer</td><td>Stdout log lines, exit code, <code>initial_load_progress.json</code></td><td>While scheduler runs</td></tr>
+            <tr><td>F5</td><td>MPOB Website</td><td>System</td><td>Article HTML — title, body, date, category, URL</td><td>Scheduler scrape (daily mode)</td></tr>
+            <tr><td>F6</td><td>Investing.com</td><td>System</td><td>OHLCV row for the most recent trading day</td><td>Scheduler price fetch (daily mode)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Notes ─────────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Notes</h2>
+      <ul class="list-disc pl-6 space-y-2 text-sm text-slate-700">
+        <li>Only <strong>two</strong> human actor classes interact with the system: anonymous visitors (read) and the maintainer (refresh). There is no admin role inside the web app — auth was removed on 2026-05-05.</li>
+        <li>Both data-source entities (MPOB, Investing.com) are accessed <em>only</em> via the local scheduler, never directly from the deployed web frontend.</li>
+        <li>The "system" boundary at this level includes the deployed Django app on Vercel, the Firestore database, the local scheduler script, and the bundled XGBoost / HMM model artefacts. Level 1 splits these apart.</li>
+      </ul>
+    </section>
+
+    <p class="text-xs text-slate-500 mt-12">Diagram source: this file. Re-render by reloading in any modern browser. Mermaid 10 + TailwindCSS via CDN — no build step required.</p>
+  </main>
+
+</body>
+</html>

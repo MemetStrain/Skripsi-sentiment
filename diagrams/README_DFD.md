@@ -1,169 +1,205 @@
-# Data Flow Diagram (DFD)
-## Sistem Web Prediksi Harga CPO dengan FinBERT & HMM
+# Data Flow Diagrams (DFD)
+## CPO Price Prediction System — Web Application
 
-> ⚠️ **OUTDATED — pre-2026-04-26**
->
-> Mentions Random Forest as a production model. After the
-> thesis-scope-reduction sweep the production scope is XGBoost only
-> with ablation study (C1-C4). See
-> [CLEANUP_INVENTORY.md](../CLEANUP_INVENTORY.md) and
-> [ARCHITECTURE.md](../ARCHITECTURE.md).
+These diagrams describe the **runtime data flow** of the deployed website
+(Django on Vercel + Firestore + bundled XGBoost / HMM artefacts) plus the
+**local scheduler** the maintainer runs on their workstation to refresh
+Firestore. They reflect the architecture as of the 2026-04-26
+thesis-scope-reduction sweep and the 2026-05-05 auth removal:
 
-### 📁 File Diagram
+- XGBoost only (no Random Forest / ARIMAX / SARIMAX in production)
+- Daily horizon only (no Weekly / Monthly)
+- C1–C4 ablation (price-only / +HMM / +sentiment / full)
+- Public read-only frontend (no users, no admin role)
+- Local scheduler (no Cloud Run / Docker)
 
-1. **dfd_level_0_context.html** - Context Diagram (DFD Level 0)
-2. **dfd_level_1_detailed.html** - Detailed Process View (DFD Level 1)
+## Files in this folder
 
-### 🚀 Cara Menggunakan
+| File | What it is |
+|---|---|
+| [dfd_level_0_context.html](dfd_level_0_context.html) | Level 0 — Context Diagram. The whole system as a single process; four external entities. |
+| [dfd_level_1_detailed.html](dfd_level_1_detailed.html) | Level 1 — Decomposed into three internal processes (Web Frontend, Inference Engine, Local Scheduler) with all eight data stores. |
+| [dfd_level_2_inference.html](dfd_level_2_inference.html) | Level 2 — Decomposition of Process 2.0 (the live inference engine behind `/api/forecasts/`). |
+| README_DFD.md | This file. |
 
-Buka file HTML di browser:
-```bash
-# Windows
-start dfd_level_0_context.html
-start dfd_level_1_detailed.html
+Open the HTML files directly in any modern browser — Mermaid 10 and Tailwind
+are loaded via CDN, no build step is needed.
 
-# Atau double-click file HTML di Windows Explorer
+## Diagram hierarchy
+
+```
+DFD Level 0 (Context)
+└── 0.0 CPO Prediction System
+    ├── ↔ Web Visitor          (HTTP requests / HTML + JSON)
+    ├── ↔ Maintainer           (CLI invocation / log output)
+    ├── ←  MPOB Website        (article HTML)
+    └── ←  Investing.com       (OHLCV)
+
+DFD Level 1 (Detailed)
+├── Processes
+│   ├── 1.0 Web Frontend         (Django on Vercel)
+│   ├── 2.0 Live Inference       (predictor.py)
+│   └── 3.0 Local Scheduler      (scheduler/main.py)
+└── Data stores
+    ├── Firestore
+    │   ├── D1 daily_prices
+    │   ├── D2 hmm_states
+    │   ├── D3 sentiment_aggregates
+    │   ├── D4 news_articles
+    │   └── D5 hmm_models (frozen params)
+    ├── Bundled with deploy
+    │   ├── D6 prediction/winners.json
+    │   └── D7 prediction/saved_models/{tag}/Daily/h{1..7}/xgboost_csa/
+    └── Workstation only
+        └── D8 cpo + news CSVs (source of truth)
+
+DFD Level 2 (Inference — Process 2.0 expanded)
+├── 2.1 Load Winners              (cached read of D6)
+├── 2.2 Build Inference Frame     (D1 + D2 + D3 → engineered DataFrame)
+├── 2.3 Load Models               (cached read of D7)
+├── 2.4 Compute Rolling Trails    (per-horizon prediction loop)
+└── 2.5 Format JSON Response
 ```
 
-### 📊 Hierarki Diagram
+## External entities
 
-```
-DFD Level 0 (Context Diagram)
-└── Menampilkan sistem sebagai single process
-    └── Interaksi dengan 3 entitas eksternal:
-        ├── User (Pengguna Umum)
-        ├── Admin
-        └── MPOB (Malaysian Palm Oil Board)
+| Entity | Role | Direction | How it's reached |
+|---|---|---|---|
+| **Web Visitor** | Anonymous user of the public dashboard | Two-way HTTP | Browser → Vercel-hosted Django app |
+| **Maintainer** | Operator who refreshes data ad-hoc | Two-way CLI | Local Python invocation of `scheduler/main.py` |
+| **MPOB Website** | News article source | Inbound (scraped) | `requests` + `beautifulsoup4` from the scheduler |
+| **Investing.com** | Daily OHLCV source | Inbound (API) | `investiny` library from the scheduler |
 
-DFD Level 1 (Detailed Process)
-└── Memecah sistem menjadi 4 sub-proses:
-    ├── P1: Authentication
-    ├── P2: News Automation Pipeline
-    ├── P3: Price & Market State Management
-    └── P4: Prediction Inference
-└── 3 Data Stores:
-    ├── D1: Users DB
-    ├── D2: News_Sentiment DB
-    └── D3: Price_MarketState DB
-```
+There is **no admin role** inside the web app — Django auth was removed
+on 2026-05-05. The maintainer interacts with the system only via the
+scheduler script, which runs outside the deployed runtime.
 
-### 🎯 Komponen Sistem
+## Processes
 
-#### **Entitas Eksternal**
-| Entitas | Peran | Interaksi |
-|---------|-------|-----------|
-| **User** | Pengguna umum | Login + request prediksi → menerima hasil prediksi |
-| **Admin** | Administrator | Login + input data harga → kelola data price |
-| **MPOB** | Sumber berita | Menyediakan raw news data (otomatis di-scrape) |
+### 1.0 Web Frontend — `website/web/`
+Django 6 application served by `vercel_wsgi.py`. Three pages and one JSON
+endpoint:
 
-#### **Proses Utama (Level 1)**
+| Route | View | Reads | Writes |
+|---|---|---|---|
+| `GET /` | `dashboard` | D1, D2, D3, D6 | — |
+| `GET /news/` | `news` | D4 | — |
+| `GET /about/` | `about` | (none) | — |
+| `GET /api/forecasts/` | `forecasts_api` | delegates to 2.0 | — |
 
-**P1: Authentication**
-- Input: Credentials (username, password)
-- Proses: Validasi dengan Users DB
-- Output: Session token / access granted
-- Teknologi: JWT, session management
+The dashboard view fetches a 90-day window from Firestore and embeds the
+data as JSON in the rendered template; Chart.js draws everything client-side.
+The browser then makes a follow-up call to `/api/forecasts/` for the
+rolling-trail overlay.
 
-**P2: News Automation Pipeline**
-- Input: Raw news dari MPOB (scraping otomatis)
-- Proses: FinBERT Sentiment Analysis
-- Output: Sentiment scores (positive/negative/neutral)
-- Jadwal: Background scheduler (harian)
+### 2.0 Live Inference Engine — `website/web/predictor.py`
+Re-engineers the full feature frame from Firestore on every request and
+runs the winning CSA XGBoost model per horizon. Module-level `lru_cache`
+keeps `winners.json` and the seven model artefacts in memory across
+requests in a warm Vercel function. Feature engineering is delegated to
+`prediction/feature_engineering.py` — the same module the offline C1–C4
+training scripts use, so production inference and offline training share
+exactly one feature pipeline.
 
-**P3: Price & Market State Management**
-- Input: Data OHLC (Open/High/Low/Close) dari Admin
-- Proses: Hidden Markov Model (HMM) untuk hidden states
-- Output: Update Price_MarketState DB dengan states (Bullish/Bearish)
-- Akses: Admin only
+See [dfd_level_2_inference.html](dfd_level_2_inference.html) for the
+sub-process breakdown.
 
-**P4: Prediction Inference**
-- Input: Request dari User + data dari D2 & D3
-- Proses: Pre-trained ML Model (Random Forest/XGBoost)
-- Output: Prediksi harga t+1, metrik (MAPE, R²), visualisasi
-- Mode: Real-time inference
+### 3.0 Local Scheduler — `scheduler/main.py`
+Three modes:
 
-#### **Data Stores**
+- **`--mode initial`** — bulk-mirror local CSVs (D8) into Firestore. Each
+  step is checkpointed in `scheduler/initial_load_progress.json`.
+- **`--mode daily`** — incremental: fetch the latest price, scrape new
+  MPOB articles, score them with FinBERT-Tone, recompute aggregates,
+  decode HMM states with frozen parameters. Writes D1, D2, D3, D4.
+- **`--mode rebuild-hmm`** — re-publish the offline-trained HMM
+  parameters (D5) and rewrite D2 from scratch. Used after re-running
+  `markov/cpo_hmm_states.py`.
 
-**D1: Users DB**
-- Kredensial login (user_id, username, password_hash, role)
-- Diakses oleh: P1 (Authentication)
+Predictions are **not** written by the scheduler. They are produced live
+by 2.0 on demand.
 
-**D2: News_Sentiment DB**
-- Berita MPOB + hasil analisis sentimen FinBERT
-- Struktur: date, news_text, sentiment_score, sentiment_label
-- Update: Otomatis via P2 (harian)
-- Digunakan: P4 untuk fitur prediksi
+## Data stores
 
-**D3: Price_MarketState DB**
-- Harga historis CPO + HMM hidden states
-- Struktur: date, open, high, low, close, volume, state, lagged_features
-- Update: Manual via Admin (P3)
-- Digunakan: P4 untuk fitur prediksi
+| ID | Name | Backend | Doc / row key | Written by | Read by |
+|---|---|---|---|---|---|
+| D1 | `daily_prices` | Firestore | `YYYY-MM-DD` | 3.0 | 1.0, 2.0 |
+| D2 | `hmm_states` | Firestore | `Daily_YYYY-MM-DD` | 3.0 | 1.0, 2.0 |
+| D3 | `sentiment_aggregates` | Firestore | `Daily_YYYY-MM-DD` | 3.0 | 1.0, 2.0 |
+| D4 | `news_articles` | Firestore | `md5(url)` | 3.0 | 1.0 |
+| D5 | `hmm_models/Daily` | Firestore document | Frozen GaussianHMM params + 252-day z-score normaliser | 3.0 (`rebuild-hmm` only) | 3.0 (every daily run) |
+| D6 | `prediction/winners.json` | Local file (bundled in deploy) | Single JSON object | Offline tool: `compute_winners.py` | 1.0, 2.0 |
+| D7 | `prediction/saved_models/{tag}/Daily/h{1..7}/xgboost_csa/` | Local folder (bundled in deploy) | `model.pkl` · `scaler.pkl` · `meta.json` | Offline training: `horizon_forecast_C{1..4}_*.py` | 2.0 |
+| D8 | Local CSVs in `cpo/` and `news/` | Workstation files | One row per date / article | 3.0 (append-only) | 3.0 |
 
-### 🔄 Aliran Data Kritis
+D6 and D7 are bundled into the Vercel deploy at build time so that the
+inference engine can read them without a network round-trip. D8 lives on
+the maintainer's workstation only and is never deployed.
 
-1. **User Authentication Flow**
-   ```
-   User → [Credentials] → P1 ↔ D1 → [Token] → User
-   ```
+## Notable data flows
 
-2. **News Processing Flow (Background)**
-   ```
-   MPOB → [Raw News] → P2 → [Sentiment Scores] → D2
-   ```
+### A. Dashboard page load
+1. Visitor `GET /`
+2. Frontend reads D1 (90-day OHLCV), D2 (state labels), D3 (aggregates), D6 (metrics table data)
+3. Renders `dashboard.html` with everything embedded as JSON
+4. Browser then fires `GET /api/forecasts/?max_horizon=7&window_days=90`
 
-3. **Price Update Flow (Admin)**
-   ```
-   Admin → [OHLC Data] → P3 ↔ D3 (HMM Calculation)
-   ```
+### B. Forecast API call (handled by Process 2.0)
+1. Visitor `GET /api/forecasts/?max_horizon=7&window_days=90`
+2. Frontend invokes `compute_forecast_trails(db, 7, 90)`
+3. Inference engine reads D1, D2, D3, D6, D7 (cached after first call), produces trail JSON
+4. Frontend wraps it in `JsonResponse` and returns
 
-4. **Prediction Flow (User Request)**
-   ```
-   User → [Request] → P4
-                       ↑
-                       ├── D2 (Sentiment Data)
-                       └── D3 (Price & States)
-                       ↓
-   User ← [Prediction + Charts]
-   ```
+### C. News page
+1. Visitor `GET /news/?sentiment=Positive&page=2`
+2. Frontend streams **all** D4 documents, sorts and filters in Python (avoids a composite index)
+3. Paginates 9 cards per page
 
-### 📝 Notasi DFD
+### D. Daily scheduler run
+1. Maintainer `python scheduler/main.py --mode daily`
+2. Scheduler reads D8 (latest local date)
+3. If stale → fetch from Investing.com, scrape MPOB → append to D8 → mirror to D1, D4
+4. Recompute aggregates from D8 → write D3
+5. Read D5 (frozen params) → forward-filter HMM decoding → write D2
 
-| Simbol | Representasi | Contoh |
-|--------|-------------|--------|
-| 🟦 Persegi Panjang | Entitas Eksternal | User, Admin, MPOB |
-| ⭕ Lingkaran | Proses | 1.0 Authentication |
-| 💾 Silinder | Data Store | D1: Users DB |
-| → Panah | Aliran Data | Credentials, Token |
-| - - → Panah Putus | Read Historical Data | D3 ke P3 |
+## DFD notation
 
-### 🛠️ Teknologi Stack (Referensi)
+| Symbol | Represents | Examples |
+|---|---|---|
+| Yellow rounded rectangle | External entity | Web Visitor, MPOB |
+| Teal circle | Process | 1.0 Web Frontend, 2.4 Compute Rolling Trails |
+| Blue cylinder | Data store | D1 daily_prices, D7 saved_models |
+| Solid arrow | Command / HTTP message / write | `GET /` request, scheduler upsert |
+| Dashed arrow | Read (often cached) | `lru_cache`-backed `joblib.load` |
 
-- **Frontend**: HTML/CSS/JavaScript + Chart.js
-- **Backend**: Python Flask/FastAPI
-- **ML Models**: FinBERT (Hugging Face), Scikit-learn HMM, Random Forest
-- **Database**: PostgreSQL / MySQL
-- **Scheduler**: APScheduler / Celery
-- **Authentication**: JWT / OAuth2
+## Technology stack (reference)
 
-### 📌 Catatan Penting
+- **Frontend:** Django 6, Chart.js 4, chartjs-plugin-annotation, Tailwind CSS (CDN)
+- **Inference:** numpy, pandas, scikit-learn (RobustScaler), xgboost ≥ 2.0, joblib
+- **Database:** Google Cloud Firestore via `firebase-admin`
+- **Scheduler:** `investiny` (price), `requests` + `beautifulsoup4` (news), `transformers` + `torch` + `nltk` (FinBERT-Tone), `hmmlearn` (HMM)
+- **Deployment:** Vercel (Python 3.11 serverless, `maxLambdaSize: 50mb`); scheduler is local-only
 
-1. **Fase Inference**: DFD ini fokus pada fase production/inference, bukan training model
-2. **Pre-trained Models**: Model FinBERT dan model prediksi sudah dilatih sebelumnya
-3. **Automated Pipeline**: P2 berjalan otomatis di background (tidak memerlukan interaksi user)
-4. **Role-Based Access**: P3 hanya bisa diakses oleh Admin
-5. **Real-time Prediction**: P4 memberikan hasil prediksi secara real-time saat user request
+## Out of scope
 
-### 📧 Metadata
+These DFDs describe the **production / serving** path. They deliberately
+omit:
 
-- **Diagram Type**: Data Flow Diagram (DFD)
-- **System**: Web Application - CPO Price Prediction
-- **Methodology**: Structured System Analysis & Design
-- **Version**: 1.0
-- **Date**: December 2025
-- **Role**: Senior System Analyst & Software Architect
+- Offline training pipelines (`prediction/horizon_forecast_C{1..4}_*.py`)
+- Offline HMM fitting (`markov/cpo_hmm_states.py`)
+- Sentiment-weight grid-search experiments (archived)
+- The Diebold-Mariano comparison framework (offline tooling)
 
----
+Those produce the artefacts that land in D5, D6, and D7 — but they run on
+the maintainer's machine, never as part of a user request.
 
-**Generated by**: System Analysis Documentation Tool  
-**Purpose**: Skripsi/Thesis - Sistem Prediksi Harga CPO
+## Metadata
+
+| Field | Value |
+|---|---|
+| Diagram type | Data Flow Diagram (DFD), three levels |
+| System | CPO Price Prediction Web Application |
+| Methodology | Structured Systems Analysis & Design (Yourdon/DeMarco) |
+| Tooling | Mermaid 10 (flowchart syntax) + Tailwind CSS, both via CDN |
+| Author | Matthew / ExMatter, Universitas Bina Nusantara |
+| Project | Skripsi (thesis) |
