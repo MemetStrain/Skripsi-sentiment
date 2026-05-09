@@ -36,17 +36,17 @@ HORIZONS = [1, 2, 3, 4, 5, 6, 7]
 
 BASE_PARAMS = {
     'xgboost': {
-        'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.05,
+        'n_estimators': 2000, 'max_depth': 6, 'learning_rate': 0.001,
         'subsample': 0.9, 'colsample_bytree': 0.9, 'min_child_weight': 1,
-        'random_state': RANDOM_STATE,
+        'random_state': RANDOM_STATE, 'verbose' : True,
     },
 }
 
 CSA_PARAM_SPACES = {
     'xgboost': [
-        ParameterSpec('n_estimators', 50, 500, 'discrete'),
-        ParameterSpec('max_depth', 3, 15, 'discrete'),
-        ParameterSpec('learning_rate', 0.001, 0.3, 'continuous'),
+        ParameterSpec('n_estimators', 50, 1500, 'discrete'),
+        ParameterSpec('max_depth', 3, 9, 'discrete'),
+        ParameterSpec('learning_rate', 0.01, 0.5, 'continuous'),
         ParameterSpec('subsample', 0.6, 1.0, 'continuous'),
         ParameterSpec('colsample_bytree', 0.6, 1.0, 'continuous'),
         ParameterSpec('min_child_weight', 1, 10, 'discrete'),
@@ -153,7 +153,7 @@ def create_sklearn_model(model_type: str, params: Optional[Dict] = None):
     p.pop('random_state', None)
     valid_keys = set(XGBRegressor().get_params().keys())
     filtered = {k: v for k, v in p.items() if k in valid_keys}
-    return XGBRegressor(**filtered, verbosity=0, random_state=RANDOM_STATE)
+    return XGBRegressor(**filtered, verbosity=1, random_state=RANDOM_STATE)
 
 
 def calculate_metrics(y_true_lr, y_pred_lr, close_anchor):
@@ -226,7 +226,9 @@ def csa_objective_sklearn(model_type, X_train, y_train, cv_folds):
             try:
                 model.fit(X_train[train_idx], y_train[train_idx])
                 y_pred = model.predict(X_train[val_idx])
-                scores.append(np.sqrt(mean_squared_error(y_train[val_idx], y_pred)))
+                y_true = y_train[val_idx]
+                mape = np.mean(np.abs((y_true - y_pred) / (np.abs(y_true) + 1e-9))) * 100
+                scores.append(mape)
             except Exception:
                 scores.append(np.inf)
         return np.mean(scores)
@@ -270,6 +272,8 @@ def save_model_artifacts(
         joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
 
     def _serialise(v):
+        if callable(v):
+            return v.__name__
         if hasattr(v, 'tolist'):
             return v.tolist()
         return v

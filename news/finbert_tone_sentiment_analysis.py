@@ -19,8 +19,6 @@ except LookupError:
 
 # Configuration
 INPUT_CSV = 'mpob_news_preprocessed.csv'
-OUTPUT_CSV = 'mpob_news_with_sentiment_tone.csv'
-DAILY_AGGREGATE_CSV = 'output/sentiment_aggregate_Daily.csv'
 BATCH_SIZE = 16  # Articles per batch (sentences within are flattened for inference)
 MAX_LENGTH = 512  # Maximum token length for FinBERT (per sentence)
 SENTENCE_CONFIDENCE_THRESHOLD = 0.5  # Drop sentences whose max-class probability is below this
@@ -28,6 +26,21 @@ TITLE_WEIGHT = 0.3
 CONTENT_WEIGHT = 0.7
 USE_HALF_PRECISION = True  # Use float16 for faster GPU inference (recommended for CUDA)
 FORCE_CPU = False  # Set to True to force CPU even if CUDA is available
+
+# TEXT_MODE controls which text is fed to FinBERT:
+#   "title"   — score the headline only; Combined = Title
+#   "content" — score the body sentences only; Combined = Content
+#   "mixed"   — score both and blend with TITLE_WEIGHT / CONTENT_WEIGHT (default)
+# Override at runtime with: python finbert_tone_sentiment_analysis.py --mode title|content|mixed
+TEXT_MODE = "mixed"
+
+def _output_csv(mode: str) -> str:
+    suffix = "" if mode == "mixed" else f"_{mode}"
+    return f"mpob_news_with_sentiment_tone{suffix}.csv"
+
+def _daily_csv(mode: str) -> str:
+    suffix = "" if mode == "mixed" else f"_{mode}"
+    return f"output/sentiment_aggregate_Daily{suffix}.csv"
 
 # CUDA Configuration
 def get_device():
@@ -212,18 +225,22 @@ def _assemble_result(probs_arr, title_idx, content_start, content_end):
         content_label = LABELS[idx]
         content_conf = float(content_probs[idx])
 
-    # Combined: title_weight * title + content_weight * content when title passes filter,
-    # otherwise content-only (or title-only if content is missing entirely).
-    if title_passed and n_total > 0:
-        combined_neu = TITLE_WEIGHT * title_neu + CONTENT_WEIGHT * content_neu
-        combined_pos = TITLE_WEIGHT * title_pos + CONTENT_WEIGHT * content_pos
-        combined_neg = TITLE_WEIGHT * title_neg + CONTENT_WEIGHT * content_neg
-    elif n_total > 0:
-        combined_neu, combined_pos, combined_neg = content_neu, content_pos, content_neg
-    elif title_idx is not None:
+    # Combined depends on TEXT_MODE.
+    if TEXT_MODE == 'title':
         combined_neu, combined_pos, combined_neg = title_neu, title_pos, title_neg
-    else:
-        combined_neu, combined_pos, combined_neg = 1.0, 0.0, 0.0
+    elif TEXT_MODE == 'content':
+        combined_neu, combined_pos, combined_neg = content_neu, content_pos, content_neg
+    else:  # mixed: weighted blend, falling back gracefully when one side is absent
+        if title_passed and n_total > 0:
+            combined_neu = TITLE_WEIGHT * title_neu + CONTENT_WEIGHT * content_neu
+            combined_pos = TITLE_WEIGHT * title_pos + CONTENT_WEIGHT * content_pos
+            combined_neg = TITLE_WEIGHT * title_neg + CONTENT_WEIGHT * content_neg
+        elif n_total > 0:
+            combined_neu, combined_pos, combined_neg = content_neu, content_pos, content_neg
+        elif title_idx is not None:
+            combined_neu, combined_pos, combined_neg = title_neu, title_pos, title_neg
+        else:
+            combined_neu, combined_pos, combined_neg = 1.0, 0.0, 0.0
 
     combined_probs = (combined_neu, combined_pos, combined_neg)
     idx = int(np.argmax(combined_probs))
@@ -260,13 +277,14 @@ def process_batch(df_batch, model, tokenizer):
     for _, row in df_batch.iterrows():
         title = str(row.get('Title', '') or '').strip()
         title_idx = None
-        if title:
+        if title and TEXT_MODE in ('title', 'mixed'):
             title_idx = len(flat_texts)
             flat_texts.append(title)
 
-        sentences = _split_into_sentences(row.get('Content', ''))
         content_start = len(flat_texts)
-        flat_texts.extend(sentences)
+        if TEXT_MODE in ('content', 'mixed'):
+            sentences = _split_into_sentences(row.get('Content', ''))
+            flat_texts.extend(sentences)
         content_end = len(flat_texts)
         article_indices.append((title_idx, content_start, content_end))
 
@@ -399,12 +417,12 @@ def aggregate_daily_sentiment(df):
     return complete_df
 
 
-def _save_aggregations(df_final):
+def _save_aggregations(df_final, daily_csv_path):
     """Run the daily aggregation and write the CSV."""
     daily_df = aggregate_daily_sentiment(df_final)
     if daily_df is not None and len(daily_df) > 0:
-        print(f"\nSaving daily aggregation to {DAILY_AGGREGATE_CSV}...")
-        daily_df.to_csv(DAILY_AGGREGATE_CSV, index=False)
+        print(f"\nSaving daily aggregation to {daily_csv_path}...")
+        daily_df.to_csv(daily_csv_path, index=False)
         print(f"Saved daily sentiment aggregation for {len(daily_df)} working days!")
 
         print("\n" + "=" * 70)
@@ -417,8 +435,24 @@ def _save_aggregations(df_final):
 
 
 def main():
+    global TEXT_MODE
+    # Parse --mode from CLI: title | content | mixed
+    if '--mode' in sys.argv:
+        idx = sys.argv.index('--mode')
+        if idx + 1 < len(sys.argv):
+            arg = sys.argv[idx + 1].lower()
+            if arg not in ('title', 'content', 'mixed'):
+                print(f"ERROR: --mode must be 'title', 'content', or 'mixed'. Got: {arg!r}")
+                return
+            TEXT_MODE = arg
+
+    output_csv = _output_csv(TEXT_MODE)
+    daily_csv  = _daily_csv(TEXT_MODE)
+
     print("=" * 70)
     print("FinBERT-Tone Sentiment Analysis for MPOB News (sentence-level)")
+    print(f"Text mode : {TEXT_MODE.upper()}"
+          + (f"  (title={TITLE_WEIGHT}, content={CONTENT_WEIGHT})" if TEXT_MODE == 'mixed' else ""))
     print("=" * 70)
 
     print(f"\nLoading data from {INPUT_CSV}...")
@@ -439,7 +473,7 @@ def main():
         if len(df_to_process) == 0:
             print("All articles already have sentiment scores!")
             df_final = df.copy()
-            _save_aggregations(df_final)
+            _save_aggregations(df_final, daily_csv)
             return
         print(f"Processing {len(df_to_process)} remaining articles...")
     else:
@@ -475,11 +509,11 @@ def main():
     else:
         df_final = df_to_process
 
-    print(f"\nSaving results to {OUTPUT_CSV}...")
-    df_final.to_csv(OUTPUT_CSV, index=False)
+    print(f"\nSaving results to {output_csv}...")
+    df_final.to_csv(output_csv, index=False)
     print(f"Saved {len(df_final)} articles with sentiment scores!")
 
-    _save_aggregations(df_final)
+    _save_aggregations(df_final, daily_csv)
 
     print("\n" + "=" * 70)
     print("SENTIMENT ANALYSIS SUMMARY")

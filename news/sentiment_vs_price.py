@@ -1,9 +1,13 @@
-"""Compare FinBERT vs Loughran-McDonald daily sentiment against CPO returns.
+"""FinBERT (title-mode) daily sentiment vs CPO price — lag search.
 
-Reads ``news/lm_finbert_comparison.csv`` (per-article FinBERT and L-M labels)
-and ``cpo/Data_CPO_Daily.csv`` (daily CPO close), aggregates sentiment to a
-daily signed score per method, then sweeps lags 0..MAX_LAG to find the lag
-at which sentiment best predicts future price returns.
+Reads ``news/output/sentiment_aggregate_Daily_title.csv`` (pre-aggregated
+daily FinBERT title sentiment produced by finbert_tone_sentiment_analysis.py
+--mode title) and ``cpo/Data_CPO_Daily.csv`` (daily CPO close), then sweeps
+lags 0..MAX_LAG to find the trading-day offset at which the title sentiment
+score best predicts future price returns.
+
+Sentiment score used: Sentiment_Score = Title_Positive_Prob - Title_Negative_Prob
+(continuous, roughly -1..+1).
 
 Outputs:
     - ``news/output/daily_sentiment_vs_price.csv``: merged daily frame.
@@ -19,43 +23,29 @@ import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 
 
-COMPARISON_CSV = "news/lm_finbert_comparison.csv"
+AGGREGATE_CSV = "news/output/sentiment_aggregate_Daily_title.csv"
 CPO_CSV = "cpo/Data_CPO_Daily.csv"
 OUTPUT_CSV = "news/output/daily_sentiment_vs_price.csv"
 LAG_CSV = "news/output/lag_search_results.csv"
 
-LABEL_TO_SCORE = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
-
 # Maximum lag (in trading days) to search. Lag 0 = same-day.
-MAX_LAG = 30
+MAX_LAG = 120
 
 
-def load_sentiment(path: Path) -> pd.DataFrame:
+def load_aggregate(path: Path) -> pd.DataFrame:
+    """Load the pre-aggregated daily title-sentiment CSV."""
     df = pd.read_csv(path)
-    required = {"Date", "Combined_Sentiment", "LM_Polarity"}
+    required = {"Date", "Sentiment_Score", "Article_Count"}
     missing = required - set(df.columns)
     if missing:
-        raise SystemExit(f"ERROR: comparison CSV missing columns: {sorted(missing)}")
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce", dayfirst=True)
-    df = df.dropna(subset=["Date"])
-    df["finbert_score"] = df["Combined_Sentiment"].str.lower().map(LABEL_TO_SCORE)
-    df["lm_score"] = np.sign(df["LM_Polarity"].astype(float)).astype(float)
-    return df
-
-
-def aggregate_daily(df: pd.DataFrame) -> pd.DataFrame:
-    daily = (
-        df.groupby(df["Date"].dt.normalize())
-        .agg(
-            article_count=("Date", "size"),
-            finbert_daily=("finbert_score", "mean"),
-            lm_daily=("lm_score", "mean"),
-        )
-        .reset_index()
-        .rename(columns={"Date": "Date"})
-    )
-    return daily
+        raise SystemExit(f"ERROR: aggregate CSV missing columns: {sorted(missing)}")
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"]).sort_values("Date").reset_index(drop=True)
+    # Keep only days that actually had news (Article_Count > 0).
+    # Forward-filled rows (Article_Count == 0) are excluded so we only correlate
+    # real news days with price moves.
+    df = df[df["Article_Count"] > 0].copy()
+    return df[["Date", "Article_Count", "Sentiment_Score"]]
 
 
 def _parse_locale_number(value: str) -> float:
@@ -146,18 +136,17 @@ def find_best_lag(name: str, sent: pd.Series, ret: pd.Series, max_lag: int) -> p
 
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
-    sent_path = root / COMPARISON_CSV
+    agg_path = root / AGGREGATE_CSV
     cpo_path = root / CPO_CSV
     out_path = root / OUTPUT_CSV
     lag_path = root / LAG_CSV
 
-    if not sent_path.exists():
-        raise SystemExit(f"ERROR: not found: {sent_path}")
+    if not agg_path.exists():
+        raise SystemExit(f"ERROR: not found: {agg_path}")
     if not cpo_path.exists():
         raise SystemExit(f"ERROR: not found: {cpo_path}")
 
-    articles = load_sentiment(sent_path)
-    daily_sent = aggregate_daily(articles)
+    daily_sent = load_aggregate(agg_path)
     prices = load_prices(cpo_path)
 
     merged = (
@@ -170,24 +159,22 @@ def main() -> None:
     merged.to_csv(out_path, index=False)
 
     print("=" * 72)
-    print("Daily sentiment vs CPO price — best-lag search")
+    print("FinBERT Title Sentiment vs CPO price — best-lag search")
     print("=" * 72)
-    print(f"Article rows           : {len(articles)}")
-    print(f"Distinct news days     : {len(daily_sent)}")
+    print(f"News days loaded       : {len(daily_sent)}")
     print(f"Trading days w/ news   : {len(merged)}")
     print(f"Date range             : {merged['Date'].min().date()} -> {merged['Date'].max().date()}")
     print(f"Lag range searched     : 0 .. {MAX_LAG} trading days")
     print(f"Merged daily frame  -> {out_path}")
 
-    fb_results = find_best_lag("FinBERT", merged["finbert_daily"], merged["return_t"], MAX_LAG)
-    lm_results = find_best_lag("Loughran-McDonald", merged["lm_daily"], merged["return_t"], MAX_LAG)
+    results = find_best_lag("FinBERT (Title)", merged["Sentiment_Score"], merged["return_t"], MAX_LAG)
 
-    all_results = pd.concat([fb_results, lm_results], ignore_index=True)
-    all_results.to_csv(lag_path, index=False)
+    results.to_csv(lag_path, index=False)
     print(f"\nFull lag results -> {lag_path}")
 
     print()
     print("Note: lag k means sentiment on day t is compared to the return on day t+k.")
+    print("      Sentiment_Score = Title_Positive_Prob - Title_Negative_Prob.")
     print("      dir.acc = share of days where sign(sentiment) == sign(return),")
     print("      excluding days where either value is exactly 0 or missing.")
 

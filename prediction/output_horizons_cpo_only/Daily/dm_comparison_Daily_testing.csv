@@ -1,8 +1,0 @@
-horizon,best_model,naive_model,dm_stat,p_value,significant_at_0.05,better_model
-1,xgboost_csa,naive_rw,1.769369,0.076832,False,tie
-2,xgboost_csa,naive_rw,0.635854,0.524872,False,tie
-3,xgboost_csa,naive_rw,-0.81658,0.414168,False,tie
-4,xgboost_csa,naive_rw,-0.782243,0.434072,False,tie
-5,xgboost_csa,naive_rw,-0.372113,0.709809,False,tie
-6,xgboost_csa,naive_rw,-0.547435,0.58408,False,tie
-7,xgboost_csa,naive_rw,-0.127987,0.898159,False,tie

@@ -1,0 +1,2 @@
+HMM state is 8 days lag
+News sentiment is 44 days lag

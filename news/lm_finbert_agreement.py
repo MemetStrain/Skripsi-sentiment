@@ -33,7 +33,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
 
-INPUT_CSV = "mpob_news_with_sentiment_tone.csv"
+INPUT_CSV = "mpob_news_with_sentiment_tone_title.csv"
 OUTPUT_CSV = "lm_finbert_comparison.csv"
 HEATMAP_PNG = "confusion_matrix.png"
 
