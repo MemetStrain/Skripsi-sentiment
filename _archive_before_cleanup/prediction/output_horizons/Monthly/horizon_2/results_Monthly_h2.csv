@@ -1,9 +1,0 @@
-Model,Optimization,MAPE,RMSE,Directional_Accuracy,R2
-xgboost,BASE,8.0637,534.9381,35.0,-1.4987
-xgboost,CSA,10.1603,579.7495,35.0,-1.9348
-random_forest,BASE,8.6556,560.8268,35.0,-1.7464
-random_forest,CSA,8.39,542.1794,35.0,-1.5668
-arimax,BASE,10.0308,543.624,45.0,-1.5805
-arimax,CSA,12.0691,678.4224,40.0,-3.0189
-sarimax,BASE,10.1506,548.6818,45.0,-1.6287
-sarimax,CSA,10.9857,637.2901,45.0,-2.5463
