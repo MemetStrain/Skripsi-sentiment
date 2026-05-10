@@ -71,7 +71,8 @@
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-red-200 inline-block"></span> Bearish</span>
                 <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-slate-200 inline-block"></span> Neutral</span>
                 <span class="text-slate-300">|</span>
-                <span id="horizon-legend" class="flex flex-wrap gap-3"></span>
+                <span class="text-slate-400">Horizons (click to toggle):</span>
+                <span id="horizon-legend" class="flex flex-wrap gap-2"></span>
             </div>
         </div>
 
@@ -228,9 +229,13 @@
     // -----------------------------------------------------------------------
     // Rolling forecast overlay — fetch /api/forecasts/ and add per-horizon datasets
     // -----------------------------------------------------------------------
+    let lastForecasts = null;
+    const visibleHorizons = new Set([1, 2, 3, 4, 5, 6, 7]);
+
     function plotTrails(forecasts) {
-        const trails = forecasts.trails || [];
-        if (!trails.length) return;
+        const allTrails = forecasts.trails || [];
+        const trails = allTrails.filter(t => visibleHorizons.has(t.horizon));
+        if (!allTrails.length) return;
 
         // Build the union of dates across all trails + actuals so x-axis covers
         // the future projection points from the longer horizons.
@@ -277,12 +282,29 @@
         const el = document.getElementById('horizon-legend');
         if (!el) return;
         const trails = forecasts.trails || [];
-        el.innerHTML = trails.map(t => `
-            <span class="flex items-center gap-1">
-                <span class="inline-block w-5 h-0 border-t-2 border-dashed" style="border-color:${HORIZON_COLORS[t.horizon]}"></span>
-                <span>+${t.horizon}d (${t.config})</span>
-            </span>
-        `).join('');
+        el.innerHTML = trails.map(t => {
+            const on = visibleHorizons.has(t.horizon);
+            const color = HORIZON_COLORS[t.horizon];
+            return `
+                <button type="button"
+                        data-horizon="${t.horizon}"
+                        class="horizon-toggle flex items-center gap-1 px-1.5 py-0.5 rounded border transition ${on ? 'border-slate-200 text-slate-600' : 'border-transparent text-slate-300 line-through'}"
+                        title="${on ? 'Hide' : 'Show'} +${t.horizon}d trail">
+                    <span class="inline-block w-5 h-0 border-t-2 border-dashed" style="border-color:${on ? color : '#cbd5e1'}"></span>
+                    <span>+${t.horizon}d (${t.config})</span>
+                </button>`;
+        }).join('');
+        el.querySelectorAll('.horizon-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const h = parseInt(btn.dataset.horizon, 10);
+                if (visibleHorizons.has(h)) visibleHorizons.delete(h);
+                else visibleHorizons.add(h);
+                if (lastForecasts) {
+                    plotTrails(lastForecasts);
+                    renderHorizonLegend(lastForecasts);
+                }
+            });
+        });
     }
 
     function renderWinnersSummary(forecasts) {
@@ -315,6 +337,7 @@
                 throw new Error(err.error || `HTTP ${res.status}`);
             }
             const data = await res.json();
+            lastForecasts = data;
             renderHorizonLegend(data);
             renderWinnersSummary(data);
             plotTrails(data);
