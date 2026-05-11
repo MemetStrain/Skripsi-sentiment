@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    pre.algorithm {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    pre.algorithm .kw       { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt      { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src      { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      pre.algorithm { background: #f8fafc; color: #0f172a; }
+      pre.algorithm .kw  { color: #0d9488; }
+      pre.algorithm .cmt { color: #475569; }
+      pre.algorithm .src { color: #b45309; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk tiga prosedur inti: pipeline harian, training HMM, dan inferensi dashboard.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="data_flow_diagram.html" class="nav-pill">Data Flow Diagram</a>
+    <a href="structure_chart.html" class="nav-pill">Structure Chart</a>
+    <a href="flowchart.html" class="nav-pill">Flowchart</a>
+    <a href="pseudocode.html" class="nav-pill">Pseudocode</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Konvensi Notasi</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Kata kunci kontrol ditulis huruf kapital (<code>BEGIN</code>, <code>END</code>,
+        <code>IF</code>, <code>THEN</code>, <code>ELSE</code>, <code>FOR</code>,
+        <code>WHILE</code>, <code>RETURN</code>, <code>INPUT</code>, <code>OUTPUT</code>).
+        Indentasi menyatakan tingkat blok. Komentar diawali <code>//</code>.
+        Setiap algoritma memiliki tabel pemetaan baris pseudocode → pemanggilan
+        fungsi konkret di kode sumber.
+      </p>
+    </section>
+
+    <!-- ── Algorithm 1 ─────────────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Algoritma 1 — Pipeline Update Harian</h2>
+      <p class="text-sm text-slate-600 mb-2">
+        Sumber: <code>scheduler/main.py::run_daily_update</code>. Lima
+        langkah berurutan dengan dedup berbasis CSV lokal sebagai
+        <em>single source of truth</em>.
+      </p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> run_daily_pipeline
+<span class="src">SOURCE</span>: scheduler/main.py :: run_daily_update
+
+<span class="kw">INPUT</span>:
+    paths_dict    <span class="cmt">// {cpo_raw, cpo_preproc, news_raw, news_preproc, news_sent}</span>
+    db            <span class="cmt">// Firestore client (init_firebase)</span>
+
+<span class="kw">OUTPUT</span>:
+    side effects on local CSV + Firestore mirrors; log lines
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// ── Langkah 1: PRICE ───────────────────────────────────────</span>
+    cutoff   = most_recent_trading_day()
+    have     = latest_price_date(paths.cpo_raw)
+    <span class="kw">IF</span> have <span class="kw">IS NULL</span> <span class="kw">OR</span> have &lt; cutoff <span class="kw">THEN</span>
+        price = fetch_latest_price()       <span class="cmt">// investiny, lookback 90 / 365 / 1095 d</span>
+        <span class="kw">IF</span> price <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> price.date &gt; have <span class="kw">THEN</span>
+            append_price_row_indonesian(paths.cpo_raw, price)
+            preprocess_price_csv(paths.cpo_raw, paths.cpo_preproc)
+            write_price(db, price)         <span class="cmt">// daily_prices/{date}</span>
+        <span class="kw">END IF</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// ── Langkah 2: NEWS (scrape + preprocess + sentiment) ──────</span>
+    have_news = latest_news_date(paths.news_sent)
+    new_articles = []
+    news_changed = <span class="kw">FALSE</span>
+    <span class="kw">IF</span> have_news <span class="kw">IS NULL</span> <span class="kw">OR</span> have_news &lt; cutoff <span class="kw">THEN</span>
+        raw = scrape_new_articles(have_news)            <span class="cmt">// MPOB, dedup by URL</span>
+        <span class="kw">IF</span> raw <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+            append_news_rows(paths.news_raw, raw, RAW_FIELDS)
+            cleaned = preprocess_articles(raw)          <span class="cmt">// NewsPreprocessor</span>
+            <span class="kw">IF</span> cleaned <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+                append_news_rows(paths.news_preproc, cleaned, RAW_FIELDS)
+                scored = run_sentiment_on_articles(cleaned)  <span class="cmt">// FinBERT-Tone</span>
+                append_news_rows(paths.news_sent, scored, SENTIMENT_FIELDS)
+                new_articles = scored
+                news_changed = <span class="kw">TRUE</span>
+            <span class="kw">END IF</span>
+        <span class="kw">END IF</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// ── Langkah 3: mirror artikel ke Firestore ─────────────────</span>
+    <span class="kw">IF</span> news_changed <span class="kw">AND</span> new_articles <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        write_news_articles(db, new_articles)           <span class="cmt">// doc ID = md5(url)</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// ── Langkah 4: sentiment_aggregates ────────────────────────</span>
+    <span class="kw">IF</span> news_changed <span class="kw">AND</span> new_articles <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        affected_dates = { a.date <span class="kw">FOR</span> a <span class="kw">IN</span> new_articles }
+        all_articles   = load_news_from_csv(paths.news_raw, paths.news_sent)
+        affected       = [ a <span class="kw">FOR</span> a <span class="kw">IN</span> all_articles
+                            <span class="kw">IF</span> a.date <span class="kw">IN</span> affected_dates ]
+        aggregates = compute_sentiment_aggregates(affected)
+        write_sentiment_aggregates(db, aggregates)
+    <span class="kw">ELSE IF</span> _is_aggregates_empty(db) <span class="kw">THEN</span>
+        all_articles = load_news_from_csv(paths.news_raw, paths.news_sent)
+        aggregates   = compute_sentiment_aggregates(all_articles)
+        write_sentiment_aggregates(db, aggregates)
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// ── Langkah 5: HMM state decoding (frozen params) ──────────</span>
+    update_hmm_states(db)                              <span class="cmt">// see Algorithm 2 (decode)</span>
+
+    <span class="kw">RETURN</span> log_DAILY_UPDATE_COMPLETE
+<span class="kw">END</span></pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Pemetaan Pseudocode → Kode (Algoritma 1)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Langkah Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td><code>most_recent_trading_day()</code></td><td><code>most_recent_trading_day</code></td><td><code>scheduler/price_fetcher.py</code></td></tr>
+            <tr><td><code>fetch_latest_price()</code></td><td><code>fetch_latest_price</code></td><td><code>scheduler/price_fetcher.py</code></td></tr>
+            <tr><td><code>append_price_row_indonesian, latest_price_date</code></td><td>idem</td><td><code>scheduler/local_csv_writer.py</code></td></tr>
+            <tr><td><code>preprocess_price_csv</code></td><td><code>preprocess_price_csv</code></td><td><code>scheduler/price_fetcher.py</code> → <code>cpo/preprocess_cpo_variables.preprocess_cpo</code></td></tr>
+            <tr><td><code>write_price, write_news_articles, write_sentiment_aggregates</code></td><td>idem</td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td><code>scrape_new_articles, preprocess_articles</code></td><td>idem</td><td><code>scheduler/news_extractor.py</code></td></tr>
+            <tr><td><code>run_sentiment_on_articles, compute_sentiment_aggregates</code></td><td>idem</td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>append_news_rows, latest_news_date</code></td><td>idem</td><td><code>scheduler/local_csv_writer.py</code></td></tr>
+            <tr><td><code>_is_aggregates_empty</code></td><td>idem (private helper)</td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>update_hmm_states</code></td><td>idem</td><td><code>scheduler/hmm_updater.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Algorithm 2 ─────────────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Algoritma 2 — Training HMM dengan K-Means Multi-Restart (Offline)</h2>
+      <p class="text-sm text-slate-600 mb-2">
+        Sumber: <code>markov/cpo_hmm_states.py</code>. Dilakukan
+        <strong>offline</strong> (tidak per-hari). Outputnya adalah
+        parameter beku yang dipublikasikan ke <code>hmm_models/Daily</code>
+        oleh <code>migrate_hmm_to_firestore.py</code>; scheduler harian
+        hanya mendecode menggunakan parameter ini (online forward filter,
+        bukan re-fit).
+      </p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> fit_hmm_with_restarts
+<span class="src">SOURCE</span>: markov/cpo_hmm_states.py :: fit_hmm_with_restarts
+
+<span class="kw">INPUT</span>:
+    X            <span class="cmt">// (T, 5) matriks fitur: Log_Return_Z, Volatility_Z,</span>
+                 <span class="cmt">//                       RSI_norm, MACD_Z, BB_Width_Z</span>
+    n_states     = 3              <span class="cmt">// Bearish / Neutral / Bullish (manual lock)</span>
+    cov_type     = "full"
+    n_iter       = 1000           <span class="cmt">// max EM iter per restart</span>
+    tol          = 1e-4
+    n_restarts   = 50
+    base_seed    = 42
+
+<span class="kw">OUTPUT</span>:
+    best_model       <span class="cmt">// GaussianHMM dengan log-likelihood tertinggi</span>
+    best_score       <span class="cmt">// nilai log-likelihood tersebut</span>
+
+<span class="kw">BEGIN</span>
+    best_model = <span class="kw">NULL</span>
+    best_score = <span class="kw">-INFINITY</span>
+
+    <span class="kw">FOR</span> i = 0 <span class="kw">TO</span> n_restarts - 1 <span class="kw">DO</span>
+        seed = base_seed + i
+        (model, score) = _fit_single(X, n_states, cov_type, n_iter, tol, seed)
+        <span class="kw">IF</span> score &gt; best_score <span class="kw">THEN</span>
+            best_score = score
+            best_model = model
+        <span class="kw">END IF</span>
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> (best_model, best_score)
+<span class="kw">END</span>
+
+
+<span class="kw">ALGORITHM</span> _fit_single
+<span class="src">SOURCE</span>: markov/cpo_hmm_states.py :: _fit_single
+
+<span class="kw">INPUT</span>:
+    X, n_states, cov_type, n_iter, tol, seed
+
+<span class="kw">OUTPUT</span>:
+    (model, log_likelihood)  <span class="cmt">// atau (NULL, -INFINITY) saat error</span>
+
+<span class="kw">BEGIN</span>
+    <span class="kw">TRY</span>
+        rng = RandomState(seed)
+        D   = X.shape[1]                  <span class="cmt">// = 5</span>
+
+        <span class="cmt">// (1) K-Means warm start untuk means &amp; covars</span>
+        km          = KMeans(n_clusters = n_states, random_state = seed, n_init = 10)
+        km.fit(X)
+        init_means  = km.cluster_centers_
+        labels      = km.labels_
+        init_covars = []
+        <span class="kw">FOR</span> s = 0 <span class="kw">TO</span> n_states - 1 <span class="kw">DO</span>
+            cluster_X = X[labels == s]
+            cov       = cov(cluster_X.T)  <span class="kw">IF</span> |cluster_X| &gt; 1 <span class="kw">ELSE</span> I(D)
+            cov       = cov + I(D) * 1e-3 <span class="cmt">// diagonal floor (numerical stability)</span>
+            init_covars.append(cov)
+        <span class="kw">END FOR</span>
+
+        <span class="cmt">// (2) Transition matrix: uniform + small noise → renormalised</span>
+        transmat = full((n_states, n_states), 1/n_states)
+        transmat = transmat + rng.uniform(-0.05, 0.05, transmat.shape)
+        transmat = |transmat|
+        transmat = transmat / row_sum(transmat)
+
+        <span class="cmt">// (3) Start probabilities: uniform + small noise → renormalised</span>
+        startprob = full(n_states, 1/n_states)
+        startprob = startprob + rng.uniform(-0.05, 0.05, n_states)
+        startprob = |startprob|
+        startprob = startprob / sum(startprob)
+
+        <span class="cmt">// (4) Build hmmlearn GaussianHMM with custom init</span>
+        model = GaussianHMM(
+            n_components    = n_states,
+            covariance_type = cov_type,
+            n_iter          = n_iter,
+            tol             = tol,
+            random_state    = seed,
+            init_params     = "",         <span class="cmt">// jangan timpa nilai seeded</span>
+            params          = "stmc",     <span class="cmt">// optimasi startprob/transmat/means/covars</span>
+            min_covar       = 1e-3)
+        model.startprob_ = startprob
+        model.transmat_  = transmat
+        model.means_     = init_means
+        model.covars_    = init_covars    <span class="cmt">// (sesuaikan bentuk per cov_type)</span>
+
+        <span class="cmt">// (5) Baum-Welch EM</span>
+        model.fit(X)
+        <span class="kw">RETURN</span> (model, model.score(X))
+
+    <span class="kw">CATCH</span> exception
+        <span class="kw">RETURN</span> (<span class="kw">NULL</span>, <span class="kw">-INFINITY</span>)
+    <span class="kw">END TRY</span>
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> label_states_by_mean_log_return
+<span class="src">SOURCE</span>: markov/cpo_hmm_states.py :: (post-fit labelling block)
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// state_stats[s] = mean(Log_Return | state == s)</span>
+    sorted_states = argsort(state_stats, descending = <span class="kw">TRUE</span>)
+    label_map     = { sorted_states[0]: "Bullish",
+                      sorted_states[1]: "Neutral",
+                      sorted_states[2]: "Bearish" }
+    publish "hmm_models/Daily" {
+        n_components    = 3,
+        covariance_type = "full",
+        startprob_, transmat_, means_, covars_,
+        feat_cols       = ["Log_Return_Z","Volatility_Z","RSI_norm","MACD_Z","BB_Width_Z"],
+        volatility_window = 20,
+        norm_window       = 252,
+        fit_cutoff        = "2026-01-01",
+        fit_seed          = 42,
+        state_to_label    = label_map }
+<span class="kw">END</span></pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Pemetaan Pseudocode → Kode (Algoritma 2)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Langkah Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td>K-Means warm start</td><td><code>sklearn.cluster.KMeans</code></td><td><code>markov/cpo_hmm_states.py</code> (baris 209–212)</td></tr>
+            <tr><td>Init transmat &amp; startprob</td><td><code>_fit_single</code> (uniform + noise renormalised)</td><td><code>markov/cpo_hmm_states.py</code> (baris 222–231)</td></tr>
+            <tr><td>Build &amp; fit GaussianHMM</td><td><code>hmm.GaussianHMM(...).fit(X)</code> (hmmlearn)</td><td><code>markov/cpo_hmm_states.py</code> (baris 234–262)</td></tr>
+            <tr><td>Multi-restart loop</td><td><code>fit_hmm_with_restarts</code></td><td><code>markov/cpo_hmm_states.py</code> (baris 268–284)</td></tr>
+            <tr><td>Label sorting by mean log-return</td><td>post-fit block writing <code>state_to_label</code></td><td><code>markov/cpo_hmm_states.py</code> (baris ~840)</td></tr>
+            <tr><td>Publish parameter ke Firestore</td><td><code>migrate_hmm_to_firestore.main</code> → <code>write_hmm_params</code></td><td><code>scheduler/migrate_hmm_to_firestore.py</code> + <code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td>Decode online (per-hari)</td><td><code>forward_filter</code> (offline lib) / <code>_forward_filter</code> (scheduler)</td><td><code>markov/cpo_hmm_states.py</code> + <code>scheduler/hmm_updater.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Algorithm 3 ─────────────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Algoritma 3 — Inferensi Live untuk Dashboard</h2>
+      <p class="text-sm text-slate-600 mb-2">
+        Sumber: <code>website/web/predictor.py::compute_forecast_trails</code>
+        (dipanggil dari <code>views.forecasts_api</code>). Untuk setiap
+        horizon h ∈ {1..7}, model XGBoost pemenang (lowest base MAPE per
+        horizon) dipakai untuk memprediksi log-return, lalu dieksponensiasi
+        menjadi harga prediksi.
+      </p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> compute_forecast_trails
+<span class="src">SOURCE</span>: website/web/predictor.py :: compute_forecast_trails
+
+<span class="kw">INPUT</span>:
+    db              <span class="cmt">// Firestore client</span>
+    max_horizon  = 7         <span class="cmt">// clamped to [1, 7]</span>
+    window_days  = 90        <span class="cmt">// clamped to [7, 365]</span>
+
+<span class="kw">OUTPUT</span>:
+    payload (dict): {
+        horizons, winners, configs, trails[], metrics, generated_at }
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// (1) winners.json menentukan tag pemenang per horizon</span>
+    payload  = load_winners()                  <span class="cmt">// lru_cache(maxsize=1)</span>
+    winners  = payload.winners_by_horizon      <span class="cmt">// {h: tag in {cpo_only,cpo_hmm,cpo_sentiment,full}}</span>
+    configs  = payload.configs_by_horizon      <span class="cmt">// {h: "C1"|"C2"|"C3"|"C4"}</span>
+
+    <span class="cmt">// (2) Bangun frame fitur penuh dari Firestore</span>
+    df = build_inference_frame(db)
+    <span class="kw">IF</span> df <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        <span class="kw">RETURN</span> empty_payload()
+    <span class="kw">END IF</span>
+
+    dates_sorted = df.Date.tolist()
+    last_idx     = |dates_sorted| - 1
+    next_td      = _next_trading_day_after(dates_sorted[last_idx])  <span class="cmt">// skip weekends</span>
+
+    <span class="cmt">// (3) Indeks anchor dalam window 90 hari terakhir</span>
+    cutoff     = df.Date.max() - timedelta(days = window_days)
+    window_idx = indices where df.Date &gt;= cutoff
+
+    trails = []
+    <span class="kw">FOR</span> h = 1 <span class="kw">TO</span> max_horizon <span class="kw">DO</span>
+        tag = winners.get(h)
+        <span class="kw">IF</span> tag <span class="kw">IS NULL</span> <span class="kw">THEN</span> CONTINUE
+
+        <span class="kw">TRY</span>
+            (model, scaler, feature_cols) = load_model(tag, h, "csa")  <span class="cmt">// lru_cache 64</span>
+        <span class="kw">CATCH</span> FileNotFoundError
+            log_warning("missing model for h=" + h)
+            CONTINUE
+        <span class="kw">END TRY</span>
+
+        points = []
+        <span class="kw">FOR</span> i <span class="kw">IN</span> window_idx <span class="kw">DO</span>
+            target_idx = i + h
+            <span class="kw">IF</span> target_idx &gt; last_idx + 1 <span class="kw">THEN</span> CONTINUE   <span class="cmt">// di luar future point</span>
+            pred_date = dates_sorted[target_idx]   <span class="kw">IF</span> target_idx ≤ last_idx
+                        <span class="kw">ELSE</span> next_td
+
+            row = df.iloc[[i]]
+            <span class="kw">TRY</span>
+                X = select_feature_matrix(row, feature_cols)
+            <span class="kw">CATCH</span> ValueError
+                CONTINUE   <span class="cmt">// fitur tidak lengkap pada anchor i</span>
+            <span class="kw">END TRY</span>
+
+            <span class="kw">IF</span> any_nan(X) <span class="kw">THEN</span> CONTINUE
+            <span class="kw">IF</span> scaler <span class="kw">IS NOT NULL</span> <span class="kw">THEN</span> X = scaler.transform(X)
+
+            log_ret      = model.predict(X)[0]                          <span class="cmt">// XGBoost regression</span>
+            anchor_close = row.Close.iloc[0]
+            pred_price   = anchor_close * exp(clip(log_ret, -10, 10))
+
+            points.append({
+                anchor_date     : dates_sorted[i],
+                anchor_price    : round(anchor_close, 2),
+                predicted_date  : pred_date,
+                predicted_price : round(pred_price, 2),
+                log_return      : round(log_ret, 6) })
+        <span class="kw">END FOR</span>
+
+        trails.append({ horizon: h, tag: tag, config: configs[h], points: points })
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> {
+        horizons     : 1..max_horizon,
+        winners      : winners,
+        configs      : configs,
+        trails       : trails,
+        metrics      : payload.metrics,
+        tag_to_config: payload.tag_to_config,
+        generated_at : utcnow_isoformat() + "Z" }
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> build_inference_frame
+<span class="src">SOURCE</span>: website/web/predictor.py :: build_inference_frame
+
+<span class="kw">BEGIN</span>
+    price_df      = _load_prices(db)              <span class="cmt">// daily_prices</span>
+    sent_df       = _load_sentiment(db)           <span class="cmt">// sentiment_aggregates Daily</span>
+    hmm_state_df  = _load_hmm_state(db)           <span class="cmt">// hmm_states Daily</span>
+
+    df = add_price_features(price_df)             <span class="cmt">// OHLCV-derived</span>
+    df = add_hmm_derived_features(df)             <span class="cmt">// RSI/MACD/Bollinger/Vol recomputed</span>
+    df.Change_Pct = df.Close.pct_change() * 100   <span class="cmt">// match training CSV units</span>
+
+    <span class="kw">IF</span> hmm_state_df <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        df = df.merge(hmm_state_df, on = "Date", how = "left")
+        df.HMM_State       = fillna(df.HMM_State, 2)         <span class="cmt">// default Neutral</span>
+        top_labels         = value_counts(df.HMM_State_Label).head(5)
+        <span class="kw">FOR</span> label <span class="kw">IN</span> top_labels <span class="kw">DO</span>
+            df["HMM_" + normalize(label)] = (df.HMM_State_Label == label) <span class="cmt">// one-hot dummies</span>
+        <span class="kw">END FOR</span>
+        drop df.HMM_State_Label
+    <span class="kw">END IF</span>
+
+    <span class="kw">IF</span> sent_df <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        df = df.merge(sent_df, on = "Date", how = "left")
+        fillna(df.[Article_Count, Positive_Prob, Negative_Prob,
+                   Neutral_Prob, Sentiment_Score], 0.0)
+        df.Confidence = max(Positive_Prob, Negative_Prob, Neutral_Prob)
+    <span class="kw">END IF</span>
+
+    df = engineer_all_features(df)            <span class="cmt">// cyclical + lags + interactions</span>
+    <span class="kw">RETURN</span> sort_by_date(df)
+<span class="kw">END</span></pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Pemetaan Pseudocode → Kode (Algoritma 3)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Langkah Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td><code>load_winners()</code></td><td>idem; <code>lru_cache(maxsize=1)</code></td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>build_inference_frame(db)</code></td><td>idem</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helper</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>add_price_features, add_hmm_derived_features, engineer_all_features, select_feature_matrix</code></td><td>idem</td><td><code>prediction/feature_engineering.py</code></td></tr>
+            <tr><td><code>load_model(tag, h, "csa")</code></td><td>idem; <code>lru_cache(maxsize=64)</code></td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>model.predict(X)</code></td><td><code>XGBRegressor.predict</code> dari pkl</td><td><code>prediction/saved_models/{tag}/Daily/h{h}/xgboost_csa/model.pkl</code></td></tr>
+            <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td>HTTP endpoint &amp; clamping</td><td><code>forecasts_api</code></td><td><code>website/web/views.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
