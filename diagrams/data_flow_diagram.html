@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Flow Diagram — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Data Flow Diagram (DFD)</h1>
+      <p class="text-teal-100 text-sm mt-1">Level 0 (Konteks) dan Level 1 (Dekomposisi Sistem) — paradigma analisis terstruktur (FBV).</p>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="data_flow_diagram.html" class="nav-pill">Data Flow Diagram</a>
+    <a href="structure_chart.html" class="nav-pill">Structure Chart</a>
+    <a href="flowchart.html" class="nav-pill">Flowchart</a>
+    <a href="pseudocode.html" class="nav-pill">Pseudocode</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <!-- ── Pendahuluan ──────────────────────────────────── -->
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Diagram ini memodelkan aliran data Sistem Prediksi Harga CPO mengikuti
+        paradigma <em>Function-Based View</em> (FBV) — setiap proses adalah
+        fungsi yang menerima input, menghasilkan output, dan berinteraksi
+        dengan penyimpanan data tanpa keadaan internal (state) tersembunyi.
+        Level 0 memperlihatkan sistem sebagai satu proses tunggal dengan
+        entitas eksternal di sekitarnya; Level 1 mendekomposisi proses
+        tersebut menjadi lima fungsi utama yang masing-masing dipetakan
+        langsung ke modul Python di kode sumber.
+      </p>
+    </section>
+
+    <!-- ── Level 0 ─────────────────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">DFD Level 0 — Diagram Konteks</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Sistem dipandang sebagai satu kotak hitam (Proses 0). Empat entitas
+        eksternal dan Pengunjung (publik) berinteraksi dengannya. Tidak ada
+        proses internal atau data store yang ditampilkan pada level ini.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart LR
+    Operator([Operator])
+    Visitor([Pengunjung Publik])
+    Inv([Investing.com])
+    MPOB([Situs MPOB])
+    HF([HuggingFace Hub])
+
+    System(("0<br/>Sistem Prediksi<br/>Harga CPO"))
+
+    Operator -->|"perintah CLI<br/>(--mode daily / initial)"| System
+    System -->|"log eksekusi"| Operator
+
+    Inv -->|"OHLCV harian CPO (FCPO #49764)"| System
+    MPOB -->|"HTML hasil pencarian + isi artikel"| System
+    HF -->|"bobot model finbert-tone"| System
+
+    Visitor -->|"HTTP GET / + /news/ + /api/forecasts/"| System
+    System -->|"HTML dashboard + JSON forecast trails"| Visitor
+
+    classDef entity fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#92400e;
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:3px,color:#134e4a;
+    class Operator,Visitor,Inv,MPOB,HF entity;
+    class System process;
+        </pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Entitas Eksternal (Level 0)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Entitas</th><th>Jenis</th><th>Arah</th><th>Deskripsi</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Operator</strong></td><td>Manusia</td><td>↔</td>
+              <td>Pengguna teknis yang menjalankan <code>scheduler/main.py</code> dari command line; menerima log eksekusi.</td></tr>
+            <tr><td><strong>Pengunjung Publik</strong></td><td>Manusia</td><td>↔</td>
+              <td>Pengguna umum browser; mengakses dashboard tanpa autentikasi (tidak ada login/register).</td></tr>
+            <tr><td><strong>Investing.com</strong></td><td>API Eksternal</td><td>→</td>
+              <td>Sumber harga CPO Futures (FCPO, ID 49764) diakses lewat pustaka <code>investiny.historical_data</code>.</td></tr>
+            <tr><td><strong>Situs MPOB</strong></td><td>Web Publik</td><td>→</td>
+              <td><code>prestasisawit.mpob.gov.my/en/palmnews/advance-search/result</code>. Di-scrape dengan BeautifulSoup untuk berita CPO.</td></tr>
+            <tr><td><strong>HuggingFace Hub</strong></td><td>Model Repository</td><td>→</td>
+              <td>Sumber bobot model <code>yiyanghkust/finbert-tone</code> (3-kelas: Neutral/Positive/Negative).</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Level 1 ─────────────────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">DFD Level 1 — Dekomposisi Sistem</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Proses 0 didekomposisi menjadi lima fungsi utama. Empat proses
+        pertama (1.0–4.0) dipicu oleh Operator melalui CLI scheduler;
+        proses 5.0 dipicu oleh Pengunjung Publik melalui HTTP request.
+        Setiap proses tertaut langsung ke modul Python yang
+        diimplementasinya.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart LR
+    Operator([Operator])
+    Visitor([Pengunjung])
+    Inv([Investing.com])
+    MPOB([Situs MPOB])
+    HF([HuggingFace])
+
+    P1(("1.0<br/>Price<br/>Acquisition"))
+    P2(("2.0<br/>News<br/>Acquisition"))
+    P3(("3.0<br/>Sentiment<br/>Analysis &amp;<br/>Aggregation"))
+    P4(("4.0<br/>HMM State<br/>Decoding"))
+    P5(("5.0<br/>Dashboard &amp;<br/>Live Inference"))
+
+    D1[("D1: daily_prices")]
+    D2[("D2: news_articles")]
+    D3[("D3: sentiment_aggregates")]
+    D4[("D4: hmm_states")]
+    D5[("D5: hmm_models")]
+    D6[("D6: saved_models/*.pkl")]
+    D7[("D7: winners.json")]
+
+    Operator -->|trigger --mode daily| P1
+    Operator -->|trigger --mode daily| P2
+    Operator -->|trigger --mode daily| P3
+    Operator -->|trigger --mode daily| P4
+
+    Inv -->|OHLCV| P1
+    P1 -->|harga harian| D1
+
+    MPOB -->|HTML artikel| P2
+    P2 -->|artikel mentah| D2
+
+    HF -->|bobot finbert-tone| P3
+    D2 -->|artikel baru| P3
+    P3 -->|label + skor| D2
+    P3 -->|agregat harian| D3
+
+    D5 -->|param HMM beku| P4
+    D1 -->|deret close| P4
+    P4 -->|state per tanggal| D4
+
+    Visitor -->|HTTP GET| P5
+    D1 -->|90 hari OHLCV| P5
+    D3 -->|90 hari sentimen| P5
+    D4 -->|90 hari state| P5
+    D6 -->|model.pkl + scaler.pkl| P5
+    D7 -->|pemenang per horizon| P5
+    P5 -->|HTML + JSON trails| Visitor
+
+    classDef entity fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#92400e;
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef store fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+    class Operator,Visitor,Inv,MPOB,HF entity;
+    class P1,P2,P3,P4,P5 process;
+    class D1,D2,D3,D4,D5,D6,D7 store;
+        </pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Proses (Level 1)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>No</th><th>Nama Proses</th><th>Input</th><th>Output</th><th>Implementasi</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>1.0</td><td><strong>Price Acquisition</strong></td>
+              <td>OHLCV harian dari Investing.com; CSV lokal <code>cpo/Data_CPO_Daily.csv</code></td>
+              <td>Dokumen di <code>daily_prices</code>; CSV terpreproses <code>cpo/output/cpo_variables_Daily.csv</code></td>
+              <td><code>scheduler/price_fetcher.py</code> · <code>fetch_latest_price</code>, <code>preprocess_price_csv</code></td>
+            </tr>
+            <tr>
+              <td>2.0</td><td><strong>News Acquisition</strong></td>
+              <td>HTML hasil pencarian situs MPOB (keyword <em>cpo</em>, <em>crude palm oil</em>)</td>
+              <td>Dokumen di <code>news_articles</code>; tiga CSV lokal (raw / preproc / sentiment)</td>
+              <td><code>scheduler/news_extractor.py</code> · <code>scrape_new_articles</code>, <code>preprocess_articles</code></td>
+            </tr>
+            <tr>
+              <td>3.0</td><td><strong>Sentiment Analysis &amp; Aggregation</strong></td>
+              <td>Artikel teks (judul + isi) dari D2; bobot FinBERT-Tone</td>
+              <td>Field sentimen pada D2; agregat harian di D3</td>
+              <td><code>scheduler/sentiment_runner.py</code> · <code>run_sentiment_on_articles</code>, <code>compute_sentiment_aggregates</code></td>
+            </tr>
+            <tr>
+              <td>4.0</td><td><strong>HMM State Decoding</strong></td>
+              <td>Parameter HMM beku dari D5; deret <code>close</code> dari D1</td>
+              <td>State (0/1/2) + label (Bearish/Neutral/Bullish) per tanggal di D4</td>
+              <td><code>scheduler/hmm_updater.py</code> · <code>update_hmm_states</code> (forward filter, bukan Viterbi)</td>
+            </tr>
+            <tr>
+              <td>5.0</td><td><strong>Dashboard &amp; Live Inference</strong></td>
+              <td>D1/D3/D4 untuk konteks; D6/D7 untuk inferensi</td>
+              <td>HTML dashboard; JSON <code>forecast trails</code> untuk Chart.js</td>
+              <td><code>website/web/views.py</code> · <code>dashboard</code>, <code>news</code>, <code>forecasts_api</code> + <code>website/web/predictor.py</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Data Stores</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Nama</th><th>Tipe</th><th>Field Utama</th><th>Sumber</th></tr></thead>
+          <tbody>
+            <tr><td>D1</td><td><code>daily_prices</code></td><td>Firestore (doc ID = <code>YYYY-MM-DD</code>)</td>
+              <td><code>date, open, high, low, close, volume, updated_at</code></td>
+              <td><code>firestore_writer.write_price[s_batch]</code></td></tr>
+            <tr><td>D2</td><td><code>news_articles</code></td><td>Firestore (doc ID = <code>md5(url)</code>)</td>
+              <td><code>date, title, content, url, sentiment_label, positive_prob, negative_prob, neutral_prob, sentiment_score, …</code></td>
+              <td><code>firestore_writer.write_news_articles</code></td></tr>
+            <tr><td>D3</td><td><code>sentiment_aggregates</code></td><td>Firestore (doc ID = <code>Daily_YYYY-MM-DD</code>)</td>
+              <td><code>date, frequency, article_count, positive_prob, negative_prob, neutral_prob, sentiment_score, dominant_sentiment</code></td>
+              <td><code>firestore_writer.write_sentiment_aggregates</code></td></tr>
+            <tr><td>D4</td><td><code>hmm_states</code></td><td>Firestore (doc ID = <code>Daily_YYYY-MM-DD</code>)</td>
+              <td><code>date, frequency, state, state_label, log_return, volatility, rsi</code></td>
+              <td><code>firestore_writer.write_hmm_states_batch</code></td></tr>
+            <tr><td>D5</td><td><code>hmm_models</code></td><td>Firestore (doc ID = <code>Daily</code>)</td>
+              <td><code>n_components, covariance_type, fit_cutoff, fit_seed, payload_json (startprob_, transmat_, means_, covars_, state_to_label, …)</code></td>
+              <td><code>firestore_writer.write_hmm_params</code></td></tr>
+            <tr><td>D6</td><td><code>saved_models/</code></td><td>Filesystem (joblib pickle)</td>
+              <td><code>{tag}/Daily/h{h}/xgboost_{base|csa}/{model,scaler}.pkl + meta.json</code> · 4 tag × 7 horizon × 2 varian = 56 set artefak</td>
+              <td>Skrip <code>horizon_forecast_C1..C4</code> (offline)</td></tr>
+            <tr><td>D7</td><td><code>winners.json</code></td><td>Filesystem (JSON)</td>
+              <td><code>winners_by_horizon, configs_by_horizon, metrics</code></td>
+              <td><code>prediction/compute_winners.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Aliran Data Utama (Level 1)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Dari</th><th>Ke</th><th>Data</th><th>Catatan</th></tr></thead>
+          <tbody>
+            <tr><td>Investing.com</td><td>1.0</td><td>OHLCV harian</td><td>Lookback adaptif 90 / 365 / 1095 hari untuk menghindari hari libur.</td></tr>
+            <tr><td>1.0</td><td>D1</td><td>Baris harga baru</td><td>Hanya tanggal lebih baru dari latest CSV yang ditulis; dedup oleh doc ID.</td></tr>
+            <tr><td>Situs MPOB</td><td>2.0</td><td>HTML artikel</td><td>Iterasi multi-keyword + multi-halaman, retry 3×, dedup oleh URL.</td></tr>
+            <tr><td>2.0</td><td>D2</td><td>Artikel mentah</td><td>Doc ID = <code>md5(url)</code> → write idempoten.</td></tr>
+            <tr><td>HuggingFace</td><td>3.0</td><td>Bobot finbert-tone</td><td>Dimuat sekali per proses; auto-CUDA bila tersedia.</td></tr>
+            <tr><td>D2</td><td>3.0</td><td>Artikel baru (judul + isi)</td><td>Sentence-level scoring, filter confidence ≥ 0.5, mean probabilitas.</td></tr>
+            <tr><td>3.0</td><td>D2</td><td>Field sentimen</td><td>Update merge: <code>sentiment_label</code>, <code>positive/negative/neutral_prob</code>, <code>sentiment_score</code>.</td></tr>
+            <tr><td>3.0</td><td>D3</td><td>Agregat harian</td><td>Rerata per tanggal: probabilitas + skor + label dominan.</td></tr>
+            <tr><td>D5</td><td>4.0</td><td>Parameter HMM beku</td><td>Dibaca via <code>read_hmm_params</code>; tidak pernah re-fit pada saat eksekusi scheduler.</td></tr>
+            <tr><td>D1</td><td>4.0</td><td>Seri <code>close</code></td><td>Direkayasa ulang menjadi 5 fitur (Log_Return_Z, Volatility_Z, RSI_norm, MACD_Z, BB_Width_Z).</td></tr>
+            <tr><td>4.0</td><td>D4</td><td>State per tanggal</td><td>Forward filter (online), bukan Viterbi — agar histori tidak berubah seiring waktu.</td></tr>
+            <tr><td>Pengunjung</td><td>5.0</td><td>HTTP GET</td><td>Endpoint: <code>/</code>, <code>/news/</code>, <code>/about/</code>, <code>/api/forecasts/</code>.</td></tr>
+            <tr><td>D1+D3+D4</td><td>5.0</td><td>Window 90 hari</td><td>Untuk konteks chart (harga + sentimen + state).</td></tr>
+            <tr><td>D6+D7</td><td>5.0</td><td>Model pemenang per horizon</td><td><code>predictor.load_winners</code> + <code>load_model(tag,h,'csa')</code>; cached via <code>lru_cache</code>.</td></tr>
+            <tr><td>5.0</td><td>Pengunjung</td><td>HTML + JSON</td><td>Template <code>dashboard.html</code> + payload <code>compute_forecast_trails</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
