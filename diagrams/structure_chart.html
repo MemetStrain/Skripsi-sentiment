@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart</h1>
+      <p class="text-teal-100 text-sm mt-1">Hierarki modul scheduler dan website mengikuti paradigma fungsi (FBV).</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="data_flow_diagram.html" class="nav-pill">Data Flow Diagram</a>
+    <a href="structure_chart.html" class="nav-pill">Structure Chart</a>
+    <a href="flowchart.html" class="nav-pill">Flowchart</a>
+    <a href="pseudocode.html" class="nav-pill">Pseudocode</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Structure chart memperlihatkan dekomposisi modul dari titik masuk
+        utama menuju fungsi-fungsi pendukung. Notasi: kotak menyatakan
+        modul/fungsi, anak panah menyatakan pemanggilan (caller → callee),
+        dan label panah menyatakan data yang dilewatkan. Dua hierarki
+        utama dipetakan: <em>pipeline scheduler</em> (offline / per-hari)
+        dan <em>website</em> (per-request HTTP).
+      </p>
+    </section>
+
+    <!-- ── Scheduler hierarchy ─────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">1 — Hierarki Pipeline Scheduler</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Akar: <code>scheduler/main.py::main</code> dengan flag <code>--mode daily</code>.
+        Mode <code>initial</code> memuat CSV bulk ke Firestore; mode
+        <code>rebuild-hmm</code> mempublikasikan ulang parameter HMM beku.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    M["scheduler/main.py<br/>main()"]:::root
+
+    M --> RD["run_daily_update(db)"]:::mode
+    M --> RI["run_initial_load(db)"]:::mode
+    M --> RH["migrate_hmm_to_firestore.main()"]:::mode
+
+    RD --> SP["_step_price(db, paths)"]:::phase
+    RD --> SN["_step_news(paths)"]:::phase
+    RD --> WN["firestore_writer.<br/>write_news_articles"]:::util
+    RD --> AGG["sentiment_runner.<br/>compute_sentiment_aggregates"]:::phase
+    RD --> WSA["firestore_writer.<br/>write_sentiment_aggregates"]:::util
+    RD --> UH["hmm_updater.<br/>update_hmm_states(db)"]:::phase
+
+    SP --> PF1["price_fetcher.<br/>fetch_latest_price"]:::util
+    SP --> PF2["price_fetcher.<br/>most_recent_trading_day"]:::util
+    SP --> LC1["local_csv_writer.<br/>latest_price_date"]:::util
+    SP --> LC2["local_csv_writer.<br/>append_price_row_indonesian"]:::util
+    SP --> PF3["price_fetcher.<br/>preprocess_price_csv"]:::util
+    SP --> WP["firestore_writer.<br/>write_price"]:::util
+
+    SN --> NE1["news_extractor.<br/>scrape_new_articles"]:::util
+    SN --> NE2["news_extractor.<br/>preprocess_articles"]:::util
+    SN --> SR1["sentiment_runner.<br/>run_sentiment_on_articles"]:::util
+    SN --> LC3["local_csv_writer.<br/>append_news_rows"]:::util
+
+    UH --> HU1["read_hmm_params(db)"]:::util
+    UH --> HU2["_build_hmm_features"]:::util
+    UH --> HU3["_hmm_from_params"]:::util
+    UH --> HU4["_forward_filter"]:::util
+    UH --> WS["firestore_writer.<br/>write_hmm_states_batch"]:::util
+
+    classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
+    classDef mode  fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#7c2d12;
+    classDef phase fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+        </pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Modul Scheduler</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Modul</th><th>Fungsi</th><th>Parameter Penting</th><th>Mengembalikan</th></tr></thead>
+          <tbody>
+            <tr><td><code>scheduler/main.py</code></td><td><code>main()</code></td><td><code>--mode {initial, daily, rebuild-hmm}</code>, <code>--reset-progress</code></td><td>None (exit code)</td></tr>
+            <tr><td><code>scheduler/main.py</code></td><td><code>run_daily_update(db)</code></td><td><code>db</code>: Firestore client</td><td>None</td></tr>
+            <tr><td><code>scheduler/main.py</code></td><td><code>_step_price(db, paths)</code></td><td><code>paths</code>: dict (cpo_raw, cpo_preproc)</td><td><code>bool</code> (true bila harga baru ditulis)</td></tr>
+            <tr><td><code>scheduler/main.py</code></td><td><code>_step_news(paths)</code></td><td><code>paths</code>: dict (news_raw, news_preproc, news_sent)</td><td><code>(list[dict], bool)</code></td></tr>
+            <tr><td><code>scheduler/price_fetcher.py</code></td><td><code>fetch_latest_price()</code></td><td>—</td><td><code>dict | None</code> (date, open, high, low, close, volume)</td></tr>
+            <tr><td><code>scheduler/price_fetcher.py</code></td><td><code>preprocess_price_csv(csv_path, output_path)</code></td><td>Path CSV input + output</td><td>None (menulis CSV terpreproses)</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>scrape_new_articles(cutoff_date)</code></td><td><code>cutoff_date</code>: <code>YYYY-MM-DD</code> atau None</td><td><code>list[dict]</code> (artikel unik per URL)</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>preprocess_articles(articles)</code></td><td><code>articles</code>: list dict</td><td><code>list[dict]</code> (mendrop yang kosong)</td></tr>
+            <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>run_sentiment_on_articles(articles)</code></td><td>list dict + bobot finbert-tone (lazy load)</td><td><code>list[dict]</code> (diperkaya field sentimen)</td></tr>
+            <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>compute_sentiment_aggregates(articles)</code></td><td>list artikel ber-sentimen</td><td><code>list[dict]</code> (per-tanggal agregat)</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>update_hmm_states(db)</code></td><td><code>db</code>: Firestore client</td><td>None (menulis D4)</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>write_price[s_batch]</code>, <code>write_news_articles</code>, <code>write_sentiment_aggregates</code>, <code>write_hmm_states_batch</code>, <code>write_hmm_params</code>, <code>read_hmm_params</code></td><td>list dict; batch commit 100 doc</td><td>jumlah dokumen ditulis</td></tr>
+            <tr><td><code>scheduler/local_csv_writer.py</code></td><td><code>append_news_rows</code>, <code>append_price_row_indonesian</code>, <code>latest_news_date</code>, <code>latest_price_date</code></td><td>Path CSV + baris baru</td><td>Jumlah baris ditulis / tanggal terakhir</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Coupling (Data yang Dilewatkan)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
+          <tbody>
+            <tr><td><code>main()</code></td><td><code>run_daily_update</code></td><td>Firestore client</td><td>Data (objek tunggal)</td></tr>
+            <tr><td><code>run_daily_update</code></td><td><code>_step_price</code></td><td><code>db</code>, <code>paths</code> dict</td><td>Stamp coupling (dict berisi banyak path)</td></tr>
+            <tr><td><code>_step_price</code></td><td><code>fetch_latest_price</code></td><td>—</td><td>Data (return value saja)</td></tr>
+            <tr><td><code>_step_news</code></td><td><code>scrape_new_articles</code></td><td>cutoff <code>YYYY-MM-DD</code></td><td>Data (scalar)</td></tr>
+            <tr><td><code>_step_news</code></td><td><code>run_sentiment_on_articles</code></td><td>list[dict] artikel</td><td>Stamp coupling (dict per artikel)</td></tr>
+            <tr><td><code>run_daily_update</code></td><td><code>compute_sentiment_aggregates</code></td><td>list[dict] artikel terberitra</td><td>Stamp coupling</td></tr>
+            <tr><td><code>update_hmm_states</code></td><td><code>_forward_filter</code></td><td><code>model</code> objek HMM + <code>X</code> ndarray</td><td>Data (numerik) + Hybrid (objek model)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Website hierarchy ───────────────────────────── -->
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">2 — Hierarki Website (Django)</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Akar: <code>website/config/urls.py</code> mendelegasikan ke
+        <code>web/urls.py</code>. Empat endpoint publik: <code>dashboard</code>,
+        <code>news</code>, <code>about</code>, <code>api/forecasts/</code>.
+        Tidak ada autentikasi. Inferensi dijalankan langsung (live)
+        memakai model XGBoost yang sudah dilatih offline.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    URL["config/urls.py<br/>web/urls.py"]:::root
+
+    URL --> VD["views.dashboard(request)"]:::view
+    URL --> VN["views.news(request)"]:::view
+    URL --> VA["views.about(request)"]:::view
+    URL --> VF["views.forecasts_api(request)"]:::view
+
+    VD --> Q1["Firestore: daily_prices<br/>(90d, order by date)"]:::query
+    VD --> Q2["Firestore: hmm_states<br/>(90d Daily)"]:::query
+    VD --> Q3["Firestore: sentiment_aggregates<br/>(90d Daily)"]:::query
+    VD --> LW["predictor.load_winners()"]:::util
+    VD --> RD["render('dashboard.html', ctx)"]:::util
+
+    LW --> WJ[("winners.json")]:::store
+
+    VF --> CT["predictor.<br/>compute_forecast_trails(db, h_max, window)"]:::util
+    CT --> LW2["load_winners()"]:::util
+    CT --> BIF["build_inference_frame(db)"]:::util
+    CT --> LM["load_model(tag, h, 'csa')"]:::util
+
+    BIF --> LP["_load_prices(db)"]:::util
+    BIF --> LS["_load_sentiment(db)"]:::util
+    BIF --> LH["_load_hmm_state(db)"]:::util
+    BIF --> EAF["feature_engineering.<br/>engineer_all_features"]:::util
+
+    LM --> JL[("saved_models/<br/>{tag}/Daily/h{h}/<br/>xgboost_csa/*.pkl")]:::store
+
+    VN --> Q4["Firestore: news_articles<br/>(all, sorted in Python)"]:::query
+    VN --> PG["pagination clamp"]:::util
+    VN --> RN["render('news.html', ctx)"]:::util
+
+    VA --> RA["render('about.html')"]:::util
+
+    classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
+    classDef view  fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef query fill:#fef3c7,stroke:#b45309,stroke-width:1px,color:#7c2d12;
+    classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+    classDef store fill:#f3e8ff,stroke:#7e22ce,stroke-width:1px,color:#581c87;
+        </pre>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Modul Website</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Modul</th><th>Fungsi</th><th>Parameter</th><th>Mengembalikan</th></tr></thead>
+          <tbody>
+            <tr><td><code>web/views.py</code></td><td><code>dashboard(request)</code></td><td><code>HttpRequest</code></td><td><code>HttpResponse</code> (dashboard.html)</td></tr>
+            <tr><td><code>web/views.py</code></td><td><code>news(request)</code></td><td>Query: <code>sentiment</code>, <code>page</code></td><td><code>HttpResponse</code> (news.html)</td></tr>
+            <tr><td><code>web/views.py</code></td><td><code>about(request)</code></td><td>—</td><td><code>HttpResponse</code> (about.html)</td></tr>
+            <tr><td><code>web/views.py</code></td><td><code>forecasts_api(request)</code></td><td>Query: <code>max_horizon</code> (1–7), <code>window_days</code> (7–365)</td><td><code>JsonResponse</code> (forecast trails)</td></tr>
+            <tr><td><code>web/predictor.py</code></td><td><code>load_winners()</code></td><td>—</td><td><code>dict</code> (winners_by_horizon, configs_by_horizon, metrics)</td></tr>
+            <tr><td><code>web/predictor.py</code></td><td><code>load_model(tag, horizon, variant='csa')</code></td><td>tag ∈ {cpo_only, cpo_hmm, cpo_sentiment, full}; h ∈ 1..7</td><td><code>(model, scaler, feature_cols)</code> (cached)</td></tr>
+            <tr><td><code>web/predictor.py</code></td><td><code>build_inference_frame(db)</code></td><td>Firestore client</td><td><code>pd.DataFrame</code> (price+tech+HMM+sentiment+lags)</td></tr>
+            <tr><td><code>web/predictor.py</code></td><td><code>compute_forecast_trails(db, max_horizon, window_days)</code></td><td>Firestore client + clamps</td><td><code>dict</code> JSON-serializable (trails, metrics, …)</td></tr>
+            <tr><td><code>prediction/feature_engineering.py</code></td><td><code>add_price_features</code>, <code>add_hmm_derived_features</code>, <code>engineer_all_features</code>, <code>select_feature_matrix</code></td><td>DataFrame + feature list</td><td>DataFrame / ndarray</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Coupling (Website)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
+          <tbody>
+            <tr><td><code>dashboard</code></td><td>Firestore</td><td>Query filter <code>date &gt;= 90d ago</code></td><td>Data</td></tr>
+            <tr><td><code>dashboard</code></td><td><code>load_winners</code></td><td>—</td><td>Common (membaca file lokal)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td><code>compute_forecast_trails</code></td><td><code>db, max_horizon, window_days</code></td><td>Data</td></tr>
+            <tr><td><code>compute_forecast_trails</code></td><td><code>load_model</code></td><td><code>(tag, h, 'csa')</code></td><td>Data (scalar tuple)</td></tr>
+            <tr><td><code>compute_forecast_trails</code></td><td><code>build_inference_frame</code></td><td><code>db</code></td><td>Data</td></tr>
+            <tr><td><code>build_inference_frame</code></td><td><code>engineer_all_features</code></td><td><code>pd.DataFrame</code> superset</td><td>Stamp (mendapat banyak kolom)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-xs text-slate-500 mt-4">
+        Catatan: notasi <em>data-couple</em> dan <em>control-couple</em> klasik
+        (lingkaran berekor pada anak panah) tidak ditampilkan pada diagram
+        karena Mermaid tidak mendukung notasi tersebut secara native. Kolom
+        “Jenis Coupling” pada tabel di atas menggantikan notasi visual itu.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
