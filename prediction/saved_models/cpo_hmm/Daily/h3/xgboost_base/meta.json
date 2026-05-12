@@ -37,9 +37,6 @@
     "HMM_State_lag9",
     "HMM_State_lag10",
     "HMM_State_lag11",
-    "HMM_State_lag12",
-    "HMM_State_lag13",
-    "HMM_State_lag14",
     "Log_Return_lag3",
     "Volatility_x_RSI"
   ],
@@ -54,5 +51,5 @@
     "random_state": 42,
     "verbose": true
   },
-  "saved_at": "2026-05-09T19:15:55.497943"
+  "saved_at": "2026-05-10T19:23:57.349439"
 }

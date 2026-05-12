@@ -13,7 +13,7 @@ Splitting (matches horizon_forecast_configurable):
     test    (Date >= VAL_CUTOFF)  → final holdout
 
 Usage:
-    python horizon_forecast_C3_price_sentiment.py --interval daily
+    python horizon_forecast_C3_price_sentiment.py
 """
 
 import os
@@ -56,10 +56,14 @@ INTERVAL_CONFIGS = {
     },
 }
 
-# Per-source lag config (C3: price + sentiment).
-# Lag 44 for sentiment is from sentiment-CPO correlation analysis.
+# Per-source lag config (Opsi A: literature-prescribed multi-lag)
+# Justifikasi:
+# - Sentiment: 1-30 days per Chi et al. (2024) — commodity sentiment effects converge within 30 trading days
+# - HMM_State: 1-8 days per intra-project hmm_state_lag_analysis (significant lags)
+# - Log_Return: 1-3 days per ACF analysis on stationary log returns
 LAG_CONFIG: List[Dict] = [
-    {'source': 'Sentiment_Score', 'lags': [44]},
+    {'source': 'HMM_State',       'lags': list(range(3, 12))},      # 3-11 (sync dengan klaim Anda)
+    {'source': 'Sentiment_Score', 'lags': [1, 3, 5, 10, 20, 30]},  # Chi et al. (2024)
     {'source': 'Log_Return',      'lags': [1, 2, 3]},
 ]
 
@@ -564,7 +568,6 @@ def run_interval(interval: str, output_dir: str, csa_config: Dict,
 def main():
     parser = argparse.ArgumentParser(
         description='Multi-Horizon CPO Price Forecasting — C3 (price + sentiment ablation)')
-    parser.add_argument('--interval', type=str, default='daily', choices=['daily'])
     parser.add_argument('--csa-population', type=int, default=50)
     parser.add_argument('--csa-iterations', type=int, default=50)
     parser.add_argument('--csa-cv-folds', type=int, default=3)
@@ -589,7 +592,7 @@ def main():
     }
 
     start = time.time()
-    run_interval(args.interval.capitalize(), output_dir, csa_config,
+    run_interval('Daily', output_dir, csa_config,
                  horizons_filter=horizons_filter)
     print(f"\n{'='*70}")
     print(f"  ALL DONE! Total time: {time.time()-start:.1f}s")

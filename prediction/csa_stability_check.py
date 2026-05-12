@@ -168,33 +168,16 @@ def _summarize(runs: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--tag', required=True, choices=list(TAG_TO_MODULE))
-    ap.add_argument('--horizon', type=int, required=True)
-    ap.add_argument('--n-runs', type=int, default=5,
-                    help='Number of CSA runs with different seeds.')
-    ap.add_argument('--population', type=int, default=25,
-                    help='CSA population size (lower than the 50 used in '
-                         'production to keep this script tractable).')
-    ap.add_argument('--iterations', type=int, default=25,
-                    help='CSA max iterations per run.')
-    ap.add_argument('--cv-folds', type=int, default=3)
-    ap.add_argument('--cutoff-jitter-weeks', type=int, default=0,
-                    help='If >0, also run with VAL_CUTOFF shifted by ±W weeks '
-                         '(adds 2 extra runs at the same base seed).')
-    ap.add_argument('--out-dir', default=os.path.join(HERE, 'output_diagnostics'))
-    args = ap.parse_args()
-
-    print(f'\n=== CSA stability check: tag={args.tag}  h={args.horizon}  '
+def run_one_pair(tag: str, horizon: int, args) -> Dict:
+    """Run the stability sweep for one (tag, horizon). Returns a summary dict."""
+    print(f'\n=== CSA stability check: tag={tag}  h={horizon}  '
           f'runs={args.n_runs} ===')
     print(f'CSA budget per run: pop={args.population}  iter={args.iterations}  '
           f'cv_folds={args.cv_folds}')
 
-    df, feature_cols = load_dataset(args.tag, args.horizon)
+    df, feature_cols = load_dataset(tag, horizon)
     print(f'rows={len(df)}  features={len(feature_cols)}')
 
-    # Configurations to try: (label, val_cutoff, seed)
     configs: List[Tuple[str, pd.Timestamp, int]] = []
     for i in range(args.n_runs):
         configs.append((f'seed_{i}', VAL_CUTOFF, RANDOM_STATE + i))
@@ -234,11 +217,10 @@ def main():
               f'({res["elapsed_sec"]}s)')
 
     if not rows:
-        raise SystemExit('No runs completed.')
+        return {'tag': tag, 'horizon': horizon, 'error': 'no runs completed'}
 
     runs = pd.DataFrame(rows)
 
-    # Summary tables
     metric_cols = ['cv_best_score', 'test_da', 'test_mape', 'test_rmse']
     param_cols = [c for c in runs.columns if c.startswith('param_')]
 
@@ -250,7 +232,6 @@ def main():
     param_summary = _summarize(runs, param_cols)
     print(param_summary.to_string(index=False))
 
-    # Verdict heuristics
     da_std    = runs['test_da'].std()
     da_range  = runs['test_da'].max() - runs['test_da'].min()
     mape_cv   = runs['test_mape'].std() / runs['test_mape'].mean() * 100
@@ -259,26 +240,29 @@ def main():
     print(f'test-DA range     = {da_range:.2f} pp   (>20 pp → very unstable)')
     print(f'test-MAPE CV%     = {mape_cv:.2f}%')
     if da_std > 10 or da_range > 20:
+        verdict = 'overfit'
         print('→ CSA is likely overfitting CV noise. The headline DA is not '
               'reproducible across seeds.')
     elif da_std > 5:
+        verdict = 'borderline'
         print('→ borderline — DA shifts noticeably with seed, but not catastrophically.')
     else:
+        verdict = 'stable'
         print('→ CSA appears stable across seeds. The chosen region of '
               'hyperparam space is robust.')
 
-    # Persist
     os.makedirs(args.out_dir, exist_ok=True)
-    stem = f'{args.tag}_h{args.horizon}_stability'
+    stem = f'{tag}_h{horizon}_stability'
     runs.to_csv(os.path.join(args.out_dir, f'{stem}_runs.csv'), index=False)
     metric_summary.to_csv(os.path.join(args.out_dir, f'{stem}_metric_summary.csv'),
                           index=False)
     param_summary.to_csv(os.path.join(args.out_dir, f'{stem}_param_summary.csv'),
                          index=False)
     summary_payload = {
-        'tag':      args.tag,
-        'horizon':  args.horizon,
+        'tag':      tag,
+        'horizon':  horizon,
         'n_runs':   len(runs),
+        'verdict':  verdict,
         'da_std':   float(da_std),
         'da_range': float(da_range),
         'mape_cv_pct': float(mape_cv),
@@ -290,6 +274,60 @@ def main():
               'w', encoding='utf-8') as f:
         json.dump(summary_payload, f, indent=2)
     print(f'\nArtefacts written to {args.out_dir}/{stem}_*')
+    return summary_payload
+
+
+def _load_winner_pairs() -> List[Tuple[str, int]]:
+    path = os.path.join(HERE, 'winners.json')
+    with open(path, encoding='utf-8') as f:
+        payload = json.load(f)
+    return [(tag, int(h)) for h, tag in payload['winners_by_horizon'].items()]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--tag', choices=list(TAG_TO_MODULE),
+                    help='Required unless --all-winners.')
+    ap.add_argument('--horizon', type=int,
+                    help='Required unless --all-winners.')
+    ap.add_argument('--all-winners', action='store_true',
+                    help='Sweep every (tag, horizon) pair in winners.json '
+                         'and write a combined summary CSV.')
+    ap.add_argument('--n-runs', type=int, default=5,
+                    help='Number of CSA runs with different seeds.')
+    ap.add_argument('--population', type=int, default=25,
+                    help='CSA population size (lower than the 50 used in '
+                         'production to keep this script tractable).')
+    ap.add_argument('--iterations', type=int, default=25,
+                    help='CSA max iterations per run.')
+    ap.add_argument('--cv-folds', type=int, default=3)
+    ap.add_argument('--cutoff-jitter-weeks', type=int, default=0,
+                    help='If >0, also run with VAL_CUTOFF shifted by ±W weeks '
+                         '(adds 2 extra runs at the same base seed).')
+    ap.add_argument('--out-dir', default=os.path.join(HERE, 'output_diagnostics'))
+    args = ap.parse_args()
+
+    if args.all_winners:
+        pairs = _load_winner_pairs()
+        print(f'Sweeping {len(pairs)} winner pair(s) from winners.json')
+    else:
+        if not args.tag or args.horizon is None:
+            ap.error('--tag and --horizon are required unless --all-winners is set.')
+        pairs = [(args.tag, args.horizon)]
+
+    summaries: List[Dict] = []
+    for tag, horizon in sorted(pairs, key=lambda x: (x[1], x[0])):
+        try:
+            summaries.append(run_one_pair(tag, horizon, args))
+        except Exception as e:  # noqa: BLE001
+            print(f'\n[{tag} h{horizon}] FAILED: {e}')
+            summaries.append({'tag': tag, 'horizon': horizon, 'error': str(e)})
+
+    if args.all_winners:
+        os.makedirs(args.out_dir, exist_ok=True)
+        out_csv = os.path.join(args.out_dir, 'stability_check_all_winners.csv')
+        pd.DataFrame(summaries).to_csv(out_csv, index=False)
+        print(f'\nCombined summary: {out_csv}')
 
 
 if __name__ == '__main__':

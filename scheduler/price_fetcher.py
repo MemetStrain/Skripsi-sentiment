@@ -17,7 +17,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # Investing.com asset ID for CPO (Palm Oil Futures)
-CPO_INVESTING_ID = 49764  # FCPO continuous contract
+CPO_INVESTING_ID = 992745  # FCPO continuous contract
 
 
 # ---------------------------------------------------------------------------

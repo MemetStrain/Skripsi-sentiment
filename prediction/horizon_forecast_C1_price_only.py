@@ -13,7 +13,7 @@ Splitting (matches horizon_forecast_configurable):
     test    (Date >= VAL_CUTOFF)  → final holdout
 
 Usage:
-    python horizon_forecast_C1_price_only.py --interval daily
+    python horizon_forecast_C1_price_only.py
 """
 
 import os
@@ -546,7 +546,6 @@ def run_interval(interval: str, output_dir: str, csa_config: Dict,
 def main():
     parser = argparse.ArgumentParser(
         description='Multi-Horizon CPO Price Forecasting — C1 (price-only ablation)')
-    parser.add_argument('--interval', type=str, default='daily', choices=['daily'])
     parser.add_argument('--csa-population', type=int, default=50)
     parser.add_argument('--csa-iterations', type=int, default=50)
     parser.add_argument('--csa-cv-folds', type=int, default=3)
@@ -571,7 +570,7 @@ def main():
     }
 
     start = time.time()
-    run_interval(args.interval.capitalize(), output_dir, csa_config,
+    run_interval('Daily', output_dir, csa_config,
                  horizons_filter=horizons_filter)
     print(f"\n{'='*70}")
     print(f"  ALL DONE! Total time: {time.time()-start:.1f}s")

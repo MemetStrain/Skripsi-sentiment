@@ -1,19 +1,12 @@
 {
   "model_type": "xgboost",
   "feature_cols": [
-    "Open",
-    "High",
-    "Low",
-    "Close",
-    "Volume",
-    "Change_Pct",
     "Price_t-1",
     "Price_t-2",
     "Price_t-3",
     "Return_t-1",
     "Return_t-2",
     "Volume_t-1",
-    "Log_Return",
     "High_Low_Spread",
     "Open_Close_Spread",
     "SMA_3",
@@ -36,25 +29,22 @@
     "DayOfWeek_Cos",
     "WeekOfYear_Sin",
     "WeekOfYear_Cos",
-    "Close_lag2",
-    "Close_lag3",
-    "Close_lag5",
-    "Close_lag10",
-    "Close_lag20",
-    "Sentiment_Score_lag2",
     "Sentiment_Score_lag3",
     "Sentiment_Score_lag5",
     "Sentiment_Score_lag10",
     "Sentiment_Score_lag20",
+    "Sentiment_Score_lag30",
+    "Log_Return_lag2",
+    "Log_Return_lag3",
     "Sentiment_x_Return"
   ],
   "params": {
-    "n_estimators": 172,
+    "n_estimators": 53,
     "max_depth": 3,
-    "learning_rate": 0.0010001284217224806,
-    "subsample": 0.8693439572148016,
-    "colsample_bytree": 0.778501762183995,
-    "min_child_weight": 1
+    "learning_rate": 0.010007975522471983,
+    "subsample": 0.6000575510677757,
+    "colsample_bytree": 0.6698978028581791,
+    "min_child_weight": 8
   },
-  "saved_at": "2026-05-05T03:56:08.453627"
+  "saved_at": "2026-05-10T22:05:59.410048"
 }

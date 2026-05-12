@@ -120,12 +120,12 @@ def add_hmm_derived_features(df: pd.DataFrame) -> pd.DataFrame:
 #
 # Mirrors:
 #   C1 (cpo_only)      → Log_Return [1, 2, 3]
-#   C2 (cpo_hmm)       → HMM_State [1..14] + Log_Return [1, 2, 3]
-#   C3 (cpo_sentiment) → Sentiment_Score [44] + Log_Return [1, 2, 3]
+#   C2 (cpo_hmm)       → HMM_State [3..11] + Log_Return [1, 2, 3]
+#   C3 (cpo_sentiment) → Sentiment_Score [1, 3, 5, 10, 20, 30] + Log_Return [1, 2, 3]
 #   C4 (full)          → all of the above
 LAG_CONFIG: List[Dict] = [
     {'source': 'HMM_State',       'lags': list(range(1, 15))},
-    {'source': 'Sentiment_Score', 'lags': [44]},
+    {'source': 'Sentiment_Score', 'lags': [1, 3, 5, 10, 20, 30]},
     {'source': 'Log_Return',      'lags': [1, 2, 3]},
 ]
 

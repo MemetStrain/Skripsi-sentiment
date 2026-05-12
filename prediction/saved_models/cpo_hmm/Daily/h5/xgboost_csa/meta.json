@@ -35,18 +35,15 @@
     "HMM_State_lag9",
     "HMM_State_lag10",
     "HMM_State_lag11",
-    "HMM_State_lag12",
-    "HMM_State_lag13",
-    "HMM_State_lag14",
     "Volatility_x_RSI"
   ],
   "params": {
     "n_estimators": 50,
-    "max_depth": 3,
-    "learning_rate": 0.01,
-    "subsample": 0.6003345026635825,
-    "colsample_bytree": 0.8318042751430589,
+    "max_depth": 6,
+    "learning_rate": 0.01008478796610506,
+    "subsample": 0.972730124970233,
+    "colsample_bytree": 1.0,
     "min_child_weight": 10
   },
-  "saved_at": "2026-05-09T20:13:18.717195"
+  "saved_at": "2026-05-10T20:07:49.843068"
 }

@@ -29,7 +29,10 @@
     "DayOfWeek_Cos",
     "WeekOfYear_Sin",
     "WeekOfYear_Cos",
-    "Sentiment_Score_lag44",
+    "Sentiment_Score_lag5",
+    "Sentiment_Score_lag10",
+    "Sentiment_Score_lag20",
+    "Sentiment_Score_lag30",
     "Sentiment_x_Return"
   ],
   "params": {
@@ -43,5 +46,5 @@
     "random_state": 42,
     "verbose": true
   },
-  "saved_at": "2026-05-09T18:25:16.869883"
+  "saved_at": "2026-05-10T22:31:48.170139"
 }

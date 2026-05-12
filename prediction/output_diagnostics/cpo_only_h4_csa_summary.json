@@ -1,0 +1,15 @@
+{
+  "tag": "cpo_only",
+  "horizon": 4,
+  "variant": "csa",
+  "n_test": 63,
+  "observed_da": 60.317460317460316,
+  "sliding_mean": 64.11764705882354,
+  "sliding_std": 3.2884681203758754,
+  "sliding_below50_pct": 0.0,
+  "permutation_p": 0.07,
+  "permutation_null_mean": 50.12380952380953,
+  "walkforward_mean": 61.666666666666664,
+  "walkforward_std": 17.559422921421234,
+  "walkforward_below50_pct": 33.33333333333333
+}

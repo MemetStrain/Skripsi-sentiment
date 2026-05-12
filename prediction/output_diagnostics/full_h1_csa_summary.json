@@ -1,0 +1,15 @@
+{
+  "tag": "full",
+  "horizon": 1,
+  "variant": "csa",
+  "n_test": 62,
+  "observed_da": 57.377049180327866,
+  "sliding_mean": 61.12156043190525,
+  "sliding_std": 5.974733644135912,
+  "sliding_below50_pct": 3.0303030303030303,
+  "permutation_p": 0.159,
+  "permutation_null_mean": 50.06065573770492,
+  "walkforward_mean": 56.05263157894737,
+  "walkforward_std": 6.641804981117873,
+  "walkforward_below50_pct": 0.0
+}

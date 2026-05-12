@@ -40,10 +40,9 @@
     "HMM_State_lag9",
     "HMM_State_lag10",
     "HMM_State_lag11",
-    "HMM_State_lag12",
-    "HMM_State_lag13",
-    "HMM_State_lag14",
-    "Sentiment_Score_lag44",
+    "Sentiment_Score_lag10",
+    "Sentiment_Score_lag20",
+    "Sentiment_Score_lag30",
     "Sentiment_x_Return",
     "Volatility_x_RSI"
   ],
@@ -58,5 +57,5 @@
     "random_state": 42,
     "verbose": true
   },
-  "saved_at": "2026-05-10T13:30:02.309848"
+  "saved_at": "2026-05-11T22:51:07.295880"
 }

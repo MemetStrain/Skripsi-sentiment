@@ -209,34 +209,15 @@ def walk_forward_retrain(df: pd.DataFrame, feature_cols: List[str],
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Per-(tag, horizon) runner
 # ---------------------------------------------------------------------------
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--tag', required=True, choices=list(TAG_TO_MODULE))
-    ap.add_argument('--horizon', type=int, required=True)
-    ap.add_argument('--variant', default='csa', choices=['csa', 'base'],
-                    help='Which trained variant to diagnose.')
-    ap.add_argument('--window', type=int, default=30,
-                    help='Sliding-window size in test-set days.')
-    ap.add_argument('--n-perm', type=int, default=2000,
-                    help='Permutation iterations for the DA null distribution.')
-    ap.add_argument('--walkforward', action='store_true',
-                    help='Run the walk-forward retrain diagnostic (slow).')
-    ap.add_argument('--wf-step', type=int, default=20,
-                    help='Walk-forward window size and stride.')
-    ap.add_argument('--wf-min-train', type=int, default=0,
-                    help='Minimum training rows before the first walk-forward '
-                         'cutoff. 0 → use the pre-test segment length.')
-    ap.add_argument('--seed', type=int, default=RANDOM_STATE)
-    ap.add_argument('--out-dir', default=os.path.join(HERE, 'output_diagnostics'))
-    args = ap.parse_args()
-
-    print(f'\n=== CSA overfit check: tag={args.tag}  h={args.horizon}  '
+def run_one_pair(tag: str, horizon: int, args) -> Dict:
+    """Run all diagnostics for one (tag, horizon). Returns a summary dict."""
+    print(f'\n=== CSA overfit check: tag={tag}  h={horizon}  '
           f'variant={args.variant} ===')
 
-    df, feature_cols = load_dataset(args.tag, args.horizon)
+    df, feature_cols = load_dataset(tag, horizon)
     pre, test = split_pre_test(df)
     print(f'pre-test rows : {len(pre):>4}  '
           f'({pre.Date.min().date()} → {pre.Date.max().date()})')
@@ -246,15 +227,14 @@ def main():
     print(f'features      : {len(feature_cols)}')
 
     if len(test) == 0:
-        raise SystemExit('No test rows (Date >= VAL_CUTOFF). Cannot diagnose.')
+        raise SystemExit(f'No test rows for {tag} h{horizon}. Cannot diagnose.')
 
     X_pre  = pre[feature_cols].values
     y_pre  = pre['Target'].values
     X_test = test[feature_cols].values
     y_test = test['Target'].values
 
-    model, scaler = load_or_train(args.tag, args.horizon, args.variant,
-                                  X_pre, y_pre)
+    model, scaler = load_or_train(tag, horizon, args.variant, X_pre, y_pre)
     y_pred = model.predict(scaler.transform(X_test))
 
     obs_da = _da(y_test, y_pred)
@@ -291,8 +271,7 @@ def main():
         min_train = args.wf_min_train or len(pre)
         print(f'\n[4] Walk-forward retrain '
               f'(step={args.wf_step}, min_train={min_train}) — this is slow')
-        wf = walk_forward_retrain(df, feature_cols,
-                                  args.tag, args.horizon,
+        wf = walk_forward_retrain(df, feature_cols, tag, horizon,
                                   step=args.wf_step, min_train=min_train)
         if len(wf) == 0:
             print('    no folds produced — try a smaller --wf-step or '
@@ -304,9 +283,9 @@ def main():
             print(f'    fraction of folds below 50%: '
                   f'{(wf.da < 50).mean() * 100:.1f}%')
 
-    # --- write artefacts ----------------------------------------------------
+    # --- write per-pair artefacts ------------------------------------------
     os.makedirs(args.out_dir, exist_ok=True)
-    stem = f'{args.tag}_h{args.horizon}_{args.variant}'
+    stem = f'{tag}_h{horizon}_{args.variant}'
 
     pd.DataFrame({
         'date':        pd.to_datetime(test['Date']).dt.date.astype(str),
@@ -326,8 +305,8 @@ def main():
                   index=False)
 
     summary = {
-        'tag':            args.tag,
-        'horizon':        args.horizon,
+        'tag':            tag,
+        'horizon':        horizon,
         'variant':        args.variant,
         'n_test':         int(len(y_test)),
         'observed_da':    obs_da,
@@ -344,6 +323,73 @@ def main():
               'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2)
     print(f'\nArtefacts written to {args.out_dir}/{stem}_*.csv|json')
+    return summary
+
+
+# ---------------------------------------------------------------------------
+# winners.json sweep
+# ---------------------------------------------------------------------------
+
+def _load_winner_pairs() -> List[Tuple[str, int]]:
+    path = os.path.join(HERE, 'winners.json')
+    with open(path, encoding='utf-8') as f:
+        payload = json.load(f)
+    return [(tag, int(h)) for h, tag in payload['winners_by_horizon'].items()]
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--tag', choices=list(TAG_TO_MODULE),
+                    help='Required unless --all-winners.')
+    ap.add_argument('--horizon', type=int,
+                    help='Required unless --all-winners.')
+    ap.add_argument('--all-winners', action='store_true',
+                    help='Sweep every (tag, horizon) pair in winners.json '
+                         'and write a combined summary CSV.')
+    ap.add_argument('--variant', default='csa', choices=['csa', 'base'],
+                    help='Which trained variant to diagnose.')
+    ap.add_argument('--window', type=int, default=30,
+                    help='Sliding-window size in test-set days.')
+    ap.add_argument('--n-perm', type=int, default=2000,
+                    help='Permutation iterations for the DA null distribution.')
+    ap.add_argument('--walkforward', action='store_true',
+                    help='Run the walk-forward retrain diagnostic (slow).')
+    ap.add_argument('--wf-step', type=int, default=20,
+                    help='Walk-forward window size and stride.')
+    ap.add_argument('--wf-min-train', type=int, default=0,
+                    help='Minimum training rows before the first walk-forward '
+                         'cutoff. 0 → use the pre-test segment length.')
+    ap.add_argument('--seed', type=int, default=RANDOM_STATE)
+    ap.add_argument('--out-dir', default=os.path.join(HERE, 'output_diagnostics'))
+    args = ap.parse_args()
+
+    if args.all_winners:
+        pairs = _load_winner_pairs()
+        print(f'Sweeping {len(pairs)} winner pair(s) from winners.json')
+    else:
+        if not args.tag or args.horizon is None:
+            ap.error('--tag and --horizon are required unless --all-winners is set.')
+        pairs = [(args.tag, args.horizon)]
+
+    summaries: List[Dict] = []
+    for tag, horizon in sorted(pairs, key=lambda x: (x[1], x[0])):
+        try:
+            summaries.append(run_one_pair(tag, horizon, args))
+        except Exception as e:  # noqa: BLE001
+            print(f'\n[{tag} h{horizon}] FAILED: {e}')
+            summaries.append({'tag': tag, 'horizon': horizon,
+                              'variant': args.variant, 'error': str(e)})
+
+    if args.all_winners:
+        os.makedirs(args.out_dir, exist_ok=True)
+        out_csv = os.path.join(args.out_dir,
+                               f'overfit_check_all_winners_{args.variant}.csv')
+        pd.DataFrame(summaries).to_csv(out_csv, index=False)
+        print(f'\nCombined summary: {out_csv}')
 
 
 if __name__ == '__main__':

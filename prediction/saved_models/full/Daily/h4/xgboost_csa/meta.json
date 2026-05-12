@@ -42,20 +42,20 @@
     "HMM_State_lag9",
     "HMM_State_lag10",
     "HMM_State_lag11",
-    "HMM_State_lag12",
-    "HMM_State_lag13",
-    "HMM_State_lag14",
-    "Sentiment_Score_lag44",
+    "Sentiment_Score_lag5",
+    "Sentiment_Score_lag10",
+    "Sentiment_Score_lag20",
+    "Sentiment_Score_lag30",
     "Sentiment_x_Return",
     "Volatility_x_RSI"
   ],
   "params": {
     "n_estimators": 50,
-    "max_depth": 9,
+    "max_depth": 3,
     "learning_rate": 0.01,
-    "subsample": 0.983075077613284,
-    "colsample_bytree": 0.9970965675069663,
-    "min_child_weight": 7
+    "subsample": 0.6015007324222378,
+    "colsample_bytree": 0.7420101656476854,
+    "min_child_weight": 10
   },
-  "saved_at": "2026-05-10T13:07:11.502112"
+  "saved_at": "2026-05-11T22:23:02.330256"
 }

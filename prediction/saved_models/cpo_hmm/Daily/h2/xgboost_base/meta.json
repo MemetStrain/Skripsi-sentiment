@@ -28,7 +28,6 @@
     "DayOfWeek_Cos",
     "WeekOfYear_Sin",
     "WeekOfYear_Cos",
-    "HMM_State_lag2",
     "HMM_State_lag3",
     "HMM_State_lag4",
     "HMM_State_lag5",
@@ -38,9 +37,6 @@
     "HMM_State_lag9",
     "HMM_State_lag10",
     "HMM_State_lag11",
-    "HMM_State_lag12",
-    "HMM_State_lag13",
-    "HMM_State_lag14",
     "Log_Return_lag2",
     "Log_Return_lag3",
     "Volatility_x_RSI"
@@ -56,5 +52,5 @@
     "random_state": 42,
     "verbose": true
   },
-  "saved_at": "2026-05-09T18:23:49.203883"
+  "saved_at": "2026-05-10T19:10:56.584229"
 }

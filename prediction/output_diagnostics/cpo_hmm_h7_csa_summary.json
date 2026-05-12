@@ -1,0 +1,15 @@
+{
+  "tag": "cpo_hmm",
+  "horizon": 7,
+  "variant": "csa",
+  "n_test": 60,
+  "observed_da": 71.66666666666667,
+  "sliding_mean": 76.88172043010753,
+  "sliding_std": 10.781860070093996,
+  "sliding_below50_pct": 0.0,
+  "permutation_p": 0.0015,
+  "permutation_null_mean": 49.92666666666666,
+  "walkforward_mean": 71.66666666666667,
+  "walkforward_std": 17.55942292142123,
+  "walkforward_below50_pct": 0.0
+}
