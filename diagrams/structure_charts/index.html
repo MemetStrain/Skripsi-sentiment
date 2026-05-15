@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Charts (per DFD Process) — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.05); padding: 1.25rem 1.5rem; transition: transform 120ms ease, box-shadow 120ms ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,.08), 0 12px 24px rgba(0,0,0,.08); }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .pill { display: inline-block; background: #ccfbf1; color: #0f766e; border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.7rem; font-weight: 600; margin-right: 0.25rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Charts (per DFD Process)</h1>
+      <p class="text-teal-100 text-sm mt-1">Lima structure chart — satu per proses pada DFD Level 1.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2">
+    <a href="../data_flow_diagram.html" class="nav-pill">Data Flow Diagram</a>
+    <a href="../structure_chart.html" class="nav-pill">Structure Chart (Legacy, by Entry Point)</a>
+    <a href="../flowchart.html" class="nav-pill">Flowchart</a>
+    <a href="../pseudocode.html" class="nav-pill">Pseudocode</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-10">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Sesuai paradigma analisis terstruktur Yourdon/Constantine, setiap proses
+        pada Data Flow Diagram (DFD) Level 1 didekomposisi menjadi struktur
+        modul kode-nya sendiri. Sistem ini memiliki lima proses (P1–P5);
+        karena itu ada lima structure chart, masing-masing berakar pada fungsi
+        yang mengimplementasikan proses tersebut. Tabel di bawah memetakan
+        proses ke akar struktur chart-nya.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pemetaan DFD → Structure Chart</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>No</th><th>Proses DFD</th><th>Akar Structure Chart</th><th>Modul Implementasi</th><th>Buka</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>1.0</td>
+              <td><strong>Price Acquisition</strong></td>
+              <td><code>_step_price(db, paths)</code></td>
+              <td><code>scheduler/main.py</code> + <code>price_fetcher.py</code>, <code>local_csv_writer.py</code>, <code>firestore_writer.py</code></td>
+              <td><a class="nav-pill" href="P1_price_acquisition.html">P1 →</a></td>
+            </tr>
+            <tr>
+              <td>2.0</td>
+              <td><strong>News Acquisition</strong></td>
+              <td><code>_step_news(paths)</code></td>
+              <td><code>scheduler/main.py</code> + <code>news_extractor.py</code>, <code>local_csv_writer.py</code>, <code>firestore_writer.py</code></td>
+              <td><a class="nav-pill" href="P2_news_acquisition.html">P2 →</a></td>
+            </tr>
+            <tr>
+              <td>3.0</td>
+              <td><strong>Sentiment Analysis &amp; Aggregation</strong></td>
+              <td>Root virtual P3 → <code>run_sentiment_on_articles</code> + <code>compute_sentiment_aggregates</code></td>
+              <td><code>scheduler/sentiment_runner.py</code> (transformers + torch, title-only)</td>
+              <td><a class="nav-pill" href="P3_sentiment.html">P3 →</a></td>
+            </tr>
+            <tr>
+              <td>4.0</td>
+              <td><strong>HMM State Decoding</strong></td>
+              <td><code>update_hmm_states(db)</code></td>
+              <td><code>scheduler/hmm_updater.py</code> (hmmlearn, scipy, numpy)</td>
+              <td><a class="nav-pill" href="P4_hmm_decoding.html">P4 →</a></td>
+            </tr>
+            <tr>
+              <td>5.0</td>
+              <td><strong>Dashboard &amp; Live Inference</strong></td>
+              <td><code>python manage.py runserver</code></td>
+              <td><code>website/manage.py</code> → Django boot → <code>web/urls.py</code> → <code>web/views.py</code> + <code>web/predictor.py</code> + <code>prediction/feature_engineering.py</code></td>
+              <td><a class="nav-pill" href="P5_dashboard.html">P5 →</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Konvensi Notasi (berlaku untuk semua chart)</h2>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li>Kotak menyatakan modul / fungsi; panah <em>caller → callee</em>.</li>
+        <li>Label panah menyatakan data yang dilewatkan (parameter penting).</li>
+        <li>Tabel coupling pada setiap chart menggantikan notasi data-couple /
+            control-couple klasik (lingkaran berekor) karena Mermaid tidak mendukung notasi tersebut secara native.</li>
+        <li>Warna konsisten: <span class="pill">root</span> = akar proses;
+            <span class="pill">util</span> = fungsi modul internal;
+            <span class="pill">priv</span> = helper privat di modul yang sama;
+            <span class="pill">ext</span> = pustaka eksternal;
+            <span class="pill">store</span> = data store dari DFD.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pranala Cepat</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a href="P1_price_acquisition.html" class="card block">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P1 · DFD 1.0</div>
+          <div class="text-base font-semibold mt-1">Price Acquisition</div>
+          <div class="text-sm text-slate-600 mt-1">Akar: <code>_step_price(db, paths)</code> · CSV-as-truth → Firestore <code>daily_prices</code>.</div>
+        </a>
+        <a href="P2_news_acquisition.html" class="card block">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P2 · DFD 2.0</div>
+          <div class="text-base font-semibold mt-1">News Acquisition</div>
+          <div class="text-sm text-slate-600 mt-1">Akar: <code>_step_news(paths)</code> · Scrape MPOB, preprocess, append 3 CSV + mirror Firestore.</div>
+        </a>
+        <a href="P3_sentiment.html" class="card block">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P3 · DFD 3.0</div>
+          <div class="text-base font-semibold mt-1">Sentiment Analysis &amp; Aggregation</div>
+          <div class="text-sm text-slate-600 mt-1">Akar virtual: <code>run_sentiment_on_articles</code> + <code>compute_sentiment_aggregates</code>.</div>
+        </a>
+        <a href="P4_hmm_decoding.html" class="card block">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P4 · DFD 4.0</div>
+          <div class="text-base font-semibold mt-1">HMM State Decoding</div>
+          <div class="text-sm text-slate-600 mt-1">Akar: <code>update_hmm_states(db)</code> · Frozen params + forward filter, no Viterbi.</div>
+        </a>
+        <a href="P5_dashboard.html" class="card block md:col-span-2">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
+          <div class="text-base font-semibold mt-1">Dashboard &amp; Live Inference</div>
+          <div class="text-sm text-slate-600 mt-1">Akar: <code>python manage.py runserver</code> · Django boot → URL dispatcher → 4 views → predictor + feature_engineering + XGBoost <code>.pkl</code>.</div>
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

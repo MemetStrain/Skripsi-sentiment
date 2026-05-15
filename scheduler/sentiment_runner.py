@@ -1,11 +1,9 @@
 """
 sentiment_runner.py — Run FinBERT-Tone sentiment analysis on new MPOB articles.
 
-Sentence-level pipeline: each article's content is split with NLTK, FinBERT-Tone
-scores each sentence, low-confidence sentences are dropped, and the remaining
-probabilities are averaged. Title is scored as a single sentence and combined
-with the content mean (0.3 / 0.7 weighting) when the title clears the same
-confidence threshold.
+Title-only pipeline: each article's headline is scored by FinBERT-Tone and the
+result is used as the article's sentiment. Mirrors the offline reference
+news/finbert_tone_sentiment_analysis.py running with --mode title.
 
 Operates on in-memory list of dicts (no CSV I/O).
 GPU is used automatically if available; falls back to CPU.
@@ -20,39 +18,11 @@ logger = logging.getLogger(__name__)
 
 MODEL_NAME = 'yiyanghkust/finbert-tone'
 MAX_LENGTH = 512
-BATCH_SIZE = 16  # Articles per batch (sentences within are flattened for inference)
-SENTENCE_CONFIDENCE_THRESHOLD = 0.5  # Drop sentences whose max-class probability is below this
-TITLE_WEIGHT = 0.3
-CONTENT_WEIGHT = 0.7
+BATCH_SIZE = 16  # Articles per batch
 
 # yiyanghkust/finbert-tone id2label is {0: Neutral, 1: Positive, 2: Negative} —
 # DIFFERENT from ProsusAI/finbert. Hardcoded to match the model's id2label.
 LABELS = ['Neutral', 'Positive', 'Negative']  # index-aligned with model output
-
-
-def _ensure_nltk_punkt():
-    """Ensure NLTK's punkt_tab tokenizer data is available; download once if missing."""
-    import nltk
-    try:
-        nltk.data.find('tokenizers/punkt_tab')
-    except LookupError:
-        logger.info('Downloading NLTK punkt_tab tokenizer (one-time)')
-        nltk.download('punkt_tab', quiet=True)
-
-
-def _split_into_sentences(text: str) -> list[str]:
-    """Split a content string into sentences via NLTK. Returns [] for empty input."""
-    if not text:
-        return []
-    from nltk.tokenize import sent_tokenize
-    text = text.strip()
-    if not text:
-        return []
-    try:
-        return [s.strip() for s in sent_tokenize(text) if s.strip()]
-    except Exception as exc:
-        logger.warning('NLTK sent_tokenize failed; treating whole text as one sentence: %s', exc)
-        return [text]
 
 
 def _load_model():
@@ -90,69 +60,37 @@ def _score_texts(texts, model, tokenizer, device):
     return probs
 
 
-def _aggregate_content(probs_arr):
-    """Mean probabilities across content sentences with the confidence filter.
-
-    Returns (mean_neu, mean_pos, mean_neg, n_total, n_used, fallback_triggered).
-    For empty input returns (None, 0, 0, False) — caller decides how to handle that.
-    """
-    n_total = int(probs_arr.shape[0])
-    if n_total == 0:
-        return (None, 0, 0, False)
-
-    max_per_row = probs_arr.max(axis=1)
-    keep_mask = max_per_row >= SENTENCE_CONFIDENCE_THRESHOLD
-    n_kept = int(keep_mask.sum())
-
-    fallback = False
-    if n_kept == 0:
-        kept = probs_arr
-        n_used = n_total
-        fallback = True
-    else:
-        kept = probs_arr[keep_mask]
-        n_used = n_kept
-
-    return (kept.mean(axis=0), n_total, n_used, fallback)
-
-
 def run_sentiment_on_articles(articles: list[dict]) -> list[dict]:
     """
-    Add sentiment fields to each article dict in-place.
+    Add sentiment fields to each article dict in-place, scoring the title only.
 
     Fields added: sentiment_label, sentiment_score, positive_prob,
-                  negative_prob, neutral_prob.
+                  negative_prob, neutral_prob, combined_confidence,
+                  title_sentiment, title_confidence, title_{neutral,positive,negative}_prob.
 
-    Internally uses sentence-level FinBERT-Tone scoring, mean-probability
-    aggregation with a confidence filter, and a 0.3/0.7 title/content weighted
-    combine. Returns the same list with sentiment fields added.
+    Combined_* mirrors Title_* — the body text is no longer scored. Articles
+    with an empty title get a degenerate Neutral result.
     """
     if not articles:
         return articles
 
-    _ensure_nltk_punkt()
     model, tokenizer, device = _load_model()
 
     for i in range(0, len(articles), BATCH_SIZE):
         batch = articles[i:i + BATCH_SIZE]
 
-        # Build flat sentence list across the whole batch with index tracking.
-        flat_texts = []
-        meta = []  # one tuple per article: (title_idx_or_none, content_start, content_end)
+        flat_titles = []
+        meta = []  # one entry per article: title_idx_or_none
         for a in batch:
             title = (a.get('title') or '').strip()
-            title_idx = None
             if title:
-                title_idx = len(flat_texts)
-                flat_texts.append(title)
-            sentences = _split_into_sentences(a.get('content') or '')
-            content_start = len(flat_texts)
-            flat_texts.extend(sentences)
-            content_end = len(flat_texts)
-            meta.append((title_idx, content_start, content_end))
+                meta.append(len(flat_titles))
+                flat_titles.append(title)
+            else:
+                meta.append(None)
 
         try:
-            probs = _score_texts(flat_texts, model, tokenizer, device)
+            probs = _score_texts(flat_titles, model, tokenizer, device)
         except Exception as e:
             logger.warning('Sentiment batch %d failed: %s', i // BATCH_SIZE, e)
             for a in batch:
@@ -163,28 +101,11 @@ def run_sentiment_on_articles(articles: list[dict]) -> list[dict]:
                 a.setdefault('neutral_prob', 0.34)
             continue
 
-        for a, (title_idx, content_start, content_end) in zip(batch, meta):
-            # Title: single sentence; keep if confidence clears threshold.
+        for a, title_idx in zip(batch, meta):
             if title_idx is None:
-                title_probs = None
-                title_passed = False
-            else:
-                title_probs = probs[title_idx]
-                title_passed = float(title_probs.max()) >= SENTENCE_CONFIDENCE_THRESHOLD
-
-            # Content: aggregate with filter (and fallback to all-sentences if all filtered).
-            content_mean, n_total, n_used, fallback = _aggregate_content(
-                probs[content_start:content_end])
-
-            # Combine. Order: [Neutral, Positive, Negative].
-            if content_mean is not None and title_passed:
-                combined = TITLE_WEIGHT * title_probs + CONTENT_WEIGHT * content_mean
-            elif content_mean is not None:
-                combined = content_mean
-            elif title_probs is not None:
-                combined = title_probs
-            else:
                 combined = np.array([1.0, 0.0, 0.0])  # degenerate neutral
+            else:
+                combined = probs[title_idx]
 
             label_idx = int(np.argmax(combined))
             label = LABELS[label_idx]
@@ -198,31 +119,15 @@ def run_sentiment_on_articles(articles: list[dict]) -> list[dict]:
                 'negative_prob': round(neg, 4),
                 'neutral_prob': round(neu, 4),
                 'combined_confidence': round(float(combined.max()), 4),
-                'content_sentence_count': int(n_total),
-                'content_sentence_used':  int(n_used),
-                'content_filter_fallback': bool(fallback),
             })
 
-            # Per-title diagnostics (for parity with the offline tone CSV schema).
-            if title_probs is not None:
-                t_idx = int(np.argmax(title_probs))
+            if title_idx is not None:
                 a.update({
-                    'title_sentiment':     LABELS[t_idx],
-                    'title_confidence':    round(float(title_probs.max()), 4),
-                    'title_neutral_prob':  round(float(title_probs[0]), 4),
-                    'title_positive_prob': round(float(title_probs[1]), 4),
-                    'title_negative_prob': round(float(title_probs[2]), 4),
-                })
-
-            # Per-content diagnostics.
-            if content_mean is not None:
-                c_idx = int(np.argmax(content_mean))
-                a.update({
-                    'content_sentiment':     LABELS[c_idx],
-                    'content_confidence':    round(float(content_mean.max()), 4),
-                    'content_neutral_prob':  round(float(content_mean[0]), 4),
-                    'content_positive_prob': round(float(content_mean[1]), 4),
-                    'content_negative_prob': round(float(content_mean[2]), 4),
+                    'title_sentiment':     label,
+                    'title_confidence':    round(float(combined.max()), 4),
+                    'title_neutral_prob':  round(neu, 4),
+                    'title_positive_prob': round(pos, 4),
+                    'title_negative_prob': round(neg, 4),
                 })
 
         if (i // BATCH_SIZE) % 10 == 0:

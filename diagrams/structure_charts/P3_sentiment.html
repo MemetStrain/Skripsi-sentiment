@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P3 Sentiment Analysis &amp; Aggregation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P3 Sentiment Analysis &amp; Aggregation</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 3.0 (DFD Level 1) — FinBERT-Tone <em>title-only</em> scoring + agregat harian.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill active">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P3 — Sentiment Analysis &amp; Aggregation</strong> dari
+        DFD Level 1 diimplementasikan oleh dua fungsi entry-point di
+        <code>scheduler/sentiment_runner.py</code>:
+        <code>run_sentiment_on_articles(articles)</code> (scoring per artikel)
+        dan <code>compute_sentiment_aggregates(articles)</code> (agregat
+        harian). Implementasi saat ini bersifat <em>title-only</em> — hanya
+        judul artikel yang di-skor oleh FinBERT-Tone; isi (content) tidak
+        dijalankan melalui model, dan field <code>Combined_*</code> dibuat
+        identik dengan <code>Title_*</code>. Tidak ada tokenisasi kalimat
+        (NLTK) maupun confidence-filter. Pemanggilan kedua entry-point berasal
+        dari <code>scheduler/main.py::run_daily_update</code>, yang juga
+        memanggil <code>write_news_articles</code> (back-write field sentimen
+        ke D2) dan <code>write_sentiment_aggregates</code> (tulis D3). Karena
+        P3 adalah satu proses logis pada DFD dengan beberapa fungsi
+        penyusun, structure chart ini memakai satu node <em>virtual</em>
+        sebagai akar P3.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    ROOT(("P3<br/>Sentiment Analysis<br/>&amp; Aggregation")):::root
+
+    %% --- entry-point functions ---
+    ROOT -->|"articles[] (cleaned)"| RSA["run_sentiment_on_articles(articles)<br/>sentiment_runner.py"]:::entry
+    ROOT -->|"articles[] (with sentiment)"| CSA["compute_sentiment_aggregates(articles)<br/>sentiment_runner.py"]:::entry
+
+    %% --- D2/D3 writers + CSV helper (orchestrated by run_daily_update) ---
+    ROOT -->|"db, scored articles[]"| WNA["write_news_articles(db, articles)<br/>firestore_writer.py (→ D2)"]:::util
+    ROOT -->|"db, aggregates[]"| WSA["write_sentiment_aggregates(db, aggs)<br/>firestore_writer.py (→ D3)"]:::util
+    ROOT -->|"raw + sent CSV paths<br/>(incremental rebuild)"| LNC["load_news_from_csv(raw, sent)<br/>news_extractor.py (← local CSV cache of D2)"]:::util
+
+    %% --- run_sentiment_on_articles internals ---
+    RSA -->|"—"| LM["_load_model()<br/>sentiment_runner.py"]:::priv
+    RSA -->|"flat titles[], model, tokenizer, device<br/>(per batch of 16)"| ST["_score_texts(texts, model, tokenizer, device)<br/>sentiment_runner.py"]:::priv
+    RSA -->|"combined probs (Nx3)"| NPF["np.argmax / np.array<br/>numpy"]:::ext
+
+    %% --- _load_model children ---
+    LM -->|"torch.cuda.is_available()"| TD["torch.device(...)<br/>torch"]:::ext
+    LM -->|"MODEL_NAME"| AT["AutoTokenizer.from_pretrained()<br/>transformers (HF Hub)"]:::ext
+    LM -->|"MODEL_NAME"| AMSC["AutoModelForSequenceClassification.from_pretrained()<br/>transformers (HF Hub)"]:::ext
+
+    %% --- _score_texts children ---
+    ST -->|"texts, truncation, padding, max_length=512"| TOK["tokenizer(texts, ...)<br/>transformers (callable)"]:::ext
+    ST -->|"input_ids, attention_mask<br/>(inside torch.no_grad)"| MOD["model(**inputs)<br/>torch (forward)"]:::ext
+    ST -->|"logits, dim=-1"| SM["torch.softmax(...)<br/>torch"]:::ext
+
+    %% --- compute_sentiment_aggregates is stdlib-only ---
+    CSA -->|"per-article: date + probs + score"| DD["defaultdict bucket → mean<br/>(collections, inline)"]:::inline
+    CSA -->|"per-date triplet (pos, neg, neu)"| MX["max(...) → dominant_sentiment<br/>(builtin, inline)"]:::inline
+
+    %% --- writers share the same _batch_write helper ---
+    WNA -->|"URL string"| URI["url_to_doc_id(url)<br/>firestore_writer.py"]:::priv
+    WNA -->|"ops list"| BW["_batch_write(db, ops)<br/>firestore_writer.py"]:::priv
+    WSA -->|"ops list"| BW
+
+    classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
+    classDef entry fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+    classDef priv  fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#312e81;
+    classDef ext   fill:#fae8ff,stroke:#86198f,stroke-width:1px,color:#701a75;
+    classDef inline fill:#fef9c3,stroke:#a16207,stroke-width:1px,color:#713f12;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda: <span class="px-1 rounded" style="background:#fde68a;border:1px solid #92400e">kuning</span> = root virtual P3,
+        <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = entry-point fungsi P3,
+        <span class="px-1 rounded" style="background:#dbeafe;border:1px solid #1e40af">biru</span> = fungsi modul internal,
+        <span class="px-1 rounded" style="background:#e0e7ff;border:1px solid #4338ca">indigo</span> = helper privat,
+        <span class="px-1 rounded" style="background:#fae8ff;border:1px solid #86198f">ungu</span> = pustaka eksternal (HuggingFace transformers / PyTorch / numpy),
+        <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #a16207">krem</span> = logika inline (stdlib, bukan pemanggilan fungsi terpisah).
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Modul</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Modul</th><th>Fungsi</th><th>Parameter</th><th>Mengembalikan</th></tr></thead>
+          <tbody>
+            <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>run_sentiment_on_articles(articles)</code></td>
+                <td><code>list[dict]</code> artikel (post-preprocessing)</td>
+                <td><code>list[dict]</code> dimutasi in-place dengan field <code>sentiment_label</code>, <code>sentiment_score</code>, <code>{positive,negative,neutral}_prob</code>, <code>combined_confidence</code>, dan <code>title_*</code> diagnostics</td></tr>
+            <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>compute_sentiment_aggregates(articles)</code></td>
+                <td><code>list[dict]</code> artikel ber-sentimen</td>
+                <td><code>list[dict]</code> per-tanggal: <code>article_count</code>, <code>positive_prob</code>, <code>negative_prob</code>, <code>neutral_prob</code>, <code>sentiment_score</code>, <code>dominant_sentiment</code>, <code>frequency='Daily'</code></td></tr>
+            <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>_load_model()</code></td>
+                <td>—</td>
+                <td><code>(model, tokenizer, device)</code></td></tr>
+            <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>_score_texts(texts, model, tokenizer, device)</code></td>
+                <td>list judul (string) + bundle model</td>
+                <td><code>ndarray</code> Nx3 dengan kolom = [Neutral, Positive, Negative]</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>write_news_articles(db, articles)</code></td>
+                <td>db + list dict (URL → md5 doc ID)</td>
+                <td><code>int</code> jumlah doc; back-write field sentimen ke D2</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>write_sentiment_aggregates(db, aggs)</code></td>
+                <td>db + list agregat</td>
+                <td><code>int</code> jumlah doc D3 (<code>Daily_YYYY-MM-DD</code>)</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>url_to_doc_id(url)</code></td>
+                <td>URL string</td>
+                <td><code>str</code> md5 32-char</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>_batch_write(db, ops)</code></td>
+                <td>list ops <code>(doc_ref, data, merge)</code></td>
+                <td><code>int</code> total doc; commit per 100 doc, sleep 1s antar batch</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>load_news_from_csv(raw, sent)</code></td>
+                <td>path CSV raw + CSV sentiment-tone</td>
+                <td><code>list[dict]</code> (di-pakai pada path rebuild aggregates per affected dates)</td></tr>
+            <tr><td><code>transformers</code></td><td><code>AutoTokenizer.from_pretrained / AutoModelForSequenceClassification.from_pretrained</code></td>
+                <td><code>MODEL_NAME = 'yiyanghkust/finbert-tone'</code></td>
+                <td>tokenizer / model instance (loaded once per process)</td></tr>
+            <tr><td><code>torch</code></td><td><code>torch.device, torch.cuda.is_available, torch.no_grad, torch.softmax</code></td>
+                <td>—</td>
+                <td>device handle, context manager, probabilitas</td></tr>
+            <tr><td><code>numpy</code></td><td><code>np.argmax, np.array</code></td>
+                <td>ndarray Nx3</td>
+                <td>indeks label dominan; ndarray degenerate <code>[1, 0, 0]</code> untuk title kosong</td></tr>
+            <tr><td><code>collections</code> / builtin</td><td><code>defaultdict</code> + <code>max(...)</code></td>
+                <td>per-tanggal bucket</td>
+                <td>agregat &amp; label dominan</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Coupling (Data yang Dilewatkan)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
+          <tbody>
+            <tr><td>Caller (P3 root / <code>run_daily_update</code>)</td><td><code>run_sentiment_on_articles</code></td><td><code>list[dict]</code> artikel</td><td>Stamp + Hybrid (mutasi in-place)</td></tr>
+            <tr><td>Caller (P3 root / <code>run_daily_update</code>)</td><td><code>compute_sentiment_aggregates</code></td><td><code>list[dict]</code> artikel ber-sentimen</td><td>Stamp</td></tr>
+            <tr><td>Caller</td><td><code>load_news_from_csv</code></td><td>2 path string</td><td>Data</td></tr>
+            <tr><td><code>run_sentiment_on_articles</code></td><td><code>_load_model</code></td><td>—</td><td>Data (return triple)</td></tr>
+            <tr><td><code>run_sentiment_on_articles</code></td><td><code>_score_texts</code></td><td>flat titles[] + model + tokenizer + device</td><td>Stamp + Common (objek model dibagi antar iterasi)</td></tr>
+            <tr><td><code>run_sentiment_on_articles</code></td><td><code>np.argmax</code></td><td>ndarray 1×3</td><td>Data</td></tr>
+            <tr><td><code>_load_model</code></td><td><code>AutoTokenizer/AutoModel.from_pretrained</code></td><td><code>MODEL_NAME</code> (scalar)</td><td>Data</td></tr>
+            <tr><td><code>_score_texts</code></td><td><code>tokenizer(...)</code></td><td>list judul + flags (return_tensors, padding, truncation)</td><td>Data</td></tr>
+            <tr><td><code>_score_texts</code></td><td><code>model(**inputs)</code></td><td>dict tensor (input_ids, attention_mask)</td><td>Stamp</td></tr>
+            <tr><td><code>_score_texts</code></td><td><code>torch.softmax</code></td><td>logits tensor + axis</td><td>Data</td></tr>
+            <tr><td><code>write_news_articles</code></td><td><code>url_to_doc_id</code></td><td>URL string</td><td>Data</td></tr>
+            <tr><td><code>write_news_articles</code></td><td><code>_batch_write</code></td><td>list ops</td><td>Stamp</td></tr>
+            <tr><td><code>write_sentiment_aggregates</code></td><td><code>_batch_write</code></td><td>list ops</td><td>Stamp</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Title-only:</strong> hanya judul artikel yang di-skor; field
+            <code>Combined_*</code> identik dengan <code>Title_*</code>. Body
+            (<code>content</code>) tidak masuk ke model. Mirror dari skrip referensi
+            offline <code>news/finbert_tone_sentiment_analysis.py --mode title</code>.</li>
+        <li><strong>Empty-title fallback:</strong> artikel dengan judul kosong
+            mendapat hasil degenerate Neutral
+            (<code>combined = np.array([1.0, 0.0, 0.0])</code>) dan field
+            <code>title_*</code> tidak ditulis untuk artikel tersebut.</li>
+        <li><strong>Batch &amp; device:</strong> ukuran batch 16 artikel;
+            <code>torch.device</code> dipilih otomatis (CUDA bila tersedia,
+            kalau tidak fallback CPU); forward pass berada di dalam
+            <code>torch.no_grad()</code>.</li>
+        <li><strong>Label space:</strong>
+            <code>yiyanghkust/finbert-tone id2label = {0: Neutral, 1: Positive, 2: Negative}</code>
+            — berbeda dengan <code>ProsusAI/finbert</code>; di-hardcode di array
+            <code>LABELS</code>.</li>
+        <li><strong>Skor sentimen:</strong> didefinisikan sebagai
+            <code>positive_prob − negative_prob</code> (range −1 .. +1);
+            <code>combined_confidence</code> = <code>combined.max()</code>.</li>
+        <li><strong>Bukan</strong> sentence-level: tidak ada
+            <code>_split_into_sentences</code>, tidak ada
+            <code>_aggregate_content</code>, tidak ada
+            <code>_ensure_nltk_punkt</code>, tidak ada confidence-threshold (0.5)
+            — semua peninggalan implementasi lama telah dihapus.</li>
+        <li><strong>Agregasi murni stdlib:</strong>
+            <code>compute_sentiment_aggregates</code> hanya memakai
+            <code>collections.defaultdict</code> dan <code>max(...)</code>; tidak
+            ada dependensi numpy/torch pada path ini. Rumus: rata-rata
+            probabilitas + skor per tanggal, label dominan = argmax dari
+            (pos, neg, neu).</li>
+        <li><strong>Path inkremental P3:</strong>
+            <code>run_daily_update</code> hanya merebuild agregat untuk
+            <em>affected_dates</em> (tanggal yang menerima artikel baru), dengan
+            meload ulang seluruh artikel di tanggal itu dari CSV lokal
+            (<code>load_news_from_csv</code>) — supaya tidak undercount kalau
+            sebelumnya hanya sebagian artikel yang sudah teragregat.</li>
+        <li><strong>Output ke DFD:</strong> hasil sentimen di-back-write ke
+            <strong>D2 (news_articles)</strong> via
+            <code>write_news_articles</code>, dan agregat harian ditulis ke
+            <strong>D3 (sentiment_aggregates)</strong> via
+            <code>write_sentiment_aggregates</code>. Kedua writer berbagi
+            helper <code>_batch_write</code> yang commit per 100 dokumen +
+            <code>sleep(1)</code> antar batch untuk respect quota Firestore.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P4 HMM State Decoding</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P4 HMM State Decoding</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 4.0 (DFD Level 1) — decoding state HMM dengan parameter beku + forward filter.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill active">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P4 — HMM State Decoding</strong> dari DFD Level 1
+        diimplementasikan oleh fungsi <code>update_hmm_states(db)</code> di
+        <code>scheduler/hmm_updater.py</code>. P4 tidak pernah me-refit HMM —
+        parameter beku dimuat dari Firestore D5 (<code>hmm_models/Daily</code>),
+        fitur dibangun ulang dari D1 (<code>daily_prices</code>), kemudian
+        <em>online forward filter</em> menetapkan state per tanggal yang ditulis
+        ke D4 (<code>hmm_states</code>). Akar struktur chart ini adalah
+        <code>update_hmm_states</code>.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    ROOT["update_hmm_states(db, write_existing=False)<br/>scheduler/hmm_updater.py"]:::root
+
+    ROOT -->|"db, 'Daily'"| RHP["read_hmm_params(db, freq)<br/>firestore_writer.py (← D5)"]:::util
+    ROOT -->|"db.collection('daily_prices')"| PRC["price_docs stream<br/>(← D1)"]:::inline
+    ROOT -->|"price_df, vol_w, norm_w"| BHF["_build_hmm_features(df, vw, nw)<br/>hmm_updater.py"]:::priv
+    ROOT -->|"params dict"| HFP["_hmm_from_params(params)<br/>hmm_updater.py"]:::priv
+    ROOT -->|"model, X ndarray"| FF["_forward_filter(model, X)<br/>hmm_updater.py"]:::priv
+    ROOT -->|"db.collection('hmm_states')"| EXIST["existing_dates stream<br/>(skip already-written)"]:::inline
+    ROOT -->|"db, to_write[]"| WSB["write_hmm_states_batch(db, states)<br/>firestore_writer.py (→ D4)"]:::util
+
+    BHF -->|"close series, 14"| WRSI["_wilder_rsi(close, period=14)<br/>hmm_updater.py"]:::priv
+    BHF -->|"close series, 12, 26"| MAC["_macd_line(close, 12, 26)<br/>hmm_updater.py"]:::priv
+    BHF -->|"close series, 20, 2.0"| BBW["_bb_width_absolute(close, 20, 2.0)<br/>hmm_updater.py"]:::priv
+    BHF -->|"series, norm_w (×4)"| RZ["_rolling_zscore(series, w)<br/>hmm_updater.py"]:::priv
+
+    HFP -->|"n_components, cov_type,<br/>init_params, params, min_covar"| GHMM["hmm.GaussianHMM(...)<br/>hmmlearn"]:::ext
+    HFP -->|"startprob_/transmat_/means_/covars_ (×4)"| NPA["np.asarray(...)<br/>numpy"]:::ext
+
+    FF -->|"X ndarray"| CLL["model._compute_log_likelihood(X)<br/>hmmlearn"]:::ext
+    FF -->|"log_alpha[t-1] + log_trans"| LSE["scipy.special.logsumexp()<br/>scipy"]:::ext
+    FF -->|"log_alpha"| ARGMAX["np.argmax(axis=1)<br/>numpy"]:::ext
+
+    RHP -->|"db, doc"| FSGET["doc.get() / payload_json<br/>(firebase_admin + json)"]:::ext
+    WSB -->|"ops list"| BW["_batch_write(db, ops)<br/>firestore_writer.py"]:::priv
+
+    classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
+    classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+    classDef priv  fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#312e81;
+    classDef ext   fill:#fae8ff,stroke:#86198f,stroke-width:1px,color:#701a75;
+    classDef inline fill:#fef9c3,stroke:#a16207,stroke-width:1px,color:#713f12;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda: <span class="px-1 rounded" style="background:#fde68a;border:1px solid #92400e">kuning</span> = root,
+        <span class="px-1 rounded" style="background:#dbeafe;border:1px solid #1e40af">biru</span> = fungsi modul internal,
+        <span class="px-1 rounded" style="background:#e0e7ff;border:1px solid #4338ca">indigo</span> = helper privat,
+        <span class="px-1 rounded" style="background:#fae8ff;border:1px solid #86198f">ungu</span> = pustaka eksternal,
+        <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #a16207">krem</span> = pemanggilan Firestore inline (bukan fungsi terpisah).
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Modul</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Modul</th><th>Fungsi</th><th>Parameter</th><th>Mengembalikan</th></tr></thead>
+          <tbody>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>update_hmm_states(db, write_existing=False)</code></td>
+                <td>Firestore client + flag overwrite</td>
+                <td>None — menulis ke D4</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_build_hmm_features(df, vol_w, norm_w)</code></td>
+                <td>DataFrame OHLCV + window size</td>
+                <td>DataFrame 6 kolom: Date, Log_Return_Z, Volatility_Z, RSI_norm, MACD_Z, BB_Width_Z</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_wilder_rsi(close, period=14)</code></td>
+                <td>Series close + period</td>
+                <td>Series RSI (Wilder)</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_macd_line(close, 12, 26)</code></td>
+                <td>Series close + fast/slow</td>
+                <td>Series MACD (EMA fast − EMA slow)</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_bb_width_absolute(close, 20, 2.0)</code></td>
+                <td>Series close + window + n_std</td>
+                <td>Series lebar Bollinger absolut</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_rolling_zscore(series, window)</code></td>
+                <td>Series + window size</td>
+                <td>Series Z-score causal (no lookahead)</td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_hmm_from_params(params)</code></td>
+                <td>dict params (n_components, transmat_, startprob_, means_, covars_)</td>
+                <td><code>hmm.GaussianHMM</code> ter-set tanpa <code>fit()</code></td></tr>
+            <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>_forward_filter(model, X)</code></td>
+                <td>GaussianHMM + ndarray fitur</td>
+                <td><code>ndarray</code> argmax state per t (online)</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>read_hmm_params(db, frequency)</code></td>
+                <td>db + 'Daily'</td>
+                <td><code>dict | None</code> (parse <code>payload_json</code>)</td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>write_hmm_states_batch(db, states)</code></td>
+                <td>db + list dict state</td>
+                <td><code>int</code> jumlah doc ditulis ke D4</td></tr>
+            <tr><td><code>hmmlearn</code></td><td><code>GaussianHMM</code>, <code>_compute_log_likelihood</code></td>
+                <td>X ndarray</td>
+                <td>matriks log-emisi <code>T × K</code></td></tr>
+            <tr><td><code>scipy.special</code></td><td><code>logsumexp</code></td>
+                <td>ndarray + axis</td>
+                <td>ndarray</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Coupling (Data yang Dilewatkan)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
+          <tbody>
+            <tr><td><code>update_hmm_states</code></td><td><code>read_hmm_params</code></td><td>db + frequency</td><td>Data + Common (db)</td></tr>
+            <tr><td><code>update_hmm_states</code></td><td><code>_build_hmm_features</code></td><td>DataFrame + 2 int</td><td>Stamp + Data</td></tr>
+            <tr><td><code>update_hmm_states</code></td><td><code>_hmm_from_params</code></td><td>dict params</td><td>Stamp</td></tr>
+            <tr><td><code>update_hmm_states</code></td><td><code>_forward_filter</code></td><td>model + X ndarray</td><td>Hybrid (objek model) + Data (numerik)</td></tr>
+            <tr><td><code>update_hmm_states</code></td><td><code>write_hmm_states_batch</code></td><td>db + list dict</td><td>Stamp + Common (db)</td></tr>
+            <tr><td><code>_build_hmm_features</code></td><td>4 indikator</td><td>Series close + scalar params</td><td>Data</td></tr>
+            <tr><td><code>_build_hmm_features</code></td><td><code>_rolling_zscore</code> ×4</td><td>Series + window</td><td>Data</td></tr>
+            <tr><td><code>_forward_filter</code></td><td><code>logsumexp</code></td><td>ndarray + axis</td><td>Data</td></tr>
+            <tr><td><code>_forward_filter</code></td><td><code>model._compute_log_likelihood</code></td><td>X ndarray</td><td>Data</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Frozen params, no refit:</strong> parameter HMM (D5) dipublikasi
+            ulang hanya saat <code>--mode rebuild-hmm</code>; pemanggilan harian tidak
+            pernah memanggil <code>.fit()</code> pada GaussianHMM.</li>
+        <li><strong>Forward filter, bukan Viterbi:</strong> state pada waktu <em>t</em>
+            ditentukan dari <code>argmax_i P(q_t = i | O_1..O_t)</code> sehingga state
+            historis tidak berubah seiring waktu (Viterbi melakukan smoothing yang
+            membuat state masa lalu bergerak setiap hari).</li>
+        <li><strong>Lima fitur dibangun ulang dari close:</strong> Log_Return_Z,
+            Volatility_Z, RSI_norm, MACD_Z, BB_Width_Z. <code>_rolling_zscore</code>
+            menggunakan window 252 hari (default <code>norm_window</code>).</li>
+        <li><strong>Idempotensi via filter D4:</strong> <code>existing_dates</code>
+            di-stream dulu agar hanya tanggal baru yang ditulis ke
+            <code>hmm_states</code> kecuali <code>write_existing=True</code>.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

@@ -28,11 +28,11 @@ USE_HALF_PRECISION = True  # Use float16 for faster GPU inference (recommended f
 FORCE_CPU = False  # Set to True to force CPU even if CUDA is available
 
 # TEXT_MODE controls which text is fed to FinBERT:
-#   "title"   — score the headline only; Combined = Title
+#   "title"   — score the headline only; Combined = Title (default; matches scheduler)
 #   "content" — score the body sentences only; Combined = Content
-#   "mixed"   — score both and blend with TITLE_WEIGHT / CONTENT_WEIGHT (default)
+#   "mixed"   — score both and blend with TITLE_WEIGHT / CONTENT_WEIGHT
 # Override at runtime with: python finbert_tone_sentiment_analysis.py --mode title|content|mixed
-TEXT_MODE = "mixed"
+TEXT_MODE = "title"
 
 def _output_csv(mode: str) -> str:
     suffix = "" if mode == "mixed" else f"_{mode}"
