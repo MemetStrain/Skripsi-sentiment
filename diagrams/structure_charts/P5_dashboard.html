@@ -50,7 +50,7 @@
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
-
+ 
   <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
     <div class="max-w-5xl mx-auto">
       <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
@@ -58,7 +58,7 @@
       <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 5.0 (DFD Level 1) — Django server &amp; inferensi XGBoost on-request.</p>
     </div>
   </header>
-
+ 
   <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
     <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
     <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
@@ -68,23 +68,48 @@
     <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
     <a href="P5_dashboard.html" class="nav-pill active">P5 Dashboard</a>
   </nav>
-
+ 
   <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
-
+ 
     <section>
       <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
       <p class="text-sm text-slate-700 leading-relaxed">
         Proses <strong>P5 — Dashboard &amp; Live Inference</strong> dari DFD
-        Level 1 dimulai dari perintah <code>python manage.py runserver</code>.
-        Akar struktur chart ini adalah perintah CLI tersebut; lapisan-lapisan
-        di bawahnya adalah Django boot sequence (<code>manage.main</code> →
-        <code>execute_from_command_line</code> → command <code>runserver</code>
-        → WSGI app → URL dispatcher) yang akhirnya men-dispatch ke empat fungsi
-        view publik. Setiap view kemudian mendekomposisi ke loaders Firestore,
-        feature engineering, dan inferensi XGBoost.
+        Level 1 dimulai dari perintah <code>python manage.py runserver</code>
+        yang dijalankan oleh Operator untuk menyalakan Django <em>development
+        server</em> pada <code>127.0.0.1:8000</code>. Secara internal, perintah
+        CLI ini memicu rantai <em>boot sequence</em> Django:
+        <code>manage.main()</code> menetapkan
+        <code>DJANGO_SETTINGS_MODULE=config.settings</code>, kemudian
+        mendelegasikan ke <code>execute_from_command_line()</code> yang
+        me-<em>resolve</em> command <code>runserver</code> ke
+        <code>django.core.management.commands.runserver.Command</code>.
+        <em>Command</em> tersebut membangun <em>WSGI handler</em> via
+        <code>get_wsgi_application()</code> (<code>website/config/wsgi.py</code>)
+        dan mem-<em>bind</em> socket pada port <code>8000</code>. Setelah server
+        siap, setiap <em>HTTP request</em> dari Pengunjung dikirim ke <em>URL
+        dispatcher</em> (<code>config/urls.py</code> → <code>web/urls.py</code>)
+        yang me-<em>route</em> ke salah satu dari empat fungsi <em>view</em>
+        publik berdasarkan <em>path</em>.
+      </p>
+      <p class="text-sm text-slate-700 leading-relaxed mt-3">
+        Karena rantai <em>boot sequence</em> dan <em>URL dispatching</em>
+        adalah infrastruktur Django <em>framework</em> — bukan modul aplikasi
+        yang ditulis pengembang — <em>structure chart</em> ini menyederhanakan
+        keseluruhan rantai tersebut menjadi <strong>satu akar tunggal</strong>
+        <code>python manage.py runserver</code>. Empat <em>view publik</em>
+        (<code>dashboard</code>, <code>news</code>, <code>about</code>,
+        <code>forecasts_api</code>) digambarkan sebagai modul anak langsung
+        dari akar, dengan label panah menyatakan <em>HTTP method + path</em>
+        yang men-<em>trigger</em> pemanggilan. Dekomposisi lebih lanjut di
+        bawah setiap <em>view</em> menampilkan modul-modul aplikasi yang
+        sebenarnya: <em>loader</em> Firestore, <em>feature engineering</em>,
+        dan inferensi XGBoost dari <em>saved models</em>. Detail modul boot
+        Django tetap didokumentasikan pada tabel <em>“Modul Boot &amp;
+        Dispatch”</em> di bawah untuk kelengkapan referensi.
       </p>
     </section>
-
+ 
     <section class="page-break">
       <h2 class="text-xl font-semibold section-heading">Diagram</h2>
       <div class="diagram-card">
@@ -92,27 +117,20 @@
 flowchart TD
     ROOT["python manage.py runserver<br/>website/manage.py"]:::root
 
-    ROOT -->|"DJANGO_SETTINGS_MODULE='config.settings'"| MMAIN["manage.main()<br/>manage.py"]:::boot
-    MMAIN -->|"sys.argv"| EFCL["execute_from_command_line(argv)<br/>django.core.management"]:::boot
-    EFCL -->|"resolves 'runserver'"| RUNCMD["runserver.Command<br/>django.core.management.commands"]:::boot
-    RUNCMD -->|"binds 127.0.0.1:8000"| WSGI["WSGIHandler / get_wsgi_application()<br/>config/wsgi.py"]:::boot
-    WSGI -->|"each HTTP request"| URLS["URL dispatcher<br/>config/urls.py → web/urls.py"]:::dispatch
-
-    URLS -->|"GET /"| VD["views.dashboard(request)<br/>web/views.py"]:::view
-    URLS -->|"GET /news/"| VN["views.news(request)<br/>web/views.py"]:::view
-    URLS -->|"GET /about/"| VA["views.about(request)<br/>web/views.py"]:::view
-    URLS -->|"GET /api/forecasts/"| VF["views.forecasts_api(request)<br/>web/views.py"]:::view
+    ROOT -->|"GET /"| VD["views.dashboard(request)<br/>web/views.py"]:::view
+    ROOT -->|"GET /news/"| VN["views.news(request)<br/>web/views.py"]:::view
+    ROOT -->|"GET /about/"| VA["views.about(request)<br/>web/views.py"]:::view
+    ROOT -->|"GET /api/forecasts/"| VF["views.forecasts_api(request)<br/>web/views.py"]:::view
 
     %% --- shared modules (called by multiple views) ---
     FC["firestore.client()<br/>firebase_admin"]:::ext
     RENDER["render(template, ctx)<br/>django.shortcuts"]:::ext
     LW["load_winners()<br/>web/predictor.py"]:::util
+    Q["db.collection(...).where()<br/>.order_by().stream()<br/>← D1 / D2 / D3 / D4"]:::query
 
     %% --- dashboard ---
     VD -->|"—"| FC
-    VD -->|"daily_prices ≥ 90d"| Q1["db.collection('daily_prices')<br/>.where().order_by().stream() ← D1"]:::query
-    VD -->|"hmm_states ≥ 90d"| Q2["db.collection('hmm_states')<br/>.where().order_by().stream() ← D4"]:::query
-    VD -->|"sentiment_aggregates ≥ 90d"| Q3["db.collection('sentiment_aggregates')<br/>.where().order_by().stream() ← D3"]:::query
+    VD -->|"3 queries (daily_prices,<br/>hmm_states, sentiment_aggregates;<br/>≥ 90 hari)"| Q
     VD -->|"—"| LW
     VD -->|"'dashboard.html', ctx"| RENDER
 
@@ -120,7 +138,7 @@ flowchart TD
 
     %% --- forecasts_api ---
     VF -->|"—"| FC
-    VF -->|"max_horizon, window_days"| CT["compute_forecast_trails(db, h_max, w)<br/>web/predictor.py"]:::util
+    VF -->|"max_horizon, window_days"| CT["compute_forecast_trails(db, h, w)<br/>web/predictor.py"]:::util
     CT -->|"—"| LW
     CT -->|"db"| BIF["build_inference_frame(db)<br/>web/predictor.py"]:::util
     CT -->|"tag, h, 'csa' (per horizon)"| LM["load_model(tag, h, variant)<br/>web/predictor.py"]:::util
@@ -129,28 +147,20 @@ flowchart TD
     CT -->|"X"| MPRED["model.predict(X)<br/>XGBoost (pkl-loaded)"]:::ext
     CT -->|"payload dict"| JR["JsonResponse(payload)<br/>django.http"]:::ext
 
-    BIF -->|"db"| LP["_load_prices(db) ← D1"]:::priv
-    BIF -->|"db"| LS["_load_sentiment(db) ← D3"]:::priv
-    BIF -->|"db"| LH["_load_hmm_state(db) ← D4"]:::priv
-    BIF -->|"df"| APF["add_price_features(df)<br/>prediction/feature_engineering.py"]:::util
-    BIF -->|"df"| AHDF["add_hmm_derived_features(df)<br/>prediction/feature_engineering.py"]:::util
-    BIF -->|"df"| EAF["engineer_all_features(df)<br/>prediction/feature_engineering.py"]:::util
+    BIF -->|"db (×3 loaders)"| LD["_load_prices /<br/>_load_sentiment /<br/>_load_hmm_state<br/>web/predictor.py (← D1/D3/D4)"]:::priv
+    BIF -->|"df (×3 helpers)"| FE["add_price_features /<br/>add_hmm_derived_features /<br/>engineer_all_features<br/>prediction/feature_engineering.py"]:::util
 
-    LM -->|"saved_models/{tag}/Daily/h{h}/<br/>xgboost_csa/{model,scaler}.pkl (×2)"| JL[("joblib.load(*.pkl)<br/>← D6")]:::store
-    LM -->|"meta.json"| MJ[("read feature_cols<br/>← D6")]:::store
+    LM -->|"model.pkl + scaler.pkl + meta.json"| D6[("saved_models/{tag}/Daily/h{h}/<br/>xgboost_csa/* ← D6")]:::store
 
     %% --- news view ---
     VN -->|"—"| FC
-    VN -->|"all docs"| Q4["db.collection('news_articles').stream()<br/>← D2"]:::query
-    VN -->|"in-memory filter + sort + paginate"| PG["pagination clamp<br/>(inline)"]:::priv
+    VN -->|"news_articles (full stream)"| Q
     VN -->|"'news.html', ctx"| RENDER
 
     %% --- about view ---
     VA -->|"'about.html', ctx"| RENDER
 
     classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
-    classDef boot  fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#7c2d12;
-    classDef dispatch fill:#fed7aa,stroke:#c2410c,stroke-width:2px,color:#7c2d12;
     classDef view  fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
     classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
     classDef priv  fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#312e81;
@@ -160,9 +170,8 @@ flowchart TD
         </pre>
       </div>
       <p class="text-xs text-slate-500 mt-3">
-        Legenda: <span class="px-1 rounded" style="background:#fde68a;border:1px solid #92400e">kuning</span> = root CLI,
-        <span class="px-1 rounded" style="background:#fef3c7;border:1px solid #b45309">krem</span> = Django boot chain,
-        <span class="px-1 rounded" style="background:#fed7aa;border:1px solid #c2410c">peach</span> = URL dispatcher,
+        Legenda:
+        <span class="px-1 rounded" style="background:#fde68a;border:1px solid #92400e">kuning</span> = root CLI (mencakup keseluruhan Django boot &amp; dispatch),
         <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = view endpoint,
         <span class="px-1 rounded" style="background:#dbeafe;border:1px solid #1e40af">biru</span> = fungsi modul internal,
         <span class="px-1 rounded" style="background:#e0e7ff;border:1px solid #4338ca">indigo</span> = helper privat,
@@ -171,29 +180,35 @@ flowchart TD
         <span class="px-1 rounded" style="background:#f3e8ff;border:1px solid #7e22ce">lavender</span> = data store (D6/D7).
       </p>
     </section>
-
+ 
     <section>
-      <h3 class="sub-heading">Tabel — Modul Boot &amp; Dispatch</h3>
+      <h3 class="sub-heading">Tabel — Modul Boot &amp; Dispatch (terkompresi pada akar diagram)</h3>
+      <p class="text-xs text-slate-600 mb-2">
+        Tabel ini menjelaskan rantai modul Django yang secara implisit terkandung
+        dalam akar <code>python manage.py runserver</code>. Modul-modul ini tidak
+        digambar di diagram karena merupakan infrastruktur <em>framework</em>,
+        bukan modul aplikasi yang ditulis pengembang.
+      </p>
       <div class="overflow-x-auto rounded-lg border border-slate-200">
         <table class="w-full border-collapse">
-          <thead><tr><th>Modul</th><th>Fungsi</th><th>Peran</th></tr></thead>
+          <thead><tr><th>Urutan</th><th>Modul</th><th>Fungsi</th><th>Peran</th></tr></thead>
           <tbody>
-            <tr><td><code>website/manage.py</code></td><td><code>main()</code></td>
+            <tr><td>1</td><td><code>website/manage.py</code></td><td><code>main()</code></td>
                 <td>Set <code>DJANGO_SETTINGS_MODULE=config.settings</code>; delegate ke Django.</td></tr>
-            <tr><td><code>django.core.management</code></td><td><code>execute_from_command_line(argv)</code></td>
+            <tr><td>2</td><td><code>django.core.management</code></td><td><code>execute_from_command_line(argv)</code></td>
                 <td>Parse <code>argv</code>; cari command <code>runserver</code>.</td></tr>
-            <tr><td><code>django.core.management.commands.runserver</code></td><td><code>Command.handle()</code></td>
+            <tr><td>3</td><td><code>django.core.management.commands.runserver</code></td><td><code>Command.handle()</code></td>
                 <td>Start dev HTTP server pada <code>127.0.0.1:8000</code>.</td></tr>
-            <tr><td><code>website/config/wsgi.py</code></td><td><code>get_wsgi_application()</code></td>
+            <tr><td>4</td><td><code>website/config/wsgi.py</code></td><td><code>get_wsgi_application()</code></td>
                 <td>Bangun WSGI handler — entry point per-request.</td></tr>
-            <tr><td><code>website/config/urls.py</code></td><td><code>urlpatterns</code></td>
+            <tr><td>5</td><td><code>website/config/urls.py</code></td><td><code>urlpatterns</code></td>
                 <td><code>include('web.urls')</code>.</td></tr>
-            <tr><td><code>website/web/urls.py</code></td><td><code>urlpatterns</code></td>
+            <tr><td>6</td><td><code>website/web/urls.py</code></td><td><code>urlpatterns</code></td>
                 <td>4 path: <code>/</code>, <code>/news/</code>, <code>/about/</code>, <code>/api/forecasts/</code>.</td></tr>
           </tbody>
         </table>
       </div>
-
+ 
       <h3 class="sub-heading">Tabel — Modul View &amp; Predictor</h3>
       <div class="overflow-x-auto rounded-lg border border-slate-200">
         <table class="w-full border-collapse">
@@ -232,14 +247,13 @@ flowchart TD
           </tbody>
         </table>
       </div>
-
+ 
       <h3 class="sub-heading">Tabel — Coupling (Data yang Dilewatkan)</h3>
       <div class="overflow-x-auto rounded-lg border border-slate-200">
         <table class="w-full border-collapse">
           <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
           <tbody>
-            <tr><td><code>runserver</code></td><td>WSGI handler</td><td>HTTP request env</td><td>Stamp (dict environ)</td></tr>
-            <tr><td>URL dispatcher</td><td><em>view function</em></td><td><code>HttpRequest</code></td><td>Stamp</td></tr>
+            <tr><td><code>runserver</code> (akar)</td><td><em>view function</em></td><td><code>HttpRequest</code> (via URL dispatcher)</td><td>Stamp</td></tr>
             <tr><td><code>dashboard</code></td><td>Firestore</td><td>filter <code>date ≥ 90d</code></td><td>Data</td></tr>
             <tr><td><code>dashboard</code></td><td><code>load_winners</code></td><td>—</td><td>Common (membaca file lokal D7)</td></tr>
             <tr><td><code>forecasts_api</code></td><td><code>compute_forecast_trails</code></td><td>db + 2 int</td><td>Data + Common</td></tr>
@@ -251,11 +265,18 @@ flowchart TD
           </tbody>
         </table>
       </div>
-
+ 
       <h3 class="sub-heading">Catatan Implementasi</h3>
       <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
-        <li><strong>Akar = CLI:</strong> sesuai permintaan, root adalah <code>python manage.py runserver</code>;
-            empat view berada sebagai child level-5 setelah boot &amp; dispatch chain.</li>
+        <li><strong>Akar = CLI tunggal:</strong> sesuai arahan pembimbing, akar
+            <em>structure chart</em> adalah <code>python manage.py runserver</code>
+            sebagai satu kotak. Rantai Django <em>boot sequence</em>
+            (<code>manage.main</code> → <code>execute_from_command_line</code> →
+            <code>Command</code> → <code>WSGIHandler</code> → URL dispatcher)
+            dijelaskan pada paragraf <em>Pendahuluan</em> dan tabel
+            <em>“Modul Boot &amp; Dispatch”</em>, tetapi tidak digambar di
+            diagram karena merupakan infrastruktur <em>framework</em>, bukan modul
+            aplikasi.</li>
         <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik read-only.</li>
         <li><strong>Inferensi live:</strong> <code>forecasts_api</code> memuat <code>model.pkl</code> +
             <code>scaler.pkl</code> per <code>(tag, horizon)</code> via <code>joblib.load</code>,
@@ -271,12 +292,12 @@ flowchart TD
             D4 (hmm_states), D2 (news_articles), D6 (saved_models/*.pkl), D7 (winners.json).</li>
       </ul>
     </section>
-
+ 
   </main>
-
+ 
   <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
     Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
   </footer>
-
+ 
 </body>
 </html>
