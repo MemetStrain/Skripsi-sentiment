@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P3 Sentiment Analysis &amp; Aggregation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P3 Sentiment Analysis &amp; Aggregation</h1>
+      <p class="text-teal-100 text-sm mt-1">Alur kontrol detail untuk proses 3.0 — scoring FinBERT-Tone (title-only) + agregat harian.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../structure_charts/P3_sentiment.html" class="nav-pill">P3 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="orchestration.html" class="nav-pill">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill active">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P3 — Sentiment Analysis &amp; Aggregation</strong>
+        diimplementasikan oleh dua fungsi entry-point di
+        <code>scheduler/sentiment_runner.py</code>:
+        <code>run_sentiment_on_articles(articles)</code> (scoring FinBERT-Tone
+        per artikel — <em>title-only</em>) dan
+        <code>compute_sentiment_aggregates(articles)</code> (agregasi per
+        tanggal). Kedua fungsi dipanggil dari
+        <code>scheduler/main.py::run_daily_update</code> yang juga
+        mengorkestrasi penulisan kembali ke D2 (<code>news_articles</code>)
+        dan D3 (<code>sentiment_aggregates</code>). Flowchart ini
+        menampilkan dua cabang keputusan utama yang tidak terlihat pada
+        diagram orkestrasi:
+        (1) <em>per-batch error recovery</em> di dalam
+        <code>run_sentiment_on_articles</code> dan
+        (2) <em>three-way branching</em> di orkestrasi agregat
+        (incremental → rebuild penuh → skip).
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: orkestrator memanggil P3<br/>(dari run_daily_update)"]):::startend
+
+    %% --- A. run_sentiment_on_articles ---
+    Start --> A1["run_sentiment_on_articles(cleaned_articles)"]:::process
+    A1 --> A1Q{"articles<br/>kosong?"}:::decision
+    A1Q -->|Ya| A1R["return tanpa modifikasi"]:::process
+    A1Q -->|Tidak| A2["_load_model()<br/>(FinBERT-Tone via HuggingFace Hub)"]:::process
+    A2 --> A3["Loop: batch berikutnya<br/>(BATCH_SIZE = 16)"]:::process
+    A3 --> A4["bangun flat_titles[]<br/>(skip artikel ber-title kosong)"]:::process
+    A4 --> A5T{"_score_texts(...)<br/>berhasil?"}:::decision
+    A5T -->|Tidak| A5F["set default Neutral fields<br/>(0.33 / 0.33 / 0.34)"]:::error
+    A5T -->|Ya| A5["probs = softmax(logits)<br/>(Nx3 ndarray)"]:::process
+
+    A5 --> A6["per-artikel di batch"]:::process
+    A6 --> A6Q{"artikel<br/>ber-title?"}:::decision
+    A6Q -->|Tidak| A6N["combined = [1.0, 0.0, 0.0]<br/>(degenerate Neutral)"]:::process
+    A6Q -->|Ya| A6S["combined = probs[title_idx]"]:::process
+    A6N --> A7
+    A6S --> A7
+    A7["update dict in-place:<br/>sentiment_label, sentiment_score,<br/>{pos,neg,neu}_prob, title_*"]:::process
+    A5F --> A7
+
+    A7 --> A8{"masih ada<br/>batch?"}:::decision
+    A8 -->|Ya| A3
+    A8 -->|Tidak| W1["write_news_articles(db, scored)<br/>→ D2 (back-write field sentimen)"]:::process
+    A1R --> Endskip
+
+    %% --- B. compute_sentiment_aggregates (3-way) ---
+    W1 --> B1{"news_changed AND<br/>new_articles?"}:::decision
+    B1 -->|Ya| B2["incremental: load_news_from_csv()<br/>filter ke affected_dates"]:::process
+    B1 -->|Tidak| B3{"Firestore aggregates<br/>kosong (post-reinit)?"}:::decision
+    B3 -->|Ya| B4["rebuild penuh:<br/>load_news_from_csv() seluruh artikel"]:::process
+    B3 -->|Tidak| B5["skip aggregates<br/>(sudah up to date)"]:::process
+
+    B2 --> B6["compute_sentiment_aggregates(articles)<br/>(per-tanggal: mean probs + dominant_sentiment)"]:::process
+    B4 --> B6
+    B6 --> B6Q{"aggregates<br/>kosong?"}:::decision
+    B6Q -->|Ya| End
+    B6Q -->|Tidak| W2["write_sentiment_aggregates(db, aggs)<br/>→ D3"]:::process
+    W2 --> End
+    B5 --> End
+
+    Endskip(["SELESAI (early): tidak ada artikel diproses"]):::startend
+    End(["SELESAI: P3 kembali ke orkestrator"]):::startend
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#854d0e,stroke-width:1px,color:#713f12;
+    classDef error    fill:#fee2e2,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda:
+        <span class="px-1 rounded" style="background:#fef3c7;border:1px solid #92400e">krem</span> = start/end,
+        <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = process,
+        <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #854d0e">krem-kuning</span> = decision,
+        <span class="px-1 rounded" style="background:#fee2e2;border:1px solid #b91c1c">merah</span> = error / fallback.
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Langkah &amp; Modul</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Langkah</th><th>Aksi</th><th>Fungsi</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td>A1</td><td>Entry-point P3a: terima artikel ber-preprocess dari P2</td><td><code>run_sentiment_on_articles(articles)</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td>A2</td><td>Lazy-load FinBERT-Tone (tokenizer + model + device) — sekali per proses</td><td><code>_load_model()</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td>A3–A5</td><td>Loop batch 16 artikel; bangun flat_titles[]; forward pass <code>model(**inputs)</code> di dalam <code>torch.no_grad()</code></td><td><code>_score_texts(texts, model, tokenizer, device)</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td>A5F</td><td>Fallback bila batch exception: setdefault Neutral (0.33/0.33/0.34) untuk seluruh artikel batch</td><td>inline di <code>run_sentiment_on_articles</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td>A6–A7</td><td>Per artikel: degenerate-Neutral jika title kosong; assign <code>sentiment_label</code>, <code>sentiment_score</code>, probs, plus <code>title_*</code> diagnostics</td><td>inline di <code>run_sentiment_on_articles</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td>W1</td><td>Mirror sentimen ke Firestore (back-write D2; idempoten via MD5(url))</td><td><code>write_news_articles(db, articles)</code></td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td>B1</td><td>Decision orkestrasi: ada artikel baru?</td><td>inline di <code>run_daily_update</code></td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td>B2</td><td>Path incremental: load full CSV → filter <code>affected_dates</code></td><td><code>load_news_from_csv(raw, sent)</code></td><td><code>scheduler/news_extractor.py</code></td></tr>
+            <tr><td>B3</td><td>Decision orkestrasi: Firestore D3 kosong (post-reinit)?</td><td><code>_is_aggregates_empty(db)</code></td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td>B4</td><td>Path rebuild penuh: load semua artikel dari CSV</td><td><code>load_news_from_csv(raw, sent)</code></td><td><code>scheduler/news_extractor.py</code></td></tr>
+            <tr><td>B5</td><td>Path skip: aggregates sudah up to date</td><td>(no-op)</td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td>B6</td><td>Entry-point P3b: hitung mean probs &amp; <code>dominant_sentiment</code> per tanggal</td><td><code>compute_sentiment_aggregates(articles)</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td>W2</td><td>Tulis agregat harian ke D3</td><td><code>write_sentiment_aggregates(db, aggs)</code></td><td><code>scheduler/firestore_writer.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Title-only scoring:</strong> hanya judul artikel yang
+            diskor; field <code>Combined_*</code> mirror dari <code>Title_*</code>.
+            Body (<code>content</code>) tidak masuk ke model. Mirror dari
+            <code>news/finbert_tone_sentiment_analysis.py --mode title</code>.</li>
+        <li><strong>Tanpa sentence tokenization:</strong> implementasi saat ini
+            tidak menggunakan NLTK / <code>_split_into_sentences</code> /
+            <code>_aggregate_content</code> / confidence threshold (0.5) —
+            semua peninggalan sentence-level lama telah dihapus.</li>
+        <li><strong>Model:</strong> <code>yiyanghkust/finbert-tone</code>;
+            id2label = {0: Neutral, 1: Positive, 2: Negative} — berbeda dari
+            <code>ProsusAI/finbert</code>; di-hardcode di array <code>LABELS</code>.</li>
+        <li><strong>Batch &amp; device:</strong> <code>BATCH_SIZE = 16</code>;
+            CUDA otomatis bila tersedia, jika tidak fallback CPU; forward pass
+            di dalam <code>torch.no_grad()</code>.</li>
+        <li><strong>Skor sentimen:</strong>
+            <code>sentiment_score = positive_prob − negative_prob</code>
+            (range −1..+1); <code>combined_confidence = combined.max()</code>.</li>
+        <li><strong>Three-way branching agregat</strong> (di
+            <code>run_daily_update</code>): (Ya, ada artikel baru) →
+            incremental untuk <em>affected_dates</em>; (tidak ada baru &amp;
+            D3 kosong) → rebuild penuh dari CSV; (tidak ada baru &amp; D3
+            terisi) → skip.</li>
+        <li><strong>Cross-reference:</strong> dekomposisi modul (caller→callee)
+            lihat <a href="../structure_charts/P3_sentiment.html"
+            class="text-teal-700 underline">Structure Chart P3</a>.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
