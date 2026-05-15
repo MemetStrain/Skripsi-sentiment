@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P5 Dashboard &amp; Live Inference</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    pre.algorithm {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      pre.algorithm { background: #f8fafc; color: #0f172a; }
+      pre.algorithm .kw  { color: #0d9488; }
+      pre.algorithm .cmt { color: #475569; }
+      pre.algorithm .src { color: #b45309; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P5 Dashboard &amp; Live Inference</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk 4 view di <code>website/web/views.py</code> dan inferensi live di <code>web/predictor.py</code>.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P5_dashboard.html" class="nav-pill">P5 Flowchart</a>
+    <a href="../structure_charts/P5_dashboard.html" class="nav-pill">P5 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="orchestration.html" class="nav-pill">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill active">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Pseudocode ini mengikuti
+        <a href="../flowcharts/P5_dashboard.html" class="text-teal-700 underline">flowchart P5</a>.
+        Setiap HTTP request akan di-<em>dispatch</em> oleh Django URL router ke
+        salah satu dari empat view. Tiga view pertama
+        (<code>dashboard</code>, <code>news</code>, <code>about</code>) bersifat
+        sinkron <em>read-and-render</em>; <code>forecasts_api</code> menjalankan
+        inferensi XGBoost <em>live</em> per request — loop horizon × anchor
+        dengan <code>lru_cache</code> hit/miss dan tiga jalur error fallback.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">VIEW dashboard</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">VIEW</span> dashboard
+<span class="src">SOURCE</span>: website/web/views.py :: dashboard
+
+<span class="kw">INPUT</span>:
+    request  <span class="cmt">// HttpRequest (GET /)</span>
+
+<span class="kw">OUTPUT</span>:
+    HttpResponse (dashboard.html)
+
+<span class="kw">BEGIN</span>
+    <span class="kw">TRY</span>
+        db = firestore.client()
+    <span class="kw">CATCH</span> ValueError                                   <span class="cmt">// Firebase not initialized</span>
+        messages.error(request, "Firebase is not initialized.")
+        <span class="kw">RETURN</span> render(request, "dashboard.html", _empty_dashboard_ctx())
+    <span class="kw">END TRY</span>
+
+    three_months_ago = (today() - timedelta(days=90)).isoformat()
+
+    <span class="cmt">// (1) prices D1, last 90 days</span>
+    price_docs = db.collection("daily_prices")
+                   .where("date", "&gt;=", three_months_ago)
+                   .order_by("date").stream()
+    price_list = [ to_price_dict(doc) <span class="kw">FOR</span> doc <span class="kw">IN</span> price_docs ]
+
+    <span class="cmt">// (2) HMM states D4, last 90 days (filter freq=Daily in Python)</span>
+    state_docs = db.collection("hmm_states")
+                   .where("date", "&gt;=", three_months_ago)
+                   .order_by("date").stream()
+    state_dict = build_state_dict(state_docs)              <span class="cmt">// keyed by date</span>
+
+    <span class="cmt">// (3) Merge price + state into chart_data</span>
+    chart_data = []
+    <span class="kw">FOR</span> row <span class="kw">IN</span> price_list <span class="kw">DO</span>
+        s = state_dict.get(row.date, { state: <span class="kw">NULL</span>, state_label: <span class="kw">NULL</span> })
+        chart_data.append(merge(row, s))
+    <span class="kw">END FOR</span>
+
+    <span class="cmt">// (4) Stats over 90-day window</span>
+    stats = compute_window_stats(price_list)              <span class="cmt">// current/avg/max/min/total</span>
+    latest_date = (price_list[-1].date) <span class="kw">IF</span> price_list <span class="kw">ELSE</span> "N/A"
+
+    <span class="cmt">// (5) winners.json optional — D7</span>
+    metrics = { mape: 0, r2: 0, accuracy: 0, best_model: "N/A" }
+    winners_payload = {}
+    <span class="kw">TRY</span>
+        winners_payload = load_winners()                  <span class="cmt">// lru_cache(maxsize=1)</span>
+        h1_metrics = winners_payload.metrics
+                         .get(winners.winners_by_horizon["1"], {})
+                         .get("1", {}).get("CSA", {})
+        <span class="kw">IF</span> h1_metrics <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+            metrics = extract_h1_metrics(h1_metrics, winners_payload)
+        <span class="kw">END IF</span>
+    <span class="kw">CATCH</span> FileNotFoundError
+        pass                                              <span class="cmt">// keep N/A defaults</span>
+    <span class="kw">END TRY</span>
+
+    <span class="cmt">// (6) sentiment_aggregates D3, last 90 days (best-effort)</span>
+    sentiment_list = []
+    <span class="kw">TRY</span>
+        sent_docs = db.collection("sentiment_aggregates")
+                      .where("date", "&gt;=", three_months_ago)
+                      .order_by("date").stream()
+        sentiment_list = [ to_sent_dict(d) <span class="kw">FOR</span> d <span class="kw">IN</span> sent_docs ]
+    <span class="kw">CATCH</span> Exception
+        pass
+    <span class="kw">END TRY</span>
+
+    <span class="kw">RETURN</span> render(request, "dashboard.html", {
+        chart_data     : json.dumps(chart_data),
+        metrics        : metrics,
+        winners_data   : json.dumps(winners_payload),
+        sentiment_data : json.dumps(sentiment_list),
+        stats          : stats,
+        latest_date    : latest_date,
+        page_title     : "CPO Price Prediction Dashboard" })
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">VIEW news · VIEW about</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">VIEW</span> news
+<span class="src">SOURCE</span>: website/web/views.py :: news
+
+<span class="kw">INPUT</span>:
+    request  <span class="cmt">// GET /news/?sentiment=...&amp;page=...</span>
+
+<span class="kw">OUTPUT</span>:
+    HttpResponse (news.html)
+
+<span class="kw">BEGIN</span>
+    db               = firestore.client()
+    sentiment_filter = request.GET.get("sentiment")
+    page_number      = int(request.GET.get("page", 1))
+    items_per_page   = 9
+
+    news_docs = db.collection("news_articles").stream()    <span class="cmt">// no Firestore filter</span>
+
+    news_list        = []
+    sentiment_counts = { positive: 0, negative: 0, neutral: 0, total: 0 }
+    <span class="kw">FOR</span> doc <span class="kw">IN</span> news_docs <span class="kw">DO</span>
+        d     = doc.to_dict()
+        label = d.get("sentiment_label", "Neutral")
+        sentiment_counts.total += 1
+        increment_label_count(sentiment_counts, label)
+        <span class="kw">IF</span> sentiment_filter <span class="kw">AND</span> label != sentiment_filter <span class="kw">THEN</span>
+            <span class="kw">CONTINUE</span>
+        <span class="kw">END IF</span>
+        news_list.append(to_news_row(d))
+    <span class="kw">END FOR</span>
+
+    news_list.sort(key = <span class="kw">LAMBDA</span> x: x.date, reverse = <span class="kw">TRUE</span>)
+
+    total_news  = |news_list|
+    total_pages = max(1, ceil(total_news / items_per_page))
+    page_number = max(1, min(page_number, total_pages))    <span class="cmt">// clamp</span>
+    start       = (page_number - 1) * items_per_page
+    news_page   = news_list[start : start + items_per_page]
+
+    pagination = build_pagination(page_number, total_pages, window_size=5)
+
+    <span class="kw">RETURN</span> render(request, "news.html", {
+        news_page         : news_page,
+        sentiment_counts  : sentiment_counts,
+        current_filter    : sentiment_filter,
+        pagination        : pagination,
+        page_title        : "CPO News &amp; Sentiment" })
+<span class="kw">END</span>
+
+
+<span class="kw">VIEW</span> about
+<span class="src">SOURCE</span>: website/web/views.py :: about
+
+<span class="kw">BEGIN</span>
+    <span class="kw">RETURN</span> render(request, "about.html", { page_title: "About" })
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">VIEW forecasts_api</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">VIEW</span> forecasts_api
+<span class="src">SOURCE</span>: website/web/views.py :: forecasts_api
+
+<span class="kw">INPUT</span>:
+    request  <span class="cmt">// GET /api/forecasts/?max_horizon=H&amp;window_days=W</span>
+
+<span class="kw">OUTPUT</span>:
+    JsonResponse (200 ok / 400 bad-param / 503 missing-artifacts / 500 other)
+
+<span class="kw">BEGIN</span>
+    <span class="kw">TRY</span>
+        max_horizon = int(request.GET.get("max_horizon", 7))
+        window_days = int(request.GET.get("window_days", 90))
+    <span class="kw">CATCH</span> (ValueError, TypeError)
+        <span class="kw">RETURN</span> JsonResponse({ error: "Invalid integer parameter" }, status=400)
+    <span class="kw">END TRY</span>
+
+    max_horizon = max(1, min(max_horizon, 7))            <span class="cmt">// clamp [1, 7]</span>
+    window_days = max(7, min(window_days, 365))          <span class="cmt">// clamp [7, 365]</span>
+
+    <span class="kw">TRY</span>
+        db      = firestore.client()
+        payload = compute_forecast_trails(db, max_horizon, window_days)
+        <span class="kw">RETURN</span> JsonResponse(payload)
+    <span class="kw">CATCH</span> FileNotFoundError <span class="kw">AS</span> e
+        <span class="kw">RETURN</span> JsonResponse({ error: str(e) }, status=503)
+    <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
+        <span class="kw">RETURN</span> JsonResponse({ error: str(e) }, status=500)
+    <span class="kw">END TRY</span>
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM compute_forecast_trails</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> compute_forecast_trails
+<span class="src">SOURCE</span>: website/web/predictor.py :: compute_forecast_trails
+
+<span class="kw">INPUT</span>:
+    db, max_horizon, window_days
+
+<span class="kw">OUTPUT</span>:
+    payload (JSON-serializable dict): {
+        horizons, winners, configs, trails[], metrics,
+        tag_to_config, generated_at }
+
+<span class="kw">BEGIN</span>
+    winners_payload = load_winners()                              <span class="cmt">// lru_cache(1) ← D7</span>
+    winners = { int(h): tag <span class="kw">FOR</span> (h, tag) <span class="kw">IN</span> winners_payload.winners_by_horizon.items() }
+    configs = { int(h): cfg <span class="kw">FOR</span> (h, cfg) <span class="kw">IN</span> winners_payload.configs_by_horizon.items() }
+
+    df = build_inference_frame(db)
+    <span class="kw">IF</span> df <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        <span class="kw">RETURN</span> { horizons: [], winners: {}, configs: {}, trails: [], metrics: {} }
+    <span class="kw">END IF</span>
+
+    dates_sorted = df.Date.tolist()
+    last_idx     = |dates_sorted| - 1
+    next_td      = _next_trading_day_after(dates_sorted[last_idx])
+
+    cutoff     = df.Date.max() - timedelta(days = window_days)
+    window_idx = indices_where(df.Date &gt;= cutoff)
+
+    trails = []
+    <span class="kw">FOR</span> h = 1 <span class="kw">TO</span> max_horizon <span class="kw">DO</span>
+        tag = winners.get(h)
+        <span class="kw">IF</span> tag <span class="kw">IS NULL</span> <span class="kw">THEN</span>
+            log_warning("no winner for h=" + h)
+            <span class="kw">CONTINUE</span>
+        <span class="kw">END IF</span>
+
+        <span class="kw">TRY</span>
+            (model, scaler, feature_cols) = load_model(tag, h, "csa")  <span class="cmt">// lru_cache(64)</span>
+        <span class="kw">CATCH</span> Exception
+            log_warning("failed load_model h=" + h + " tag=" + tag)
+            <span class="kw">CONTINUE</span>
+        <span class="kw">END TRY</span>
+
+        points = []
+        <span class="kw">FOR</span> i <span class="kw">IN</span> window_idx <span class="kw">DO</span>
+            target_idx = i + h
+            <span class="kw">IF</span> target_idx &gt; last_idx + 1 <span class="kw">THEN</span> <span class="kw">CONTINUE</span>
+            pred_date = dates_sorted[target_idx] <span class="kw">IF</span> target_idx &lt;= last_idx
+                        <span class="kw">ELSE</span> next_td
+
+            row = df.iloc[[i]]
+            <span class="kw">TRY</span>
+                X = select_feature_matrix(row, feature_cols)
+            <span class="kw">CATCH</span> ValueError
+                <span class="kw">CONTINUE</span>                                        <span class="cmt">// kolom fitur tidak lengkap</span>
+            <span class="kw">END TRY</span>
+            <span class="kw">IF</span> any_nan(X) <span class="kw">THEN</span> <span class="kw">CONTINUE</span>
+
+            <span class="kw">IF</span> scaler <span class="kw">IS NOT NULL</span> <span class="kw">THEN</span> X = scaler.transform(X)
+            log_ret      = float(model.predict(X)[0])
+            anchor_close = float(row.Close.iloc[0])
+            pred_price   = anchor_close * exp(clip(log_ret, -10, 10))
+
+            points.append({
+                anchor_date     : format_date(dates_sorted[i]),
+                anchor_price    : round(anchor_close, 2),
+                predicted_date  : format_date(pred_date),
+                predicted_price : round(pred_price, 2),
+                log_return      : round(log_ret, 6) })
+        <span class="kw">END FOR</span>
+
+        trails.append({ horizon: h, tag: tag, config: configs.get(h, ""), points: points })
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> {
+        horizons      : range(1, max_horizon + 1),
+        winners       : { str(h): t <span class="kw">FOR</span> (h, t) <span class="kw">IN</span> winners.items() },
+        configs       : { str(h): c <span class="kw">FOR</span> (h, c) <span class="kw">IN</span> configs.items() },
+        trails        : trails,
+        metrics       : winners_payload.get("metrics", {}),
+        tag_to_config : winners_payload.get("tag_to_config", {}),
+        generated_at  : utcnow_isoformat() + "Z" }
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> build_inference_frame
+<span class="src">SOURCE</span>: website/web/predictor.py :: build_inference_frame
+
+<span class="kw">BEGIN</span>
+    price_df     = _load_prices(db)             <span class="cmt">// ← D1</span>
+    <span class="kw">IF</span> price_df <span class="kw">IS EMPTY</span> <span class="kw">THEN</span> <span class="kw">RAISE</span> RuntimeError
+
+    sent_df      = _load_sentiment(db)          <span class="cmt">// ← D3</span>
+    hmm_state_df = _load_hmm_state(db)          <span class="cmt">// ← D4 (Date, HMM_State, HMM_State_Label)</span>
+
+    df = add_price_features(price_df)
+    df = add_hmm_derived_features(df)
+    df.Change_Pct = df.Close.pct_change() * 100
+
+    <span class="kw">IF</span> hmm_state_df <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        df = df.merge(hmm_state_df, on="Date", how="left")
+        df.HMM_State       = fillna(df.HMM_State, 2)         <span class="cmt">// default Neutral=2</span>
+        df.HMM_State_Label = fillna(df.HMM_State_Label, "Neutral")
+        top_labels = value_counts(df.HMM_State_Label).head(5)
+        <span class="kw">FOR</span> state <span class="kw">IN</span> top_labels.index <span class="kw">DO</span>
+            col = "HMM_" + state.replace(" ", "_").replace("-", "_")
+            df[col] = (df.HMM_State_Label == state).astype(int)
+        <span class="kw">END FOR</span>
+        df = df.drop(columns=["HMM_State_Label"])
+    <span class="kw">END IF</span>
+
+    <span class="kw">IF</span> sent_df <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        df = df.merge(sent_df, on="Date", how="left")
+        fillna(df[Article_Count, Positive_Prob, Negative_Prob,
+                  Neutral_Prob, Sentiment_Score], 0.0)
+        <span class="kw">IF</span> "Confidence" <span class="kw">NOT IN</span> df.columns <span class="kw">THEN</span>
+            df.Confidence = max(Positive_Prob, Negative_Prob, Neutral_Prob).fillna(0.0)
+        <span class="kw">END IF</span>
+    <span class="kw">END IF</span>
+
+    df = engineer_all_features(df)              <span class="cmt">// cyclical + lags + interactions</span>
+    <span class="kw">RETURN</span> df.sort_values("Date").reset_index(drop=<span class="kw">TRUE</span>)
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> load_model
+<span class="src">SOURCE</span>: website/web/predictor.py :: load_model  (@lru_cache(maxsize=64))
+
+<span class="kw">INPUT</span>:
+    tag, horizon, variant = "csa"
+
+<span class="kw">OUTPUT</span>:
+    (model, scaler, feature_cols)
+
+<span class="kw">BEGIN</span>
+    base        = path.join(_SAVED_MODELS_DIR, tag, "Daily", "h" + horizon, "xgboost_" + variant)
+    model_path  = path.join(base, "model.pkl")
+    scaler_path = path.join(base, "scaler.pkl")
+    meta_path   = path.join(base, "meta.json")
+
+    <span class="kw">IF</span> <span class="kw">NOT</span> (path.exists(model_path) <span class="kw">AND</span> path.exists(meta_path)) <span class="kw">THEN</span>
+        <span class="kw">RAISE</span> FileNotFoundError("Model artefacts missing in " + base)
+    <span class="kw">END IF</span>
+
+    meta         = json.load(meta_path)
+    feature_cols = list(meta.get("feature_cols", []))
+    <span class="kw">IF</span> feature_cols <span class="kw">IS EMPTY</span> <span class="kw">THEN</span> <span class="kw">RAISE</span> ValueError
+
+    model  = joblib.load(model_path)                              <span class="cmt">// ← D6</span>
+    scaler = joblib.load(scaler_path) <span class="kw">IF</span> path.exists(scaler_path) <span class="kw">ELSE</span> <span class="kw">NULL</span>
+    <span class="kw">RETURN</span> (model, scaler, feature_cols)
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Pemetaan Pseudocode → Kode</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td><code>dashboard(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>news(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>about(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>forecasts_api(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>_empty_dashboard_ctx()</code></td><td>private helper</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>compute_forecast_trails(db, h_max, w)</code></td><td>idem</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>build_inference_frame(db)</code></td><td>idem</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>load_winners()</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>load_model(tag, h, variant)</code></td><td>idem; <code>@lru_cache(maxsize=64)</code></td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helpers</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>add_price_features, add_hmm_derived_features,</code><br/><code>engineer_all_features, select_feature_matrix</code></td><td>idem</td><td><code>prediction/feature_engineering.py</code></td></tr>
+            <tr><td><code>model.predict(X)</code></td><td><code>XGBRegressor.predict</code> dari pkl</td><td><code>prediction/saved_models/{tag}/Daily/h{h}/xgboost_csa/model.pkl</code></td></tr>
+            <tr><td><code>scaler.transform(X)</code></td><td><code>StandardScaler.transform</code> dari pkl</td><td><code>.../scaler.pkl</code></td></tr>
+            <tr><td><code>firestore.client()</code></td><td>idem</td><td><code>firebase_admin</code></td></tr>
+            <tr><td><code>render, JsonResponse</code></td><td>idem</td><td><code>django.shortcuts</code> / <code>django.http</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Variabel yang Menyimpan Hasil Pemanggilan Fungsi</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Variabel</th><th>Tipe / Bentuk</th><th>Dari pemanggilan</th></tr></thead>
+          <tbody>
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— dashboard —</td></tr>
+            <tr><td><code>db</code></td><td>Firestore Client</td><td><code>firestore.client()</code></td></tr>
+            <tr><td><code>three_months_ago</code></td><td><code>str</code> ISO date</td><td>arithmetic dari <code>today() - timedelta(90)</code></td></tr>
+            <tr><td><code>price_docs, state_docs, sent_docs</code></td><td>iterator FirestoreDocument</td><td><code>db.collection(...).where(...).order_by(...).stream()</code></td></tr>
+            <tr><td><code>price_list, state_dict, chart_data, sentiment_list</code></td><td><code>list[dict]</code> / <code>dict</code></td><td>komprehensi dari stream</td></tr>
+            <tr><td><code>stats, metrics, winners_payload, latest_date</code></td><td>dict / dict / dict / str</td><td>helpers + <code>load_winners()</code></td></tr>
+
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— news —</td></tr>
+            <tr><td><code>news_docs</code></td><td>iterator FirestoreDocument</td><td><code>db.collection("news_articles").stream()</code></td></tr>
+            <tr><td><code>news_list</code></td><td><code>list[dict]</code> di-filter + di-sort</td><td>iterasi <code>news_docs</code></td></tr>
+            <tr><td><code>total_pages, page_number, news_page</code></td><td>int, int, <code>list[dict]</code></td><td>pagination clamp + slice</td></tr>
+            <tr><td><code>pagination</code></td><td>dict (current_page, has_previous, …)</td><td><code>build_pagination(...)</code></td></tr>
+
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— forecasts_api / compute_forecast_trails —</td></tr>
+            <tr><td><code>(max_horizon, window_days)</code></td><td>int, int (clamped)</td><td><code>int(request.GET.get(...))</code></td></tr>
+            <tr><td><code>payload</code></td><td>JSON-serializable dict</td><td><code>compute_forecast_trails(db, h, w)</code></td></tr>
+            <tr><td><code>winners_payload</code></td><td>dict (from <code>winners.json</code>)</td><td><code>load_winners()</code></td></tr>
+            <tr><td><code>(winners, configs)</code></td><td>dict[int,str] each</td><td>unpack <code>winners_payload</code></td></tr>
+            <tr><td><code>df</code></td><td><code>pd.DataFrame</code> superset fitur</td><td><code>build_inference_frame(db)</code></td></tr>
+            <tr><td><code>(dates_sorted, last_idx, next_td, cutoff, window_idx)</code></td><td>list, int, Timestamp, Timestamp, list[int]</td><td>turunan dari <code>df.Date</code> + <code>_next_trading_day_after</code></td></tr>
+            <tr><td><code>(model, scaler, feature_cols)</code></td><td>(XGBRegressor, StandardScaler|<code>None</code>, list[str])</td><td><code>load_model(tag, h, "csa")</code></td></tr>
+            <tr><td><code>X</code></td><td><code>ndarray (1, F)</code> float</td><td><code>select_feature_matrix(row, feature_cols)</code> + opsional <code>scaler.transform</code></td></tr>
+            <tr><td><code>log_ret, anchor_close, pred_price</code></td><td>float, float, float</td><td><code>model.predict(X)[0]</code>, row.Close, math</td></tr>
+            <tr><td><code>points, trails</code></td><td><code>list[dict]</code> tiap-tiap</td><td>iterasi anchor × horizon</td></tr>
+
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— build_inference_frame internals —</td></tr>
+            <tr><td><code>price_df, sent_df, hmm_state_df</code></td><td><code>pd.DataFrame</code> tiap-tiap</td><td><code>_load_prices(db)</code>, <code>_load_sentiment(db)</code>, <code>_load_hmm_state(db)</code></td></tr>
+            <tr><td><code>top_labels</code></td><td><code>pd.Index</code> 5 entri</td><td><code>value_counts(df.HMM_State_Label).head(5)</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik dan
+            read-only.</li>
+        <li><strong>Cache:</strong> <code>load_winners</code> di-cache dengan
+            <code>@lru_cache(maxsize=1)</code>;
+            <code>load_model</code> dengan <code>@lru_cache(maxsize=64)</code>.
+            Maksimum kombinasi yang dibutuhkan: 4 tags × 7 horizon × 1 varian
+            CSA = 28 entri.</li>
+        <li><strong>Convergence trail:</strong> setiap horizon
+            <em>h</em>-step-ahead diakhiri pada <code>next_td</code> yang
+            sama → 7 trail bertemu di titik prediksi yang sama.</li>
+        <li><strong>Pagination clamp di news:</strong>
+            <code>page_number = max(1, min(page_number, total_pages))</code>
+            — parameter di luar rentang tetap merender halaman valid
+            (tidak 404).</li>
+        <li><strong>Composite-index avoidance:</strong> <code>news</code> men-stream
+            seluruh dokumen dan filter di Python — menghindari composite index
+            (date + sentiment).</li>
+        <li><strong>Cross-reference:</strong>
+            <a href="../flowcharts/P5_dashboard.html" class="text-teal-700 underline">flowchart P5</a>,
+            <a href="../structure_charts/P5_dashboard.html" class="text-teal-700 underline">structure chart P5</a>.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

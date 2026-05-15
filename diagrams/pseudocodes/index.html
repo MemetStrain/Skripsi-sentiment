@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocodes (per DFD Process) — CPO Price Prediction System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.05); padding: 1.25rem 1.5rem; transition: transform 120ms ease, box-shadow 120ms ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,.08), 0 12px 24px rgba(0,0,0,.08); }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .pill { display: inline-block; background: #ccfbf1; color: #0f766e; border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.7rem; font-weight: 600; margin-right: 0.25rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocodes (per DFD Process)</h1>
+      <p class="text-teal-100 text-sm mt-1">Empat berkas pseudocode — satu untuk orkestrasi pipeline, plus detail P3, P4, P5. Mengikuti pemetaan flowchart.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2">
+    <a href="../data_flow_diagram.html" class="nav-pill">Data Flow Diagram</a>
+    <a href="../structure_charts/index.html" class="nav-pill">Structure Charts</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts</a>
+    <a href="../pseudocode.html" class="nav-pill">Pseudocode (Legacy, single file)</a>
+    <span class="nav-pill" style="background:#0d9488;color:#fff;border-color:#0d9488">Pseudocodes (Index)</span>
+    <a href="orchestration.html" class="nav-pill">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-10">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Pseudocode di sini mengikuti pemetaan satu-banding-satu dengan
+        <em>flowchart</em>: satu berkas <em>orchestration</em> yang
+        merepresentasikan rangkaian pipeline scheduler (P1 → P2 → P3 → P4),
+        ditambah tiga berkas detail per-proses (P3, P4, P5) untuk proses
+        dengan logika kontrol non-trivial. Tujuan setiap pseudocode adalah
+        menampilkan struktur kontrol, fungsi-fungsi yang dipanggil, dan
+        variabel yang menyimpan hasil pemanggilan tersebut — bukan
+        mereplikasi setiap baris kode sumber.
+      </p>
+      <p class="text-sm text-slate-700 leading-relaxed mt-3">
+        Pseudocode untuk pelatihan HMM <em>offline</em> (K-Means warm-start +
+        Baum-Welch multi-restart) tidak termasuk dalam set ini karena
+        bukan bagian dari proses operasional (P1–P5). Algoritma tersebut
+        masih tersedia pada
+        <a class="text-teal-700 underline" href="../pseudocode.html">Pseudocode (Legacy, single file)</a>
+        sebagai referensi.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pemetaan Flowchart → Pseudocode</h2>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>No</th><th>Proses DFD</th><th>Flowchart</th><th>Pseudocode</th><th>Sumber Kode</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>1.0 + 2.0 + (orchestration)</td>
+              <td><strong>Pipeline Scheduler Harian</strong></td>
+              <td><a class="nav-pill" href="../flowcharts/orchestration.html">Orchestration FC</a></td>
+              <td><a class="nav-pill" href="orchestration.html">Orchestration PC →</a></td>
+              <td><code>scheduler/main.py::run_daily_update</code></td>
+            </tr>
+            <tr>
+              <td>3.0</td>
+              <td><strong>Sentiment Analysis &amp; Aggregation</strong></td>
+              <td><a class="nav-pill" href="../flowcharts/P3_sentiment.html">P3 FC</a></td>
+              <td><a class="nav-pill" href="P3_sentiment.html">P3 PC →</a></td>
+              <td><code>scheduler/sentiment_runner.py</code></td>
+            </tr>
+            <tr>
+              <td>4.0</td>
+              <td><strong>HMM State Decoding</strong></td>
+              <td><a class="nav-pill" href="../flowcharts/P4_hmm_decoding.html">P4 FC</a></td>
+              <td><a class="nav-pill" href="P4_hmm_decoding.html">P4 PC →</a></td>
+              <td><code>scheduler/hmm_updater.py</code></td>
+            </tr>
+            <tr>
+              <td>5.0</td>
+              <td><strong>Dashboard &amp; Live Inference</strong></td>
+              <td><a class="nav-pill" href="../flowcharts/P5_dashboard.html">P5 FC</a></td>
+              <td><a class="nav-pill" href="P5_dashboard.html">P5 PC →</a></td>
+              <td><code>website/web/views.py</code> + <code>web/predictor.py</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Konvensi Notasi</h2>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li>Kata kunci kontrol huruf kapital: <code>BEGIN</code>, <code>END</code>,
+            <code>IF</code>/<code>THEN</code>/<code>ELSE</code>/<code>END IF</code>,
+            <code>FOR</code>/<code>END FOR</code>, <code>WHILE</code>,
+            <code>RETURN</code>, <code>INPUT</code>, <code>OUTPUT</code>,
+            <code>TRY</code>/<code>CATCH</code>.</li>
+        <li>Indentasi menyatakan tingkat blok. Komentar diawali <code>//</code>.</li>
+        <li>Penugasan: <code>var = expression</code>. Pemanggilan fungsi:
+            <code>result = func(args)</code> menyoroti variabel yang menyimpan
+            hasil panggilan tersebut.</li>
+        <li>Identifier kode (nama fungsi/variabel) ditulis dalam bahasa Inggris
+            persis seperti di kode sumber; narasi dalam bahasa Indonesia.</li>
+        <li>Setiap pseudocode memuat tabel pemetaan baris → fungsi konkret di
+            kode sumber.</li>
+        <li>Cross-reference ke <em>flowchart</em> dan <em>structure chart</em>
+            P-yang-sama tersedia di setiap berkas.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pranala Cepat</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a href="orchestration.html" class="card block md:col-span-2">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">Orkestrasi · Pipeline Scheduler Harian</div>
+          <div class="text-base font-semibold mt-1">Pseudocode Orchestration</div>
+          <div class="text-sm text-slate-600 mt-1"><code>run_daily_update(db)</code> — 5 langkah berurutan dengan <em>skip-if-current</em> guard, plus 3-way branch agregat sentimen.</div>
+        </a>
+        <a href="P3_sentiment.html" class="card block">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P3 · DFD 3.0</div>
+          <div class="text-base font-semibold mt-1">Sentiment Analysis &amp; Aggregation</div>
+          <div class="text-sm text-slate-600 mt-1"><code>run_sentiment_on_articles</code> + <code>compute_sentiment_aggregates</code>. Title-only FinBERT-Tone, batch 16.</div>
+        </a>
+        <a href="P4_hmm_decoding.html" class="card block">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P4 · DFD 4.0</div>
+          <div class="text-base font-semibold mt-1">HMM State Decoding</div>
+          <div class="text-sm text-slate-600 mt-1"><code>update_hmm_states(db, write_existing=False)</code>. Frozen params, online forward filter, 3 early-returns.</div>
+        </a>
+        <a href="P5_dashboard.html" class="card block md:col-span-2">
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
+          <div class="text-base font-semibold mt-1">Dashboard &amp; Live Inference</div>
+          <div class="text-sm text-slate-600 mt-1">4 view (<code>dashboard</code>, <code>news</code>, <code>about</code>, <code>forecasts_api</code>) + <code>compute_forecast_trails</code> dengan loop horizon × anchor.</div>
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

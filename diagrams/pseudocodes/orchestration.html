@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — Orchestration: Pipeline Scheduler Harian</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    pre.algorithm {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      pre.algorithm { background: #f8fafc; color: #0f172a; }
+      pre.algorithm .kw  { color: #0d9488; }
+      pre.algorithm .cmt { color: #475569; }
+      pre.algorithm .src { color: #b45309; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — Orchestration: Pipeline Scheduler Harian</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>scheduler/main.py::run_daily_update</code> (P1 → P2 → P3 → P4).</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/orchestration.html" class="nav-pill">Orchestration FC</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="orchestration.html" class="nav-pill active">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Pseudocode ini mengikuti
+        <a href="../flowcharts/orchestration.html" class="text-teal-700 underline">flowchart Orchestration</a>
+        — alur kontrol untuk <code>--mode daily</code> di
+        <code>scheduler/main.py::run_daily_update(db)</code>. Tiga sub-prosedur
+        ditampilkan eksplisit: <code>_step_price</code> (P1),
+        <code>_step_news</code> (P2 + memanggil P3a
+        <code>run_sentiment_on_articles</code>), dan blok orkestrasi 3-way
+        agregat sentimen (P3b) + pemicu P4
+        (<code>update_hmm_states</code>). Detail internal P3 dan P4 berada di
+        berkas pseudocode masing-masing.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM main · scheduler/main.py</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> main
+<span class="src">SOURCE</span>: scheduler/main.py :: main
+
+<span class="kw">INPUT</span>:
+    sys.argv  <span class="cmt">// --mode {initial, daily, rebuild-hmm}, --reset-progress</span>
+
+<span class="kw">OUTPUT</span>:
+    side effects (CSV writes, Firestore writes, log); exit code
+
+<span class="kw">BEGIN</span>
+    args = parse_argparse()
+    <span class="kw">IF</span> args.reset_progress <span class="kw">THEN</span>
+        _reset_progress()
+        <span class="kw">RETURN</span>
+    <span class="kw">END IF</span>
+
+    <span class="kw">IF</span> args.mode == "rebuild-hmm" <span class="kw">THEN</span>
+        migrate_hmm_to_firestore.main()        <span class="cmt">// republish frozen params</span>
+        <span class="kw">RETURN</span>
+    <span class="kw">END IF</span>
+
+    <span class="kw">TRY</span>
+        init_firebase()                        <span class="cmt">// env JSON / file / ADC fallback</span>
+    <span class="kw">CATCH</span> Exception
+        log_error("Firebase init failed")
+        sys.exit(1)
+    <span class="kw">END TRY</span>
+
+    db = firestore.client()
+
+    <span class="kw">IF</span> args.mode == "initial" <span class="kw">THEN</span>
+        run_initial_load(db)                   <span class="cmt">// bulk CSV → Firestore (4 checkpointed steps)</span>
+    <span class="kw">ELSE</span>
+        run_daily_update(db)                   <span class="cmt">// the main daily pipeline (see below)</span>
+    <span class="kw">END IF</span>
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM run_daily_update · scheduler/main.py</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> run_daily_update
+<span class="src">SOURCE</span>: scheduler/main.py :: run_daily_update
+
+<span class="kw">INPUT</span>:
+    db   <span class="cmt">// Firestore client</span>
+
+<span class="kw">OUTPUT</span>:
+    side effects on D1 (daily_prices), D2 (news_articles),
+    D3 (sentiment_aggregates), D4 (hmm_states) + 3 local CSV files
+
+<span class="kw">BEGIN</span>
+    paths = _paths()      <span class="cmt">// {cpo_raw, cpo_preproc, news_raw, news_preproc, news_sent}</span>
+
+    <span class="cmt">// ── Step 1 · P1: PRICE ─────────────────────────────────────</span>
+    _step_price(db, paths)
+
+    <span class="cmt">// ── Step 2 · P2: NEWS (scrape + preprocess + title-only sentiment) ─</span>
+    (new_articles, news_changed) = _step_news(paths)
+
+    <span class="cmt">// ── Step 3 · P3: mirror artikel baru ke D2 ─────────────────</span>
+    <span class="kw">IF</span> news_changed <span class="kw">AND</span> new_articles <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        write_news_articles(db, new_articles)   <span class="cmt">// doc ID = md5(url)</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// ── Step 4 · P3: sentiment_aggregates (3-way branch) ───────</span>
+    <span class="kw">IF</span> news_changed <span class="kw">AND</span> new_articles <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        affected_dates = { a.date <span class="kw">FOR</span> a <span class="kw">IN</span> new_articles <span class="kw">IF</span> a.date }
+        all_articles   = load_news_from_csv(paths.news_raw, paths.news_sent)
+        affected       = [ a <span class="kw">FOR</span> a <span class="kw">IN</span> all_articles <span class="kw">IF</span> a.date <span class="kw">IN</span> affected_dates ]
+        aggregates     = compute_sentiment_aggregates(affected)
+        <span class="kw">IF</span> aggregates <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+            write_sentiment_aggregates(db, aggregates)
+        <span class="kw">END IF</span>
+    <span class="kw">ELSE IF</span> _is_aggregates_empty(db) <span class="kw">THEN</span>
+        all_articles = load_news_from_csv(paths.news_raw, paths.news_sent)
+        aggregates   = compute_sentiment_aggregates(all_articles)
+        <span class="kw">IF</span> aggregates <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+            write_sentiment_aggregates(db, aggregates)
+        <span class="kw">END IF</span>
+    <span class="kw">ELSE</span>
+        log_info("aggregates already up to date — skip")
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// ── Step 5 · P4: HMM state decoding ────────────────────────</span>
+    update_hmm_states(db)                       <span class="cmt">// see P4 pseudocode</span>
+
+    <span class="kw">RETURN</span> log_DAILY_UPDATE_COMPLETE
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">PROCEDURE _step_price · P1 (linear)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">PROCEDURE</span> _step_price
+<span class="src">SOURCE</span>: scheduler/main.py :: _step_price
+
+<span class="kw">INPUT</span>:
+    db, paths
+
+<span class="kw">OUTPUT</span>:
+    bool — TRUE jika harga baru ditulis, FALSE bila skip
+
+<span class="kw">BEGIN</span>
+    cutoff = most_recent_trading_day()                       <span class="cmt">// weekday-only floor</span>
+    have   = latest_price_date(paths.cpo_raw)
+
+    <span class="kw">IF</span> have <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> have &gt;= cutoff <span class="kw">THEN</span>
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>                                       <span class="cmt">// skip-if-current</span>
+    <span class="kw">END IF</span>
+
+    price = fetch_latest_price()                             <span class="cmt">// investiny, lookback 90/365/1095 d</span>
+    <span class="kw">IF</span> price <span class="kw">IS NULL</span> <span class="kw">THEN</span> <span class="kw">RETURN</span> <span class="kw">FALSE</span>
+    <span class="kw">IF</span> have <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> price.date &lt;= have <span class="kw">THEN</span>
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>                                       <span class="cmt">// stale fetch — already have it</span>
+    <span class="kw">END IF</span>
+
+    appended = append_price_row_indonesian(paths.cpo_raw, price)
+    <span class="kw">IF</span> <span class="kw">NOT</span> appended <span class="kw">THEN</span> <span class="kw">RETURN</span> <span class="kw">FALSE</span>             <span class="cmt">// duplicate date guard</span>
+
+    preprocess_price_csv(paths.cpo_raw, paths.cpo_preproc)    <span class="cmt">// build engineered CSV</span>
+    write_price(db, price)                                    <span class="cmt">// daily_prices/{date} ← D1</span>
+    <span class="kw">RETURN</span> <span class="kw">TRUE</span>
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">PROCEDURE _step_news · P2 (linear, calls P3a)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">PROCEDURE</span> _step_news
+<span class="src">SOURCE</span>: scheduler/main.py :: _step_news
+
+<span class="kw">INPUT</span>:
+    paths
+
+<span class="kw">OUTPUT</span>:
+    (scored: list[dict], news_changed: bool)
+
+<span class="kw">BEGIN</span>
+    cutoff = most_recent_trading_day()
+    have   = latest_news_date(paths.news_sent)
+
+    <span class="kw">IF</span> have <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> have &gt;= cutoff <span class="kw">THEN</span>
+        <span class="kw">RETURN</span> ([], <span class="kw">FALSE</span>)
+    <span class="kw">END IF</span>
+
+    raw = scrape_new_articles(have)                          <span class="cmt">// MPOB, multi-keyword × page, dedup URL</span>
+    <span class="kw">IF</span> raw <span class="kw">IS EMPTY</span> <span class="kw">THEN</span> <span class="kw">RETURN</span> ([], <span class="kw">FALSE</span>)
+
+    raw_rows = [ article_to_raw_row(a) <span class="kw">FOR</span> a <span class="kw">IN</span> raw ]
+    append_news_rows(paths.news_raw, raw_rows, RAW_FIELDS)   <span class="cmt">// arsip mentah</span>
+
+    cleaned = preprocess_articles(raw)                       <span class="cmt">// NewsPreprocessor, drops empty</span>
+    <span class="kw">IF</span> cleaned <span class="kw">IS EMPTY</span> <span class="kw">THEN</span> <span class="kw">RETURN</span> ([], <span class="kw">FALSE</span>)
+
+    cleaned_rows = [ article_to_raw_row(a) <span class="kw">FOR</span> a <span class="kw">IN</span> cleaned ]
+    append_news_rows(paths.news_preproc, cleaned_rows, RAW_FIELDS)
+
+    scored = run_sentiment_on_articles(cleaned)              <span class="cmt">// P3a — see P3 pseudocode</span>
+    sent_rows = [ article_to_sentiment_row(a) <span class="kw">FOR</span> a <span class="kw">IN</span> scored ]
+    append_news_rows(paths.news_sent, sent_rows, SENTIMENT_FIELDS)
+
+    <span class="kw">RETURN</span> (scored, <span class="kw">TRUE</span>)
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Pemetaan Pseudocode → Kode</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td><code>init_firebase</code></td><td><code>init_firebase</code></td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>_paths()</code></td><td><code>_paths</code> (private helper)</td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>run_initial_load</code> / <code>run_daily_update</code></td><td>idem</td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>_step_price, _step_news, _is_aggregates_empty</code></td><td>private helpers di <code>main.py</code></td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>most_recent_trading_day, fetch_latest_price, preprocess_price_csv</code></td><td>idem</td><td><code>scheduler/price_fetcher.py</code></td></tr>
+            <tr><td><code>latest_price_date, append_price_row_indonesian,</code><br/><code>latest_news_date, append_news_rows</code></td><td>idem</td><td><code>scheduler/local_csv_writer.py</code></td></tr>
+            <tr><td><code>scrape_new_articles, preprocess_articles, load_news_from_csv,</code><br/><code>article_to_raw_row, article_to_sentiment_row</code></td><td>idem</td><td><code>scheduler/news_extractor.py</code></td></tr>
+            <tr><td><code>run_sentiment_on_articles, compute_sentiment_aggregates</code></td><td>idem (lihat P3 pseudocode)</td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>write_price, write_news_articles, write_sentiment_aggregates</code></td><td>idem</td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td><code>update_hmm_states</code></td><td>idem (lihat P4 pseudocode)</td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td><code>migrate_hmm_to_firestore.main</code></td><td>delegasi <code>--mode rebuild-hmm</code></td><td><code>scheduler/migrate_hmm_to_firestore.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Variabel yang Menyimpan Hasil Pemanggilan Fungsi</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Variabel</th><th>Tipe / Bentuk</th><th>Dari pemanggilan</th></tr></thead>
+          <tbody>
+            <tr><td><code>db</code></td><td>Firestore Client</td><td><code>firestore.client()</code></td></tr>
+            <tr><td><code>paths</code></td><td>dict 5 path string</td><td><code>_paths()</code></td></tr>
+            <tr><td><code>cutoff</code></td><td><code>str</code> YYYY-MM-DD</td><td><code>most_recent_trading_day()</code></td></tr>
+            <tr><td><code>have</code></td><td><code>str | None</code></td><td><code>latest_price_date(...)</code> / <code>latest_news_date(...)</code></td></tr>
+            <tr><td><code>price</code></td><td><code>dict | None</code> OHLCV</td><td><code>fetch_latest_price()</code></td></tr>
+            <tr><td><code>appended</code></td><td><code>bool</code></td><td><code>append_price_row_indonesian(...)</code></td></tr>
+            <tr><td><code>raw</code></td><td><code>list[dict]</code></td><td><code>scrape_new_articles(have)</code></td></tr>
+            <tr><td><code>cleaned</code></td><td><code>list[dict]</code></td><td><code>preprocess_articles(raw)</code></td></tr>
+            <tr><td><code>scored</code></td><td><code>list[dict]</code> + sentiment fields</td><td><code>run_sentiment_on_articles(cleaned)</code></td></tr>
+            <tr><td><code>(new_articles, news_changed)</code></td><td><code>(list[dict], bool)</code></td><td><code>_step_news(paths)</code></td></tr>
+            <tr><td><code>affected_dates</code></td><td><code>set[str]</code></td><td>set-comprehension dari <code>new_articles</code></td></tr>
+            <tr><td><code>all_articles</code></td><td><code>list[dict]</code></td><td><code>load_news_from_csv(raw, sent)</code></td></tr>
+            <tr><td><code>aggregates</code></td><td><code>list[dict]</code> per-tanggal</td><td><code>compute_sentiment_aggregates(...)</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

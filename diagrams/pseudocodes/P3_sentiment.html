@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P3 Sentiment Analysis &amp; Aggregation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    pre.algorithm {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      pre.algorithm { background: #f8fafc; color: #0f172a; }
+      pre.algorithm .kw  { color: #0d9488; }
+      pre.algorithm .cmt { color: #475569; }
+      pre.algorithm .src { color: #b45309; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P3 Sentiment Analysis &amp; Aggregation</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>scheduler/sentiment_runner.py</code> — FinBERT-Tone <em>title-only</em>.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P3_sentiment.html" class="nav-pill">P3 Flowchart</a>
+    <a href="../structure_charts/P3_sentiment.html" class="nav-pill">P3 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="orchestration.html" class="nav-pill">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill active">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Pseudocode ini mengikuti
+        <a href="../flowcharts/P3_sentiment.html" class="text-teal-700 underline">flowchart P3</a>.
+        Dua fungsi entry-point ditampilkan eksplisit:
+        <code>run_sentiment_on_articles</code> (skoring FinBERT-Tone, title-only)
+        dan <code>compute_sentiment_aggregates</code> (agregasi per tanggal).
+        Helper privat di sentiment_runner (<code>_load_model</code>,
+        <code>_score_texts</code>) juga ditampilkan ringkas.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM run_sentiment_on_articles</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> run_sentiment_on_articles
+<span class="src">SOURCE</span>: scheduler/sentiment_runner.py :: run_sentiment_on_articles
+
+<span class="kw">INPUT</span>:
+    articles  <span class="cmt">// list[dict] hasil preprocess (title + content)</span>
+
+<span class="kw">OUTPUT</span>:
+    articles dimutasi in-place dengan field:
+        sentiment_label, sentiment_score,
+        positive_prob, negative_prob, neutral_prob,
+        combined_confidence,
+        title_sentiment, title_confidence,
+        title_{positive,negative,neutral}_prob
+
+<span class="kw">BEGIN</span>
+    <span class="kw">IF</span> articles <span class="kw">IS EMPTY</span> <span class="kw">THEN</span> <span class="kw">RETURN</span> articles
+
+    (model, tokenizer, device) = _load_model()       <span class="cmt">// lazy, sekali per proses</span>
+
+    <span class="kw">FOR</span> i = 0 <span class="kw">TO</span> |articles| - 1 <span class="kw">STEP</span> BATCH_SIZE <span class="kw">DO</span>   <span class="cmt">// BATCH_SIZE = 16</span>
+        batch = articles[i : i + BATCH_SIZE]
+
+        flat_titles = []
+        meta        = []                              <span class="cmt">// per-article: title_idx or NULL</span>
+        <span class="kw">FOR</span> a <span class="kw">IN</span> batch <span class="kw">DO</span>
+            title = strip(a.title <span class="kw">OR</span> "")
+            <span class="kw">IF</span> title <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+                meta.append(|flat_titles|)
+                flat_titles.append(title)
+            <span class="kw">ELSE</span>
+                meta.append(<span class="kw">NULL</span>)
+            <span class="kw">END IF</span>
+        <span class="kw">END FOR</span>
+
+        <span class="kw">TRY</span>
+            probs = _score_texts(flat_titles, model, tokenizer, device)
+        <span class="kw">CATCH</span> Exception
+            <span class="kw">FOR</span> a <span class="kw">IN</span> batch <span class="kw">DO</span>
+                a.setdefault(sentiment_label, "Neutral")
+                a.setdefault(sentiment_score, 0.0)
+                a.setdefault(positive_prob, 0.33)
+                a.setdefault(negative_prob, 0.33)
+                a.setdefault(neutral_prob, 0.34)
+            <span class="kw">END FOR</span>
+            <span class="kw">CONTINUE</span>                                  <span class="cmt">// next batch</span>
+        <span class="kw">END TRY</span>
+
+        <span class="kw">FOR</span> (a, title_idx) <span class="kw">IN</span> zip(batch, meta) <span class="kw">DO</span>
+            <span class="kw">IF</span> title_idx <span class="kw">IS NULL</span> <span class="kw">THEN</span>
+                combined = [1.0, 0.0, 0.0]            <span class="cmt">// degenerate Neutral</span>
+            <span class="kw">ELSE</span>
+                combined = probs[title_idx]            <span class="cmt">// shape (3,)</span>
+            <span class="kw">END IF</span>
+
+            label_idx = argmax(combined)
+            label     = LABELS[label_idx]              <span class="cmt">// {0:Neutral, 1:Positive, 2:Negative}</span>
+            (neu, pos, neg) = (combined[0], combined[1], combined[2])
+            score     = pos - neg
+
+            a.update({
+                sentiment_label     : label,
+                sentiment_score     : round(score, 4),
+                positive_prob       : round(pos, 4),
+                negative_prob       : round(neg, 4),
+                neutral_prob        : round(neu, 4),
+                combined_confidence : round(max(combined), 4) })
+
+            <span class="kw">IF</span> title_idx <span class="kw">IS NOT NULL</span> <span class="kw">THEN</span>
+                a.update({
+                    title_sentiment     : label,
+                    title_confidence    : round(max(combined), 4),
+                    title_neutral_prob  : round(neu, 4),
+                    title_positive_prob : round(pos, 4),
+                    title_negative_prob : round(neg, 4) })
+            <span class="kw">END IF</span>
+        <span class="kw">END FOR</span>
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> articles
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> _load_model
+<span class="src">SOURCE</span>: scheduler/sentiment_runner.py :: _load_model
+
+<span class="kw">BEGIN</span>
+    device    = torch.device("cuda" <span class="kw">IF</span> torch.cuda.is_available() <span class="kw">ELSE</span> "cpu")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)     <span class="cmt">// yiyanghkust/finbert-tone</span>
+    model     = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+    model.to(device)
+    model.eval()
+    <span class="kw">RETURN</span> (model, tokenizer, device)
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> _score_texts
+<span class="src">SOURCE</span>: scheduler/sentiment_runner.py :: _score_texts
+
+<span class="kw">INPUT</span>:
+    texts, model, tokenizer, device
+
+<span class="kw">OUTPUT</span>:
+    probs  <span class="cmt">// ndarray shape (N, 3) — Neutral, Positive, Negative</span>
+
+<span class="kw">BEGIN</span>
+    <span class="kw">IF</span> texts <span class="kw">IS EMPTY</span> <span class="kw">THEN</span> <span class="kw">RETURN</span> zeros((0, 3))
+
+    inputs = tokenizer(texts,
+                       return_tensors = "pt",
+                       truncation     = <span class="kw">TRUE</span>,
+                       max_length     = MAX_LENGTH,          <span class="cmt">// 512</span>
+                       padding        = <span class="kw">TRUE</span>)
+    inputs = move_to_device(inputs, device)
+
+    <span class="kw">WITH</span> torch.no_grad() <span class="kw">DO</span>
+        outputs = model(**inputs)
+        probs   = torch.softmax(outputs.logits, dim = -1).cpu().numpy()
+    <span class="kw">END WITH</span>
+
+    <span class="kw">RETURN</span> probs
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM compute_sentiment_aggregates</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> compute_sentiment_aggregates
+<span class="src">SOURCE</span>: scheduler/sentiment_runner.py :: compute_sentiment_aggregates
+
+<span class="kw">INPUT</span>:
+    articles  <span class="cmt">// list[dict] dengan field sentimen lengkap</span>
+
+<span class="kw">OUTPUT</span>:
+    aggregates  <span class="cmt">// list[dict] per-tanggal (Daily)</span>
+
+<span class="kw">BEGIN</span>
+    daily = defaultdict(<span class="kw">LAMBDA</span> {
+        positive_sum : 0.0, negative_sum : 0.0, neutral_sum : 0.0,
+        score_sum    : 0.0, count        : 0 })
+
+    <span class="kw">FOR</span> a <span class="kw">IN</span> articles <span class="kw">DO</span>
+        d = a.get(date, "")
+        <span class="kw">IF</span> d <span class="kw">IS EMPTY</span> <span class="kw">OR</span> "sentiment_score" <span class="kw">NOT IN</span> a
+                          <span class="kw">OR</span> "positive_prob"   <span class="kw">NOT IN</span> a <span class="kw">THEN</span>
+            <span class="kw">CONTINUE</span>
+        <span class="kw">END IF</span>
+        bucket = daily[d]
+        bucket.positive_sum += a.positive_prob
+        bucket.negative_sum += a.negative_prob
+        bucket.neutral_sum  += a.neutral_prob
+        bucket.score_sum    += a.sentiment_score
+        bucket.count        += 1
+    <span class="kw">END FOR</span>
+
+    aggregates = []
+    <span class="kw">FOR</span> (date_str, b) <span class="kw">IN</span> sorted(daily.items()) <span class="kw">DO</span>
+        n     = b.count
+        pos   = b.positive_sum / n
+        neg   = b.negative_sum / n
+        neu   = b.neutral_sum  / n
+        score = b.score_sum    / n
+        dominant = argmax_by_value([
+                       ("Positive", pos),
+                       ("Negative", neg),
+                       ("Neutral",  neu) ])
+
+        aggregates.append({
+            date                : date_str,
+            frequency           : "Daily",
+            article_count       : n,
+            positive_prob       : round(pos,   4),
+            negative_prob       : round(neg,   4),
+            neutral_prob        : round(neu,   4),
+            sentiment_score     : round(score, 4),
+            dominant_sentiment  : dominant })
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> aggregates
+<span class="kw">END</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Pemetaan Pseudocode → Kode</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td><code>run_sentiment_on_articles(articles)</code></td><td>idem</td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>compute_sentiment_aggregates(articles)</code></td><td>idem</td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>_load_model()</code></td><td>private helper; <code>MODEL_NAME = "yiyanghkust/finbert-tone"</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>_score_texts(texts, model, tokenizer, device)</code></td><td>private helper</td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>AutoTokenizer.from_pretrained, AutoModelForSequenceClassification.from_pretrained</code></td><td>pustaka <code>transformers</code></td><td>HuggingFace Hub</td></tr>
+            <tr><td><code>torch.cuda.is_available, torch.device, torch.no_grad, torch.softmax</code></td><td>pustaka <code>torch</code></td><td>—</td></tr>
+            <tr><td><code>argmax, max</code> (numpy)</td><td><code>np.argmax</code>, <code>arr.max()</code></td><td>—</td></tr>
+            <tr><td><code>LABELS</code></td><td>konstanta <code>["Neutral","Positive","Negative"]</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
+            <tr><td><code>defaultdict</code></td><td><code>collections.defaultdict</code></td><td>stdlib</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Variabel yang Menyimpan Hasil Pemanggilan Fungsi</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Variabel</th><th>Tipe / Bentuk</th><th>Dari pemanggilan</th></tr></thead>
+          <tbody>
+            <tr><td><code>(model, tokenizer, device)</code></td><td>tuple (PreTrainedModel, PreTrainedTokenizer, torch.device)</td><td><code>_load_model()</code></td></tr>
+            <tr><td><code>device</code></td><td><code>torch.device</code></td><td><code>torch.device("cuda"/"cpu")</code></td></tr>
+            <tr><td><code>tokenizer</code></td><td>PreTrainedTokenizer</td><td><code>AutoTokenizer.from_pretrained(MODEL_NAME)</code></td></tr>
+            <tr><td><code>model</code></td><td>PreTrainedModel</td><td><code>AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)</code></td></tr>
+            <tr><td><code>inputs</code></td><td>dict of tensors</td><td><code>tokenizer(texts, ...)</code></td></tr>
+            <tr><td><code>outputs</code></td><td>ModelOutput (logits, ...)</td><td><code>model(**inputs)</code></td></tr>
+            <tr><td><code>probs</code></td><td><code>ndarray (N, 3)</code></td><td><code>torch.softmax(...).cpu().numpy()</code></td></tr>
+            <tr><td><code>combined</code></td><td><code>ndarray (3,)</code></td><td>per-artikel: probs slice atau degenerate <code>[1,0,0]</code></td></tr>
+            <tr><td><code>(label_idx, label)</code></td><td>(int, str)</td><td><code>argmax(combined)</code> → <code>LABELS[label_idx]</code></td></tr>
+            <tr><td><code>(neu, pos, neg)</code></td><td>tuple float</td><td>unpack <code>combined</code></td></tr>
+            <tr><td><code>score</code></td><td>float</td><td><code>pos - neg</code></td></tr>
+            <tr><td><code>daily</code></td><td><code>defaultdict[str, dict]</code></td><td><code>defaultdict(lambda: {...})</code></td></tr>
+            <tr><td><code>aggregates</code></td><td><code>list[dict]</code> per-tanggal</td><td>list comprehension dari sorted(<code>daily.items()</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Title-only:</strong> body artikel tidak diskor.
+            <code>Combined_*</code> mirror dari <code>Title_*</code>.</li>
+        <li><strong>Empty-title:</strong> degenerate Neutral
+            <code>[1.0, 0.0, 0.0]</code>; field <code>title_*</code> dilewati.</li>
+        <li><strong>Label space:</strong>
+            <code>LABELS = ["Neutral", "Positive", "Negative"]</code> mengikuti
+            <code>yiyanghkust/finbert-tone</code> id2label (BERBEDA dari
+            <code>ProsusAI/finbert</code>).</li>
+        <li><strong>Batch exception fallback:</strong> tiap artikel di batch
+            mendapat default Neutral (0.33 / 0.33 / 0.34) bila inferensi
+            gagal — tidak crash seluruh proses.</li>
+        <li><strong>Cross-reference:</strong>
+            <a href="../flowcharts/P3_sentiment.html" class="text-teal-700 underline">flowchart P3</a>
+            untuk alur kontrol;
+            <a href="../structure_charts/P3_sentiment.html" class="text-teal-700 underline">structure chart P3</a>
+            untuk dekomposisi modul.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
