@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P5 Dashboard &amp; Live Inference</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P5 Dashboard &amp; Live Inference</h1>
+      <p class="text-teal-100 text-sm mt-1">Alur kontrol detail untuk proses 5.0 — URL routing, dashboard render, live XGBoost inference.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../structure_charts/P5_dashboard.html" class="nav-pill">P5 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="orchestration.html" class="nav-pill">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill active">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P5 — Dashboard &amp; Live Inference</strong> dimulai
+        dari <code>python manage.py runserver</code> yang menyalakan
+        Django <em>development server</em> di <code>127.0.0.1:8000</code>.
+        Setiap HTTP request akan di-<em>dispatch</em> oleh URL router
+        (<code>config/urls.py</code> → <code>web/urls.py</code>) ke salah
+        satu dari empat <em>view</em>: <code>dashboard</code>, <code>news</code>,
+        <code>about</code>, atau <code>forecasts_api</code>. Tiga view
+        pertama bersifat sinkron <em>read-and-render</em>; endpoint
+        <code>forecasts_api</code> menjalankan inferensi XGBoost
+        <em>live</em> per request — inilah sumber kompleksitas kontrol
+        terbesar (loop horizon × loop anchor + <code>lru_cache</code>
+        hit/miss + tiga jalur error).
+      </p>
+      <p class="text-sm text-slate-700 leading-relaxed mt-3">
+        Flowchart ini menampilkan empat sub-alur view, masing-masing
+        diakhiri respons HTTP. Sub-alur <code>forecasts_api</code> diberi
+        detail penuh: validasi parameter (400), dua jalur error fallback
+        (503 untuk artefak hilang, 500 untuk exception lain), dan dua
+        loop bersarang (horizon × anchor) dengan keputusan
+        <em>cache hit/miss</em> serta skip-NaN.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: runserver listen 127.0.0.1:8000"]):::startend
+    Start --> REQ["HTTP request dari Pengunjung"]:::process
+    REQ --> DISP{"URL path?"}:::decision
+
+    DISP -->|"/"| VD["dashboard(request)"]:::process
+    DISP -->|"/news/"| VN["news(request)"]:::process
+    DISP -->|"/about/"| VA["about(request)"]:::process
+    DISP -->|"/api/forecasts/"| VF["forecasts_api(request)"]:::process
+
+    %% --- Dashboard subflow ---
+    VD --> VDF{"firestore.client()<br/>berhasil?"}:::decision
+    VDF -->|Tidak| VDE["empty ctx<br/>(metrics N/A)"]:::error
+    VDE --> RD1["render('dashboard.html', ctx)"]:::process
+    VDF -->|Ya| VDQ["3 queries Firestore (≥ 90 hari):<br/>D1 daily_prices, D4 hmm_states,<br/>D3 sentiment_aggregates"]:::process
+    VDQ --> VDW{"winners.json<br/>tersedia?"}:::decision
+    VDW -->|Tidak| VDM["metrics N/A<br/>(template tetap render)"]:::process
+    VDW -->|Ya| VDL["load_winners()<br/>+ ekstrak h=1 CSA metrics"]:::process
+    VDM --> RD1
+    VDL --> RD1
+    RD1 --> RET1(["HTTP 200 · dashboard.html"]):::startend
+
+    %% --- News subflow ---
+    VN --> VNQ["stream news_articles ← D2<br/>(no Firestore filter,<br/>sort &amp; filter di Python)"]:::process
+    VNQ --> VNF["filter by ?sentiment,<br/>sort desc by date,<br/>paginate (page clamp 1..total_pages)"]:::process
+    VNF --> RD2["render('news.html', ctx)"]:::process
+    RD2 --> RET2(["HTTP 200 · news.html"]):::startend
+
+    %% --- About subflow ---
+    VA --> RD3["render('about.html', ctx)"]:::process
+    RD3 --> RET3(["HTTP 200 · about.html"]):::startend
+
+    %% --- forecasts_api subflow ---
+    VF --> VFV{"int(max_horizon) &amp;<br/>int(window_days) ok?"}:::decision
+    VFV -->|Tidak| VF400["JsonResponse 400<br/>'Invalid integer parameter'"]:::error
+    VFV -->|Ya| VFC["clamp:<br/>max_horizon ∈ [1,7],<br/>window_days ∈ [7,365]"]:::process
+    VFC --> CT["try: compute_forecast_trails(db, h, w)"]:::process
+    CT --> CT1["load_winners()<br/>(lru_cache 1)"]:::process
+    CT1 --> CT2["build_inference_frame(db):<br/>_load_prices/_load_sentiment/_load_hmm_state<br/>+ feature engineering pipeline"]:::process
+
+    CT2 --> CT3{"Loop horizon<br/>h = 1..max_horizon"}:::decision
+    CT3 --> CT3W{"winner_tag<br/>untuk h ada?"}:::decision
+    CT3W -->|Tidak| CT3S["log.warning, skip horizon"]:::process
+    CT3W -->|Ya| CT4{"(tag, h, 'csa')<br/>di lru_cache(64)?"}:::decision
+    CT4 -->|Ya| CT5["pakai cached<br/>(model, scaler, feature_cols)"]:::process
+    CT4 -->|Tidak| CT6["load_model:<br/>joblib.load model.pkl + scaler.pkl,<br/>parse meta.json ← D6"]:::process
+
+    CT5 --> CT7{"Loop anchor<br/>di window_days"}:::decision
+    CT6 --> CT7
+    CT7 --> CT7X["select_feature_matrix(row, feature_cols)<br/>→ X (ndarray)"]:::process
+    CT7X --> CT7Q{"X punya<br/>NaN?"}:::decision
+    CT7Q -->|Ya| CT7S["skip anchor"]:::process
+    CT7Q -->|Tidak| CT8["X = scaler.transform(X)<br/>log_ret = model.predict(X)[0]"]:::process
+    CT8 --> CT9["pred_price = anchor_close<br/>× exp(clip(log_ret, -10, 10))"]:::process
+    CT9 --> CT7N{"anchor lain?"}:::decision
+    CT7S --> CT7N
+    CT7N -->|Ya| CT7
+    CT7N -->|Tidak| CT3N{"horizon lain?"}:::decision
+    CT3S --> CT3N
+    CT3N -->|Ya| CT3
+    CT3N -->|Tidak| CT10["assemble payload:<br/>{horizons, winners, configs,<br/>trails, metrics, tag_to_config}"]:::process
+
+    CT10 --> VFOK["JsonResponse(payload) 200"]:::process
+    CT -.->|"FileNotFoundError<br/>(D6 / D7 hilang)"| VF503["JsonResponse 503<br/>{error: ...}"]:::error
+    CT -.->|"Exception"| VF500["JsonResponse 500<br/>{error: ...}"]:::error
+
+    VFOK --> RET4(["JSON 200 · trails"]):::startend
+    VF400 --> RET4err(["JSON error"]):::startend
+    VF503 --> RET4err
+    VF500 --> RET4err
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#854d0e,stroke-width:1px,color:#713f12;
+    classDef error    fill:#fee2e2,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda:
+        <span class="px-1 rounded" style="background:#fef3c7;border:1px solid #92400e">krem</span> = start/end,
+        <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = process,
+        <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #854d0e">krem-kuning</span> = decision,
+        <span class="px-1 rounded" style="background:#fee2e2;border:1px solid #b91c1c">merah</span> = error / fallback.
+        Panah putus-putus = jalur exception (try/except).
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Sub-alur &amp; Endpoint</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Endpoint</th><th>View</th><th>Aksi Utama</th><th>Data store dibaca</th><th>Respons</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET /</code></td><td><code>dashboard(request)</code></td>
+                <td>3 query Firestore (≥ 90d), opsional muat <code>winners.json</code>, render template</td>
+                <td>D1, D3, D4 + D7</td>
+                <td><code>HttpResponse</code> 200 (dashboard.html)</td></tr>
+            <tr><td><code>GET /news/</code></td><td><code>news(request)</code></td>
+                <td>Stream seluruh <code>news_articles</code>, filter+sort+paginate di Python, render template</td>
+                <td>D2</td>
+                <td><code>HttpResponse</code> 200 (news.html)</td></tr>
+            <tr><td><code>GET /about/</code></td><td><code>about(request)</code></td>
+                <td>Render template statis</td>
+                <td>—</td>
+                <td><code>HttpResponse</code> 200 (about.html)</td></tr>
+            <tr><td><code>GET /api/forecasts/</code></td><td><code>forecasts_api(request)</code></td>
+                <td>Validasi → <code>compute_forecast_trails</code> (loop horizon × anchor) → JSON</td>
+                <td>D1, D3, D4, D6, D7</td>
+                <td><code>JsonResponse</code> 200 / 400 / 503 / 500</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Decision Points di <code>forecasts_api</code></h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Decision</th><th>Cabang Ya</th><th>Cabang Tidak</th><th>Lokasi</th></tr></thead>
+          <tbody>
+            <tr><td>param <code>max_horizon</code> &amp; <code>window_days</code> dapat dikonversi <code>int</code>?</td>
+                <td>Lanjut (clamp ranges)</td>
+                <td>JsonResponse 400 <em>Invalid integer parameter</em></td>
+                <td><code>web/views.py::forecasts_api</code></td></tr>
+            <tr><td><code>winners.json</code> ada?</td>
+                <td>load &amp; lanjut</td>
+                <td><code>FileNotFoundError</code> → JsonResponse 503</td>
+                <td><code>web/predictor.py::load_winners</code></td></tr>
+            <tr><td>winner_tag untuk horizon <code>h</code> ada?</td>
+                <td>load model</td>
+                <td>log.warning, skip horizon</td>
+                <td><code>compute_forecast_trails</code></td></tr>
+            <tr><td><code>(tag, h, 'csa')</code> di <code>lru_cache(64)</code>?</td>
+                <td>reuse</td>
+                <td><code>joblib.load</code> dari D6, cache</td>
+                <td><code>web/predictor.py::load_model</code></td></tr>
+            <tr><td>kolom fitur cocok dengan training?</td>
+                <td>select_feature_matrix → X</td>
+                <td><code>ValueError</code> → log once, skip anchor</td>
+                <td><code>prediction/feature_engineering.py</code></td></tr>
+            <tr><td>X mengandung NaN?</td>
+                <td>skip anchor</td>
+                <td>scaler.transform → model.predict</td>
+                <td><code>compute_forecast_trails</code></td></tr>
+            <tr><td>Exception bukan FileNotFound</td>
+                <td>JsonResponse 500</td>
+                <td>—</td>
+                <td><code>web/views.py::forecasts_api</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik dan
+            <em>read-only</em>. Tidak ada login, sesi, atau CSRF check
+            untuk GET API.</li>
+        <li><strong>Inferensi live:</strong> <code>forecasts_api</code> memuat
+            <code>model.pkl</code> + <code>scaler.pkl</code> per
+            <code>(tag, horizon)</code> via <code>joblib.load</code>,
+            di-cache <em>process-wide</em> dengan
+            <code>@lru_cache(maxsize=64)</code>. Maksimal kombinasi yang
+            dibutuhkan: 4 tags × 7 horizon × 1 varian CSA = 28 entry —
+            jauh di bawah batas cache.</li>
+        <li><strong>Winners cache:</strong> <code>winners.json</code> di-cache
+            dengan <code>@lru_cache(maxsize=1)</code> — file hanya dibaca
+            sekali per proses gunicorn / Vercel.</li>
+        <li><strong>Convergence trail:</strong> setiap horizon
+            <em>h</em>-step-ahead diakhiri pada satu titik masa depan
+            bersama (<em>next_trading_day_after(last_date)</em>), sehingga
+            keseluruhan 7 trail bertemu di titik prediksi yang sama.</li>
+        <li><strong>Composite-index avoidance:</strong> <code>news</code>
+            view sengaja meng-stream seluruh dokumen
+            <code>news_articles</code> tanpa filter Firestore — filter
+            dan sort dilakukan di Python — untuk menghindari kewajiban
+            composite index (date + sentiment).</li>
+        <li><strong>Pagination clamp:</strong>
+            <code>page_number = max(1, min(page_number, total_pages))</code>
+            menjamin parameter di luar rentang valid tetap merender
+            halaman batas atas/bawah (tanpa 404).</li>
+        <li><strong>Cross-reference:</strong> dekomposisi modul (caller→callee)
+            lihat <a href="../structure_charts/P5_dashboard.html"
+            class="text-teal-700 underline">Structure Chart P5</a>.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

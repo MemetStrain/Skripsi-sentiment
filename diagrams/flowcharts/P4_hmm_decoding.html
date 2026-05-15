@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P4 HMM State Decoding</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#ccfbf1',
+        primaryTextColor: '#134e4a',
+        primaryBorderColor: '#0d9488',
+        lineColor: '#475569',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        background: '#ffffff',
+        mainBkg: '#f0fdfa',
+        nodeBorder: '#0d9488',
+        clusterBkg: '#f0fdfa',
+        clusterBorder: '#99f6e4',
+        titleColor: '#0f172a',
+        edgeLabelBackground: '#ffffff',
+      },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd)  { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print {
+      .no-print { display: none; }
+      .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P4 HMM State Decoding</h1>
+      <p class="text-teal-100 text-sm mt-1">Alur kontrol detail untuk proses 4.0 — frozen-params HMM + online forward filter.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../structure_charts/P4_hmm_decoding.html" class="nav-pill">P4 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="orchestration.html" class="nav-pill">Orchestration</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill active">P4 HMM</a>
+    <a href="P5_dashboard.html" class="nav-pill">P5 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P4 — HMM State Decoding</strong>
+        diimplementasikan oleh
+        <code>scheduler/hmm_updater.py::update_hmm_states(db, write_existing=False)</code>.
+        Fungsi ini <em>tidak pernah</em> me-refit HMM — parameter dimuat
+        beku dari D5 (<code>hmm_models/Daily</code>) yang sebelumnya
+        di-publish oleh skrip training offline
+        (<code>markov/cpo_hmm_states.py</code>) via
+        <code>scheduler/migrate_hmm_to_firestore.py</code>. Fitur
+        direkonstruksi dari D1 (<code>daily_prices</code>), HMM
+        di-instansiasi ulang dari params, dan <em>online forward filter</em>
+        (bukan Viterbi) men-decode satu state per tanggal. Hasil ditulis
+        ke D4 (<code>hmm_states</code>); tanggal yang sudah ada akan
+        di-skip kecuali <code>write_existing=True</code>.
+      </p>
+      <p class="text-sm text-slate-700 leading-relaxed mt-3">
+        Flowchart ini menonjolkan tiga keputusan dengan early-return:
+        (1) <em>params tidak ditemukan</em> (error path), (2) data harga
+        terlalu sedikit (<code>&lt; 50 baris</code>), dan (3) feature rows
+        terlalu sedikit setelah preprocessing
+        (<code>&lt; 30 baris</code>). Plus filter per-baris yang menentukan
+        dokumen mana yang benar-benar ditulis.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: orkestrator memanggil P4<br/>update_hmm_states(db, write_existing=False)"]):::startend
+
+    Start --> P1["read_hmm_params(db, 'Daily') ← D5"]:::process
+    P1 --> P1Q{"params<br/>ditemukan?"}:::decision
+    P1Q -->|Tidak| ERR1["log.error:<br/>'jalankan migrate_hmm_to_firestore dulu'"]:::error
+    ERR1 --> End
+    P1Q -->|Ya| P2["unpack feat_cols, volatility_window,<br/>norm_window, state_to_label"]:::process
+
+    P2 --> P3["stream daily_prices ← D1<br/>(order_by date)"]:::process
+    P3 --> P3Q{"len(price_rows)<br/>&gt;= 50?"}:::decision
+    P3Q -->|Tidak| ERR2["log.warning:<br/>'Not enough price data'"]:::error
+    ERR2 --> End
+    P3Q -->|Ya| P4["_build_hmm_features(price_df,<br/>vol_window, norm_window)"]:::process
+
+    P4 --> P4D["compute 5 fitur:<br/>Log_Return_Z, Volatility_Z, RSI_norm,<br/>MACD_Z, BB_Width_Z (causal Z-score)"]:::process
+    P4D --> P4Q{"len(feat_df)<br/>&gt;= 30?"}:::decision
+    P4Q -->|Tidak| ERR3["log.warning:<br/>'too few feature rows'"]:::error
+    ERR3 --> End
+    P4Q -->|Ya| P5["X = feat_df[feat_cols].values<br/>(ndarray float64)"]:::process
+
+    P5 --> P6["_hmm_from_params(params)<br/>(rekonstruksi GaussianHMM,<br/>set startprob_/transmat_/means_/covars_)"]:::process
+    P6 --> P7["_forward_filter(model, X)<br/>online: argmax P(q_t | O_1..O_t)<br/>(BUKAN Viterbi)"]:::process
+
+    P7 --> P8Q{"write_existing=True?"}:::decision
+    P8Q -->|Ya| P9["existing_dates = ∅<br/>(tulis semua)"]:::process
+    P8Q -->|Tidak| P8["stream hmm_states ← D4<br/>kumpulkan existing_dates (Daily)"]:::process
+
+    P8 --> P10["Loop: per-baris di feat_df"]:::process
+    P9 --> P10
+    P10 --> P10Q{"date di existing_dates<br/>AND NOT write_existing?"}:::decision
+    P10Q -->|Ya| P10S["skip (continue)"]:::process
+    P10Q -->|Tidak| P10A["append ke to_write[]:<br/>date, state, state_label,<br/>log_return, volatility, rsi"]:::process
+    P10S --> P10N
+    P10A --> P10N
+    P10N{"masih ada baris?"}:::decision
+    P10N -->|Ya| P10
+    P10N -->|Tidak| P11Q{"to_write<br/>kosong?"}:::decision
+
+    P11Q -->|Ya| LOG_NEW["log.info:<br/>'no new dates to write'"]:::process
+    LOG_NEW --> End
+    P11Q -->|Tidak| W["write_hmm_states_batch(db, to_write)<br/>→ D4"]:::process
+
+    W --> End(["SELESAI: log 'HMM Daily: wrote N new state docs'"]):::startend
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#854d0e,stroke-width:1px,color:#713f12;
+    classDef error    fill:#fee2e2,stroke:#b91c1c,stroke-width:2px,color:#7f1d1d;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda:
+        <span class="px-1 rounded" style="background:#fef3c7;border:1px solid #92400e">krem</span> = start/end,
+        <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = process,
+        <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #854d0e">krem-kuning</span> = decision,
+        <span class="px-1 rounded" style="background:#fee2e2;border:1px solid #b91c1c">merah</span> = error / fallback (early return).
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Langkah &amp; Modul</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Langkah</th><th>Aksi</th><th>Fungsi</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td>P1</td><td>Muat parameter HMM beku (startprob_, transmat_, means_, covars_, feat_cols, windows, state_to_label) dari D5</td><td><code>read_hmm_params(db, 'Daily')</code></td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td>P3</td><td>Stream seluruh dokumen <code>daily_prices</code> dari D1 (order_by date)</td><td>inline di <code>update_hmm_states</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>P4</td><td>Bangun 5 fitur ber-Z-score dari OHLCV: <code>Log_Return_Z</code>, <code>Volatility_Z</code>, <code>RSI_norm</code>, <code>MACD_Z</code>, <code>BB_Width_Z</code></td><td><code>_build_hmm_features(df, vw, nw)</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>P6</td><td>Rekonstruksi <code>hmm.GaussianHMM</code> dari params (tanpa fit), set 4 array atribut</td><td><code>_hmm_from_params(params)</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>P7</td><td>Online forward filter: <code>argmax_i P(q_t = i | O_1..O_t)</code> — log-space alpha update + <code>logsumexp</code></td><td><code>_forward_filter(model, X)</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>P8</td><td>Bila <code>write_existing=False</code>: stream <code>hmm_states</code> (D4) untuk kumpulkan tanggal yang sudah ada</td><td>inline di <code>update_hmm_states</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>P10</td><td>Per-baris feat_df: skip jika tanggal sudah ada, else append ke <code>to_write[]</code></td><td>inline loop</td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>W</td><td>Batch-write seluruh <code>to_write[]</code> ke D4 (Daily_YYYY-MM-DD doc IDs)</td><td><code>write_hmm_states_batch(db, to_write)</code></td><td><code>scheduler/firestore_writer.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Forward filter (online), BUKAN Viterbi (offline):</strong>
+            keputusan disengaja agar histori state tidak berubah seiring
+            waktu. Viterbi smoothing akan memutakhirkan keseluruhan
+            sequence setiap kali dijalankan (peek observasi di masa
+            depan); forward filter hanya menggunakan
+            <code>O_1..O_t</code> untuk state pada waktu <code>t</code>.</li>
+        <li><strong>5 fitur HMM (causal Z-score):</strong>
+            <code>Log_Return_Z</code>, <code>Volatility_Z</code>,
+            <code>RSI_norm</code> ((RSI−50)/50), <code>MACD_Z</code>,
+            <code>BB_Width_Z</code> — semuanya direkayasa ulang dari
+            <code>close</code> dengan window dari
+            <code>params['volatility_window']</code> dan
+            <code>params['norm_window']</code>.</li>
+        <li><strong>Mapping state→label:</strong> diambil dari
+            <code>params['state_to_label']</code> yang ditulis oleh
+            training offline (bukan hardcoded di runtime). Mapping di
+            sistem ini adalah {0: Bearish, 1: Bullish, 2: Neutral} atau
+            urutan apa pun yang tersimpan di D5.</li>
+        <li><strong>Guard data-cukup:</strong> <code>&lt; 50 baris harga</code>
+            dan <code>&lt; 30 baris fitur</code> → early-return log.warning.
+            Setelah preprocessing (rolling Z-score dengan
+            <code>min_periods = max(window // 2, 2)</code>), beberapa baris
+            warmup akan terbuang.</li>
+        <li><strong>Idempotensi:</strong> default <code>write_existing=False</code>
+            → setiap rerun hanya menambahkan dokumen untuk tanggal yang
+            belum ditulis. Histori deterministik di bawah frozen-params, jadi
+            re-write tidak diperlukan (kecuali params berubah → set
+            <code>write_existing=True</code> secara eksplisit).</li>
+        <li><strong>Cross-reference:</strong> dekomposisi modul (caller→callee)
+            lihat <a href="../structure_charts/P4_hmm_decoding.html"
+            class="text-teal-700 underline">Structure Chart P4</a>.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
