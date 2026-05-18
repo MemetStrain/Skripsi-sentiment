@@ -208,14 +208,3 @@ def write_sentiment_aggregates(db, aggregates: List[Dict]) -> int:
     count = _batch_write(db, ops)
     logger.info(f'Wrote {count} sentiment aggregate documents.')
     return count
-
-
-# ---------------------------------------------------------------------------
-# Predictions
-# ---------------------------------------------------------------------------
-
-def write_prediction(db, model: str, variant: str, frequency: str, horizon: int, data: Dict) -> None:
-    """Write / overwrite a single prediction document."""
-    doc_id = f'{model}_{variant}_{frequency}_h{horizon}'
-    doc_ref = db.collection('predictions').document(doc_id)
-    doc_ref.set({**data, 'computed_at': _now_iso()})
