@@ -51,6 +51,7 @@ from utils.forecast_utils import (
     csa_objective_sklearn,
     run_csa,
 )
+from feature_engineering import build_unified_features
 
 warnings.filterwarnings('ignore')
 sns.set_style("whitegrid")
@@ -76,30 +77,18 @@ USE_CPO_VARS:  bool = True   # CPO technical variables (spreads, SMAs, Bollinger
 # Days ahead to forecast. Any subset of positive integers.
 HORIZONS: list[int] = [1, 2, 3, 4, 5, 6, 7]
 
-# ── Lag feature config ────────────────────────────────────────────────────────
-# Per-source lag config. Each entry specifies a column and which lag periods to
-# create for it. Horizon-aware: lags < horizon are skipped automatically.
-# Missing columns (e.g. Sentiment_Score if USE_SENTIMENT=False) are silently skipped.
-LAG_CONFIG: list[dict] = [
-    {'source': 'HMM_State',       'lags': list(range(1, 15))},  # lags 1-14 from HMM analysis
-    {'source': 'Sentiment_Score', 'lags': [44]},                 # lag 44 from sentiment analysis
-    {'source': 'Log_Return',      'lags': [1, 2, 3]},            # price lags 1-3
-]
-
-# CPO technical columns passed through as-is (end-of-day, already lag-1 or derived).
-# Only included when USE_CPO_VARS = True.
-CPO_TECH_COLS: list[str] = [
-    'Return_t-1', 'Return_t-2', 'Volume_t-1',
-    'High_Low_Spread', 'Open_Close_Spread',
-    'SMA_3', 'SMA_6', 'EMA_3', 'EMA_6',
-    'RSI', 'MACD', 'MACD_Signal', 'Bollinger_Band_Width',
-]
-
-# Cyclical temporal encoding (month, day-of-week, week-of-year as sin/cos pairs).
-USE_TIME_FEATURES: bool = True
-
-# Interaction terms: Sentiment×LogReturn, HMM_Volatility×RSI.
-USE_INTERACTIONS: bool = True
+# ── Ablation configuration ────────────────────────────────────────────────────
+# The unified feature schema (prediction/master_features.py) is keyed by an
+# ablation name. It is derived from the data-source toggles above so the merged
+# frame and the emitted column schema can never disagree. The schema (which
+# base features, which lag indices, calendar + interaction terms) is fixed by
+# master_features.py — there is no per-script lag list to tune here.
+ABLATION: str = (
+    'C4_full'          if USE_HMM and USE_SENTIMENT else
+    'C2_cpo_hmm'       if USE_HMM                   else
+    'C3_cpo_sentiment' if USE_SENTIMENT             else
+    'C1_cpo_only'
+)
 
 # ── Split config ─────────────────────────────────────────────────────────────
 VAL_CUTOFF: str = '2026-01-01'  # data before this = CV; data from this onward = test
@@ -139,8 +128,9 @@ _CPO_FILE       = _ROOT / 'cpo/output/cpo_variables_Daily.csv'
 _SENTIMENT_FILE = _ROOT / 'news/output/sentiment_aggregate_Daily_title.csv'
 _HMM_FILE       = _ROOT / 'markov/output/hmm_states_results_Daily.csv'
 
-# Raw same-day OHLCV columns excluded from CPO vars (no data leakage)
-_CPO_VARS_DROP = {'Open', 'High', 'Low', 'Volume', 'Change_Pct'}
+# Raw same-day OHLC / Change_Pct dropped from CPO vars. Volume is kept — the
+# unified schema lags it (Volume_lag{k}), so there is no same-day leakage.
+_CPO_VARS_DROP = {'Open', 'High', 'Low', 'Change_Pct'}
 
 
 # =============================================================================
@@ -205,70 +195,22 @@ def load_and_merge() -> pd.DataFrame:
 
 def build_features(df: pd.DataFrame, horizon: int):
     """
-    Build the full feature matrix for one forecast horizon.
+    Build the unified-schema feature matrix for one forecast horizon.
 
-    Returns (df_clean, feature_cols) where df_clean has Target and Close
-    alongside all feature columns, and all NaN rows have been removed.
+    Delegates to feature_engineering.build_unified_features (Formula A: every
+    lag-k column is shifted by k + h - 1; calendar features are anchored at the
+    forecast origin d - h), so the feature schema is identical across all 7
+    horizons for the active ABLATION.
 
-    Lag convention
-    --------------
-    safe_lags = [l for l in LAG_PERIODS if l >= horizon]
-    Using lags strictly < horizon would peek at future returns, so we drop them.
+    Returns (df_clean, feature_cols) where df_clean carries `Target`
+    (log(C[d]/C[d-h])) and `Close` (the forecast-origin anchor C[d-h], used to
+    invert log-return predictions back to price) alongside the feature columns,
+    with all NaN rows removed.
     """
-    df = df.copy()
-
-    # ── Temporal features ─────────────────────────────────────────────────────
-    if USE_TIME_FEATURES:
-        df['Month_Sin']      = np.sin(2 * np.pi * df['Date'].dt.month / 12)
-        df['Month_Cos']      = np.cos(2 * np.pi * df['Date'].dt.month / 12)
-        df['DayOfWeek_Sin']  = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
-        df['DayOfWeek_Cos']  = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
-        woy = df['Date'].dt.isocalendar().week.astype(int)
-        df['WeekOfYear_Sin'] = np.sin(2 * np.pi * woy / 52)
-        df['WeekOfYear_Cos'] = np.cos(2 * np.pi * woy / 52)
-
-    # ── Horizon-aware lagged columns ──────────────────────────────────────────
-    for entry in LAG_CONFIG:
-        col = entry['source']
-        if col not in df.columns:
-            continue
-        for lag in entry['lags']:
-            if lag < horizon:
-                continue  # would leak future data for this horizon
-            df[f'{col}_lag{lag}'] = df[col].shift(lag)
-
-    # ── Interaction features ───────────────────────────────────────────────────
-    if USE_INTERACTIONS:
-        if 'Sentiment_Score' in df.columns and 'Log_Return' in df.columns:
-            df['Sentiment_x_Return'] = df['Sentiment_Score'] * df['Log_Return']
-        if 'HMM_Volatility' in df.columns and 'RSI' in df.columns:
-            df['Volatility_x_RSI'] = df['HMM_Volatility'] * df['RSI']
-
-    # ── Target ────────────────────────────────────────────────────────────────
-    df['Target'] = np.log(df['Close'].shift(-horizon) / df['Close'])
-
-    df = df.dropna().reset_index(drop=True)
-
-    # ── Feature column selection ───────────────────────────────────────────────
-    # Exclude non-feature columns. CPO tech cols are auto-included when present.
-    always_exclude = {
-        'Date', 'Target',
-        'HMM_Close',         # duplicate price anchor; confuses log-return target
-        'HMM_Log_Return',    # removed per feature analysis
-        'HMM_RSI',           # removed per feature analysis
-        'HMM_MACD',          # removed per feature analysis
-        'Close_Anchor', 'Close', 'Log_Return',  # raw same-day values; lags are used instead
-    }
-    if not USE_CPO_VARS:
-        always_exclude.update(CPO_TECH_COLS)
-
-    numeric_dtypes = {'float64', 'float32', 'int64', 'int32'}
-    feature_cols = [
-        c for c in df.columns
-        if c not in always_exclude and str(df[c].dtype) in numeric_dtypes
-    ]
-
-    return df, feature_cols
+    out, feature_cols = build_unified_features(df, horizon, ablation=ABLATION)
+    out = out.rename(columns={'Target_LogReturn': 'Target',
+                              'Close_Origin': 'Close'})
+    return out, feature_cols
 
 
 # =============================================================================
@@ -516,9 +458,7 @@ def run_horizon(horizon: int, merged: pd.DataFrame,
         'config': {
             'USE_HMM': USE_HMM, 'USE_SENTIMENT': USE_SENTIMENT,
             'USE_CPO_VARS': USE_CPO_VARS,
-            'LAG_CONFIG': LAG_CONFIG,
-            'USE_TIME_FEATURES': USE_TIME_FEATURES,
-            'USE_INTERACTIONS': USE_INTERACTIONS,
+            'ABLATION': ABLATION,
         },
     }
     with open(out_dir / f'params_Daily_h{horizon}.json', 'w') as fh:

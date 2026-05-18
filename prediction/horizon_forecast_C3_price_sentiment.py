@@ -37,6 +37,7 @@ from utils.forecast_utils import (
     calculate_metrics, csa_objective_sklearn, run_csa,
     save_model_artifacts, save_feature_importance,
 )
+from feature_engineering import build_unified_features
 
 
 SCRIPT_TAG = 'cpo_sentiment'
@@ -56,24 +57,10 @@ INTERVAL_CONFIGS = {
     },
 }
 
-# Per-source lag config (Opsi A: literature-prescribed multi-lag)
-# Justifikasi:
-# - Sentiment: 1-30 days per Chi et al. (2024) — commodity sentiment effects converge within 30 trading days
-# - HMM_State: 1-8 days per intra-project hmm_state_lag_analysis (significant lags)
-# - Log_Return: 1-3 days per ACF analysis on stationary log returns
-LAG_CONFIG: List[Dict] = [
-    {'source': 'HMM_State',       'lags': list(range(3, 12))},      # 3-11 (sync dengan klaim Anda)
-    {'source': 'Sentiment_Score', 'lags': [1, 3, 5, 10, 20, 30]},  # Chi et al. (2024)
-    {'source': 'Log_Return',      'lags': [1, 2, 3]},
-]
-
-USE_INTERACTIONS = True
-
-EXCLUDE_COLS = {
-    'Date', 'Target',
-    'Close_Anchor', 'Close', 'Log_Return',
-    'Dominant_Sentiment',
-}
+# Ablation configuration — selects which base features the unified schema
+# emits (see prediction/master_features.py). C3 = lagged CPO price/technicals
+# + news sentiment features; no HMM.
+ABLATION: str = 'C3_cpo_sentiment'
 
 
 # =============================================================================
@@ -87,7 +74,9 @@ def load_and_merge_data(interval: str) -> pd.DataFrame:
     print(f"  Loading CPO data...")
     cpo = pd.read_csv(cfg['cpo_file'])
     cpo['Date'] = pd.to_datetime(cpo['Date'])
-    drop = [c for c in cpo.columns if c in CPO_VARS_DROP]
+    # Keep raw Volume — the unified schema lags it (Volume_lag{k}); only the
+    # other same-day OHLC / Change_Pct columns are dropped.
+    drop = [c for c in cpo.columns if c in CPO_VARS_DROP and c != 'Volume']
     cpo = cpo.drop(columns=drop).sort_values('Date').reset_index(drop=True)
 
     print(f"  Loading sentiment data...")
@@ -122,40 +111,20 @@ def load_and_merge_data(interval: str) -> pd.DataFrame:
 
 def engineer_features_for_horizon(df: pd.DataFrame, horizon: int
                                   ) -> Tuple[pd.DataFrame, List[str]]:
-    """Build features using CPO + sentiment data (no look-ahead)."""
-    df = df.copy()
+    """Build the unified-schema feature matrix for this ablation + horizon.
 
-    df['Month_Sin'] = np.sin(2 * np.pi * df['Date'].dt.month / 12)
-    df['Month_Cos'] = np.cos(2 * np.pi * df['Date'].dt.month / 12)
+    Delegates to feature_engineering.build_unified_features so all four
+    ablations x seven horizons share an identical column schema (Formula A:
+    lag-k column shifted by k + h - 1; calendar anchored at d - h).
 
-    df['DayOfWeek_Sin'] = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
-    df['DayOfWeek_Cos'] = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
-    woy = df['Date'].dt.isocalendar().week.astype(int)
-    df['WeekOfYear_Sin'] = np.sin(2 * np.pi * woy / 52)
-    df['WeekOfYear_Cos'] = np.cos(2 * np.pi * woy / 52)
-
-    for entry in LAG_CONFIG:
-        col = entry['source']
-        if col not in df.columns:
-            continue
-        for lag in entry['lags']:
-            if lag < horizon:
-                continue
-            df[f'{col}_lag{lag}'] = df[col].shift(lag)
-
-    if USE_INTERACTIONS:
-        if 'Sentiment_Score' in df.columns and 'Log_Return' in df.columns:
-            df['Sentiment_x_Return'] = df['Sentiment_Score'] * df['Log_Return']
-
-    df['Target'] = np.log(df['Close'].shift(-horizon) / df['Close'])
-
-    df = df.dropna().reset_index(drop=True)
-
-    numeric_dtypes = {'float64', 'float32', 'int64', 'int32'}
-    feature_cols = [c for c in df.columns
-                    if c not in EXCLUDE_COLS and str(df[c].dtype) in numeric_dtypes]
-
-    return df, feature_cols
+    The unified frame is renamed into the column contract the training
+    pipeline expects: `Target` (the h-step log return log(C[d]/C[d-h])) and
+    `Close` (the forecast-origin price C[d-h], the inverse-transform anchor).
+    """
+    out, feature_cols = build_unified_features(df, horizon, ablation=ABLATION)
+    out = out.rename(columns={'Target_LogReturn': 'Target',
+                              'Close_Origin': 'Close'})
+    return out, feature_cols
 
 
 # =============================================================================
@@ -406,8 +375,7 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
         'val_cutoff': str(VAL_CUTOFF.date()),
         'test_start': str(data['dates_test'][0])  if len(data['dates_test']) else None,
         'test_end':   str(data['dates_test'][-1]) if len(data['dates_test']) else None,
-        'lag_config': LAG_CONFIG,
-        'use_interactions': USE_INTERACTIONS,
+        'ablation':   ABLATION,
         'models':     all_params,
     }
     with open(os.path.join(horizon_dir, f'params_{interval}_h{horizon}.json'), 'w') as f:

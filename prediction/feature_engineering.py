@@ -3,30 +3,57 @@ prediction/feature_engineering.py — dependency-light feature engineering
 shared between the offline ablation training scripts and the live website
 inference path.
 
-The ablation training scripts (horizon_forecast_C{1..4}_*.py) historically
-each defined their own `engineer_features_for_horizon`. This module extracts
-the union of those recipes so a single function can be called from both
-training and inference. Any divergence between the two would silently
-produce wrong predictions at inference time, so we keep one source of truth.
+Unified lag schema (Formula A)
+------------------------------
+Every (ablation x horizon) pair emits the *same* set of feature columns; only
+the underlying dates differ. `prediction/master_features.py` is the single
+source of truth for which base features each ablation uses and which lag
+indices each base exposes.
 
-Key design notes:
+There are two entry points, both reading that one schema:
+
+* `build_unified_features` — TRAINING. Rows are indexed by the target day `d`.
+  A lag column `<base>_lag{k}` at horizon `h` takes `df[base].shift(k+h-1)`,
+  so `_lag1` resolves to the forecast origin `d - h`. The target is
+  `log(C[d] / C[d-h])`. Used by the C{1..4} ablation scripts.
+
+* `engineer_all_features` — INFERENCE. Rows are indexed by the forecast
+  origin `o`. A lag column `<base>_lag{k}` takes `df[base].shift(k-1)`, so the
+  row's `_lag{k}` value equals `base[o-k+1]` — exactly what
+  `build_unified_features` places at training row `d = o + h`. The website
+  predictor slices the trained model's `feature_cols` from this superset.
+
+Because both paths shift relative to the same anchor (the forecast origin),
+their feature *values* agree by construction; the schema can never diverge.
+
+Key design notes
+----------------
 * The website does not read CSVs — it pulls price / sentiment / HMM data
   from Firestore as DataFrames. `merge_inputs` operates on DataFrames so
   both paths can call it.
 * HMM one-hot dummies are derived from the `HMM_State_Label` column. At
   training time the top-5 most-frequent labels were dummied; at inference
   we replicate that selection deterministically from the same column.
-* `engineer_all_features` adds the *superset* of all columns the four
-  ablations could need. The trained model's `meta.json` records exactly
-  which subset its `feature_cols` consumed, and the predictor selects by
-  that list — extra columns in the superset are ignored, missing ones
-  trigger a clear error.
+* `Price` / `Return` are same-day base columns derived from `Close`; the
+  legacy `Price_t-N` / `Return_t-N` CSV columns are ignored (the unified
+  `<base>_lag{k}` machinery re-derives the equivalent shifts).
 """
 
-from typing import Dict, List, Optional, Tuple
+import os
+import sys
+import warnings
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+# Make `master_features` importable regardless of how this module itself was
+# imported (top-level `feature_engineering` from a script that put prediction/
+# on sys.path, or `prediction.feature_engineering` from repo root).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from master_features import (  # noqa: E402  (after sys.path tweak)
+    LAG_FEATURES, CALENDAR_FEATURE_NAMES, get_ablation_bases, lag_shift,
+)
 
 
 # =============================================================================
@@ -114,27 +141,6 @@ def add_hmm_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Per-source lag config — the union across the four C-script LAG_CONFIGs.
-# At inference time we generate all of these so any C{1..4} model's
-# `feature_cols` can be sliced from the resulting superset.
-#
-# Mirrors:
-#   C1 (cpo_only)      → Log_Return [1, 2, 3]
-#   C2 (cpo_hmm)       → HMM_State [3..11] + Log_Return [1, 2, 3]
-#   C3 (cpo_sentiment) → Sentiment_Score [1, 3, 5, 10, 20, 30] + Log_Return [1, 2, 3]
-#   C4 (full)          → all of the above
-LAG_CONFIG: List[Dict] = [
-    {'source': 'HMM_State',       'lags': list(range(1, 15))},
-    {'source': 'Sentiment_Score', 'lags': [1, 3, 5, 10, 20, 30]},
-    {'source': 'Log_Return',      'lags': [1, 2, 3]},
-]
-
-# Legacy uniform-lag list. Retained only for the deprecated training-time
-# `engineer_features_for_horizon` below, which is no longer called by the
-# C{1..4} ablation scripts (each now defines its own LAG_CONFIG inline).
-BASE_LAG_PERIODS = [1, 2, 3, 5, 10, 20]
-
-
 # =============================================================================
 # Merge — turn raw price / sentiment / HMM frames into a single feature frame
 # =============================================================================
@@ -206,78 +212,231 @@ def merge_inputs(
 
 
 # =============================================================================
-# Feature engineering — superset of columns any C{1..4} ablation may need
+# Shared feature-engineering helpers (used by both train and inference paths)
 # =============================================================================
 
-def engineer_all_features(
-    df: pd.DataFrame,
-    lag_config: Optional[List[Dict]] = None,
-) -> pd.DataFrame:
+def _build_base_columns(df: pd.DataFrame, close_col: str) -> pd.DataFrame:
     """
-    Add cyclical seasonality, per-source lags, and interaction terms.
+    Materialise the same-day CPO base columns the unified schema expects.
 
-    The output is the *superset* of columns any of the four ablations could
-    have consumed at training time. The website inference path slices this
-    superset by the trained model's `feature_cols` to get the exact input
-    matrix shape the model expects.
-
-    `lag_config` defaults to the union of the four C-script configs. Pass
-    a custom list (same shape: ``[{'source': 'X', 'lags': [...]}, ...]``)
-    only if you've trained a model with a non-standard lag set.
+    `Price` / `Return` / `Log_Return` are derived from the close price when
+    absent. The legacy `Price_t-N` / `Return_t-N` columns (if present) are left
+    untouched — the unified `<base>_lag{k}` machinery re-derives the shifts.
     """
     df = df.copy()
-    cfg = lag_config if lag_config is not None else LAG_CONFIG
+    if 'Price' not in df.columns:
+        df['Price'] = df[close_col]
+    if 'Return' not in df.columns:
+        df['Return'] = df[close_col].pct_change()
+    if 'Log_Return' not in df.columns:
+        df['Log_Return'] = np.log(df[close_col] / df[close_col].shift(1))
+    return df
 
-    # Cyclical seasonality.
-    df['Month_Sin']      = np.sin(2 * np.pi * df['Date'].dt.month / 12)
-    df['Month_Cos']      = np.cos(2 * np.pi * df['Date'].dt.month / 12)
-    df['DayOfWeek_Sin']  = np.sin(2 * np.pi * df['Date'].dt.dayofweek / 5)
-    df['DayOfWeek_Cos']  = np.cos(2 * np.pi * df['Date'].dt.dayofweek / 5)
-    df['WeekOfYear_Sin'] = np.sin(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
-    df['WeekOfYear_Cos'] = np.cos(2 * np.pi * df['Date'].dt.isocalendar().week.astype(int) / 52)
 
-    # Per-source lags. Sources missing from the frame are silently skipped
-    # (so C1 — price-only — won't grow Sentiment_Score / HMM_State lag columns).
-    for entry in cfg:
-        col  = entry['source']
-        lags = entry['lags']
-        if col not in df.columns:
-            continue
-        for lag in lags:
-            df[f'{col}_lag{lag}'] = df[col].shift(lag)
-
-    # Interactions.
+def _build_interactions(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add Sentiment_x_Return and Volatility_x_RSI as same-day (un-shifted)
+    columns. They are later treated as base features and shifted into their
+    `_lag{k}` form alongside every other base.
+    """
+    df = df.copy()
     if 'Sentiment_Score' in df.columns and 'Log_Return' in df.columns:
         df['Sentiment_x_Return'] = df['Sentiment_Score'] * df['Log_Return']
     if 'HMM_Volatility' in df.columns and 'RSI' in df.columns:
         df['Volatility_x_RSI'] = df['HMM_Volatility'] * df['RSI']
+    return df
+
+
+def _build_calendar(df: pd.DataFrame, offset_rows: int) -> pd.DataFrame:
+    """
+    Add the 6 cyclical calendar columns, anchored at the forecast origin.
+
+    The origin date is `offset_rows` trading rows before the row's own date,
+    obtained with `Date.shift(offset_rows)` — the *same* row shift the target
+    and lag features use. Anchoring all three at one point keeps a training
+    row internally coherent and keeps the train / inference paths consistent
+    on real, gap-containing trading calendars (a calendar-day subtraction
+    would drift against the row-based lags whenever weekends/holidays fall in
+    the window). Training passes `offset_rows = horizon`; inference passes
+    `offset_rows = 0` because its rows are already indexed by the origin.
+    """
+    df = df.copy()
+    src = df['Date'].shift(offset_rows)
+
+    month = src.dt.month
+    dow   = src.dt.dayofweek
+    woy   = src.dt.isocalendar().week.astype('float64')  # float tolerates NaT
+
+    df['Month_Sin']      = np.sin(2 * np.pi * month / 12)
+    df['Month_Cos']      = np.cos(2 * np.pi * month / 12)
+    df['DayOfWeek_Sin']  = np.sin(2 * np.pi * dow / 5)
+    df['DayOfWeek_Cos']  = np.cos(2 * np.pi * dow / 5)
+    df['WeekOfYear_Sin'] = np.sin(2 * np.pi * woy / 52)
+    df['WeekOfYear_Cos'] = np.cos(2 * np.pi * woy / 52)
+    return df
+
+
+# =============================================================================
+# Training feature builder — horizon-aware, target-day-indexed (Formula A)
+# =============================================================================
+
+def build_unified_features(
+    df_raw: pd.DataFrame,
+    horizon: int,
+    ablation: str,
+    *,
+    target_close_col: str = 'Close',
+) -> Tuple[pd.DataFrame, List[str]]:
+    """
+    Build the horizon-aware feature matrix for one ablation configuration.
+
+    Schema invariant: for every (horizon, ablation) pair this function emits
+    the same set of feature column names; only the underlying dates differ
+    (Formula A).
+
+    Convention:
+        - Each row is indexed by the target day `d` (`Date` column).
+        - For each base feature B and lag k in LAG_FEATURES[B], emit
+          `B_lag{k}` = df[B].shift(k + h - 1); `_lag1` resolves to `d - h`.
+        - Calendar columns anchored at the forecast origin (`Date` shifted
+          back `h` trading rows).
+        - `Close_Origin` = C[d-h] — the inverse-transform anchor (not a
+          feature; carried for the training pipeline).
+        - `Target_LogReturn` = log(C[d] / C[d-h]).
+        - Rows with any NaN (head rows from shifts / target) are dropped.
+
+    Args:
+        df_raw: Merged frame with `Date`, the close column, and all raw
+            feature columns the chosen ablation needs.
+        horizon: Forecast horizon h, >= 1.
+        ablation: One of 'C1_cpo_only', 'C2_cpo_hmm', 'C3_cpo_sentiment',
+            'C4_full'.
+        target_close_col: Name of the close-price column used for the target.
+
+    Returns:
+        (out, feature_cols) where `out` contains Date, Close_Origin, the 6
+        calendar columns, every `<base>_lag{k}` column, and Target_LogReturn,
+        with all-NaN rows removed. `feature_cols` lists only the model-input
+        columns (calendar + lags), in deterministic order.
+
+    Raises:
+        ValueError: on bad horizon, unknown ablation, missing required
+            columns, or an empty post-dropna result.
+    """
+    if horizon < 1:
+        raise ValueError(f"horizon must be >= 1; got {horizon}")
+    if 'Date' not in df_raw.columns:
+        raise ValueError("df_raw must have a 'Date' column.")
+    if target_close_col not in df_raw.columns:
+        raise ValueError(
+            f"target_close_col {target_close_col!r} not in df_raw."
+        )
+
+    df = df_raw.sort_values('Date').reset_index(drop=True).copy()
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = _build_base_columns(df, target_close_col)
+    df = _build_interactions(df)
+    df = _build_calendar(df, horizon)
+
+    bases = get_ablation_bases(ablation)
+
+    out = pd.DataFrame({'Date': df['Date'].values})
+    out['Close_Origin'] = df[target_close_col].shift(horizon).values
+
+    feature_cols: List[str] = []
+
+    # Calendar features (always included).
+    for cal in CALENDAR_FEATURE_NAMES:
+        out[cal] = df[cal].values
+        feature_cols.append(cal)
+
+    # Lag features.
+    for base in bases:
+        if base not in LAG_FEATURES:
+            warnings.warn(
+                f"[build_unified_features] Base feature {base!r} not in "
+                f"LAG_FEATURES schema; skipping. (ablation={ablation})"
+            )
+            continue
+        if base not in df.columns:
+            warnings.warn(
+                f"[build_unified_features] Source column {base!r} not in "
+                f"df_raw; skipping all its lags. "
+                f"(ablation={ablation}, h={horizon})"
+            )
+            continue
+        for k in LAG_FEATURES[base]:
+            col_name = f'{base}_lag{k}'
+            out[col_name] = df[base].shift(lag_shift(k, horizon)).values
+            feature_cols.append(col_name)
+
+    # Target: log(C[d] / C[d-h]).
+    close = df[target_close_col]
+    out['Target_LogReturn'] = np.log(close / close.shift(horizon)).values
+
+    # Drop rows with any NaN (head rows from .shift(), or target NaN at start).
+    before = len(out)
+    out = out.dropna().reset_index(drop=True)
+    if len(out) == 0:
+        emitted = [b for b in bases if b in LAG_FEATURES and b in df.columns]
+        max_lag = max((max(LAG_FEATURES[b]) for b in emitted), default=0)
+        raise ValueError(
+            f"All {before} rows dropped after NaN removal. Check that df_raw "
+            f"has enough history for horizon={horizon} and max lag={max_lag}."
+        )
+
+    return out, feature_cols
+
+
+# =============================================================================
+# Inference feature builder — origin-indexed unified superset
+# =============================================================================
+
+def engineer_all_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build the inference-time unified feature superset.
+
+    Each row is a forecast *origin* `o`. For every base feature any ablation
+    could use, and every lag k in LAG_FEATURES[base], emit
+    `<base>_lag{k}` = df[base].shift(k - 1) — so the row's lag-k value equals
+    `base[o - k + 1]`, exactly what `build_unified_features` places at the
+    training row `d = o + h`. Calendar columns come from the row's own date.
+
+    The frame is NOT NaN-dropped (the predictor needs the most recent rows and
+    skips any row whose sliced feature vector still contains NaN). The website
+    predictor slices the trained model's `feature_cols` from this superset.
+    """
+    df = df.copy()
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.sort_values('Date').reset_index(drop=True)
+
+    df = _build_base_columns(df, 'Close')
+    df = _build_interactions(df)
+    df = _build_calendar(df, 0)  # origin-indexed: calendar from the row's date
+
+    # Union of every ablation's bases == C4_full's bases.
+    for base in get_ablation_bases('C4_full'):
+        if base not in LAG_FEATURES or base not in df.columns:
+            continue
+        for k in LAG_FEATURES[base]:
+            df[f'{base}_lag{k}'] = df[base].shift(k - 1)
 
     return df
 
 
-def engineer_features_for_horizon(
-    df: pd.DataFrame, horizon: int,
-    lag_periods: List[int] = BASE_LAG_PERIODS,
-) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Training-time helper: add features, set Target = log(Close[t+h] / Close[t]),
-    drop rows with NaNs, and return (df, feature_cols). Mirrors the per-script
-    `engineer_features_for_horizon` that previously lived in each C-script.
+# =============================================================================
+# Deprecation shim
+# =============================================================================
 
-    Horizon-aware lag filtering: only lags >= horizon are added, to prevent
-    accidentally training on a lag shorter than the forecast distance.
-    """
-    safe_lags = [lag for lag in lag_periods if lag >= horizon] or [horizon]
-    df = engineer_all_features(df, lag_periods=safe_lags)
-
-    df['Target'] = np.log(df['Close'].shift(-horizon) / df['Close'])
-    df = df.dropna().reset_index(drop=True)
-
-    exclude = {'Date', 'Target', 'Dominant_Sentiment', 'HMM_Close'}
-    feature_cols = [c for c in df.columns
-                    if c not in exclude
-                    and df[c].dtype in ('float64', 'int64', 'int32', 'float32')]
-    return df, feature_cols
+def engineer_features_for_horizon(df: pd.DataFrame, horizon: int,
+                                  lag_periods=None) -> Tuple[pd.DataFrame, List[str]]:
+    """DEPRECATED: use build_unified_features(df, horizon, ablation)."""
+    warnings.warn(
+        "engineer_features_for_horizon is deprecated; "
+        "use build_unified_features with an explicit ablation argument.",
+        DeprecationWarning, stacklevel=2,
+    )
+    return build_unified_features(df, horizon, ablation='C4_full')
 
 
 # =============================================================================
