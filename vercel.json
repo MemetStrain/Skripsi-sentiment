@@ -5,16 +5,17 @@
       "src": "website/vercel_wsgi.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "50mb",
-        "runtime": "python3.11"
+        "maxLambdaSize": "250mb",
+        "runtime": "python3.12",
+        "includeFiles": [
+          "website/web/**",
+          "website/config/**",
+          "prediction/winners.json"
+        ]
       }
     }
   ],
   "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/website/staticfiles/$1"
-    },
     {
       "src": "/(.*)",
       "dest": "website/vercel_wsgi.py"

@@ -1,14 +1,33 @@
+# --- Local dev / build artifacts ---
 website/venv
 website/db.sqlite3
-prediction/
+**/__pycache__
+*.pyc
+*.log
+
+# --- Secrets: supplied via the FIREBASE_CREDENTIALS_JSON env var instead ---
+firebase-credentials.json
+website/firebase-credentials.json
+
+# --- Repo areas unrelated to the web app ---
 news/
 cpo/
 markov/
 output/
 diagrams/
+_archive_uml_diagrams/
 scheduler/
+revision/
+tests/
 *.csv
-*.pkl
+
+# --- prediction/: the site only needs winners.json (for the metrics table).
+#     Forecasts are precomputed offline into Firestore, so none of the
+#     165 MB saved_models artefacts are deployed. ---
+prediction/output*/
+prediction/saved_models/
+
+# --- Model/data formats not used by the web app ---
 *.h5
 *.pt
 *.pth

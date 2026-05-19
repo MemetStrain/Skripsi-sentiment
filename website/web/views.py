@@ -105,7 +105,7 @@ def dashboard(request):
     metrics = {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'}
     winners_payload = {}
     try:
-        from .predictor import load_winners
+        from .winners import load_winners
         winners_payload = load_winners()
         h1_tag = winners_payload.get('winners_by_horizon', {}).get('1')
         if h1_tag:
@@ -178,29 +178,26 @@ def _empty_dashboard_ctx():
 
 def forecasts_api(request):
     """
-    GET /api/forecasts/?max_horizon=7&window_days=90
+    GET /api/forecasts/
 
-    Runs live XGBoost inference for h ∈ {1..max_horizon} using the
-    auto-picked winning ablation config per horizon (lowest base-MAPE
-    from prediction/winners.json), and returns rolling forecast trails
-    over the trailing `window_days` window.
+    Returns the rolling forecast trails (h ∈ {1..7}, 90-day window) that were
+    precomputed offline by `website/precompute_forecasts.py` and stored in
+    Firestore at `forecasts/latest`. XGBoost inference is too heavy to run on
+    Vercel's serverless functions, so it runs offline and the site only reads
+    the result here.
     """
     try:
-        max_horizon = int(request.GET.get('max_horizon', 7))
-        window_days = int(request.GET.get('window_days', 90))
-    except (ValueError, TypeError):
-        return JsonResponse({'error': 'Invalid integer parameter'}, status=400)
-    max_horizon = max(1, min(max_horizon, 7))
-    window_days = max(7, min(window_days, 365))
-
-    try:
-        from .predictor import compute_forecast_trails
         db = firestore.client()
-        payload = compute_forecast_trails(db, max_horizon=max_horizon,
-                                          window_days=window_days)
+        doc = db.collection('forecasts').document('latest').get()
+        if not doc.exists:
+            return JsonResponse(
+                {'error': 'No precomputed forecasts available yet. '
+                          'Run website/precompute_forecasts.py.'},
+                status=503,
+            )
+        data = doc.to_dict() or {}
+        payload = json.loads(data['payload']) if 'payload' in data else data
         return JsonResponse(payload)
-    except FileNotFoundError as e:
-        return JsonResponse({'error': str(e)}, status=503)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 

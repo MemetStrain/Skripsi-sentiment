@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-09T15:10:09.045356+00:00",
+  "generated_at": "2026-05-19T08:24:20.660589+00:00",
   "horizons": [
     1,
     2,
@@ -24,8 +24,8 @@
   "winners_by_horizon": {
     "1": "full",
     "2": "full",
-    "3": "cpo_hmm",
-    "4": "cpo_only",
+    "3": "full",
+    "4": "full",
     "5": "cpo_hmm",
     "6": "cpo_hmm",
     "7": "cpo_hmm"
@@ -33,8 +33,8 @@
   "configs_by_horizon": {
     "1": "C4",
     "2": "C4",
-    "3": "C2",
-    "4": "C1",
+    "3": "C4",
+    "4": "C4",
     "5": "C2",
     "6": "C2",
     "7": "C2"
@@ -43,344 +43,512 @@
     "cpo_only": {
       "1": {
         "BASE": {
-          "mape": 1.2451,
-          "smape": 1.2482,
-          "rmse": 70.6835,
-          "da": 50.7692,
-          "r2_price": 0.9251,
-          "r2_logreturn": -0.0435
+          "mape": 1.2126,
+          "smape": 1.2151,
+          "rmse": 68.5227,
+          "da": 53.5211,
+          "r2_price": 0.9258,
+          "r2_logreturn": -0.0224
+        },
+        "CSA": {
+          "mape": 1.2102,
+          "smape": 1.212,
+          "rmse": 67.9654,
+          "da": 47.8873,
+          "r2_price": 0.927,
+          "r2_logreturn": -0.0042
         }
       },
       "2": {
         "BASE": {
-          "mape": 1.732,
-          "smape": 1.744,
-          "rmse": 98.4268,
-          "da": 42.1875,
-          "r2_price": 0.8524,
-          "r2_logreturn": -0.129
+          "mape": 1.6879,
+          "smape": 1.6967,
+          "rmse": 95.4752,
+          "da": 53.5211,
+          "r2_price": 0.856,
+          "r2_logreturn": -0.0524
+        },
+        "CSA": {
+          "mape": 1.6836,
+          "smape": 1.6884,
+          "rmse": 94.0857,
+          "da": 49.2958,
+          "r2_price": 0.8602,
+          "r2_logreturn": -0.0089
         }
       },
       "3": {
         "BASE": {
-          "mape": 2.3177,
-          "smape": 2.3428,
-          "rmse": 125.8539,
-          "da": 42.8571,
-          "r2_price": 0.7562,
-          "r2_logreturn": -0.149
+          "mape": 2.2782,
+          "smape": 2.2964,
+          "rmse": 123.2062,
+          "da": 47.8873,
+          "r2_price": 0.7602,
+          "r2_logreturn": -0.0639
+        },
+        "CSA": {
+          "mape": 2.2111,
+          "smape": 2.2205,
+          "rmse": 121.5131,
+          "da": 52.1127,
+          "r2_price": 0.7668,
+          "r2_logreturn": -0.0157
         }
       },
       "4": {
         "BASE": {
-          "mape": 2.7329,
-          "smape": 2.7727,
-          "rmse": 150.6511,
-          "da": 50.0,
-          "r2_price": 0.6471,
-          "r2_logreturn": -0.1244
+          "mape": 2.7149,
+          "smape": 2.7446,
+          "rmse": 148.4227,
+          "da": 45.0704,
+          "r2_price": 0.652,
+          "r2_logreturn": -0.0839
         },
         "CSA": {
-          "mape": 2.7145,
-          "smape": 2.7349,
-          "rmse": 148.5212,
-          "da": 62.9032,
-          "r2_price": 0.657,
-          "r2_logreturn": -0.0648
+          "mape": 2.6861,
+          "smape": 2.7004,
+          "rmse": 145.9091,
+          "da": 35.2113,
+          "r2_price": 0.6637,
+          "r2_logreturn": -0.0256
         }
       },
       "5": {
         "BASE": {
-          "mape": 3.2101,
-          "smape": 3.2666,
-          "rmse": 175.5215,
-          "da": 44.2623,
-          "r2_price": 0.5148,
-          "r2_logreturn": -0.1044
+          "mape": 3.1088,
+          "smape": 3.1514,
+          "rmse": 171.2432,
+          "da": 42.2535,
+          "r2_price": 0.5368,
+          "r2_logreturn": -0.0723
+        },
+        "CSA": {
+          "mape": 3.0426,
+          "smape": 3.0623,
+          "rmse": 169.5201,
+          "da": 47.8873,
+          "r2_price": 0.5461,
+          "r2_logreturn": -0.026
         }
       },
       "6": {
         "BASE": {
-          "mape": 3.4879,
-          "smape": 3.5635,
-          "rmse": 195.9059,
-          "da": 45.0,
-          "r2_price": 0.39,
-          "r2_logreturn": -0.1446
+          "mape": 3.3111,
+          "smape": 3.3678,
+          "rmse": 187.4145,
+          "da": 40.8451,
+          "r2_price": 0.4452,
+          "r2_logreturn": -0.0891
+        },
+        "CSA": {
+          "mape": 3.2917,
+          "smape": 3.3209,
+          "rmse": 186.3499,
+          "da": 39.4366,
+          "r2_price": 0.4515,
+          "r2_logreturn": -0.0476
         }
       },
       "7": {
         "BASE": {
-          "mape": 4.0048,
-          "smape": 4.0957,
-          "rmse": 215.052,
-          "da": 33.8983,
-          "r2_price": 0.2538,
-          "r2_logreturn": -0.1701
+          "mape": 3.6935,
+          "smape": 3.764,
+          "rmse": 203.6779,
+          "da": 39.4366,
+          "r2_price": 0.3447,
+          "r2_logreturn": -0.1206
+        },
+        "CSA": {
+          "mape": 3.5022,
+          "smape": 3.5383,
+          "rmse": 198.7998,
+          "da": 70.4225,
+          "r2_price": 0.3757,
+          "r2_logreturn": -0.038
         }
       }
     },
     "cpo_hmm": {
       "1": {
         "BASE": {
-          "mape": 1.2409,
-          "smape": 1.244,
-          "rmse": 70.3174,
-          "da": 60.0,
-          "r2_price": 0.9259,
-          "r2_logreturn": -0.0329
+          "mape": 1.2071,
+          "smape": 1.2093,
+          "rmse": 68.2141,
+          "da": 56.338,
+          "r2_price": 0.9265,
+          "r2_logreturn": -0.0132
+        },
+        "CSA": {
+          "mape": 1.2119,
+          "smape": 1.2136,
+          "rmse": 68.0152,
+          "da": 47.8873,
+          "r2_price": 0.9269,
+          "r2_logreturn": -0.0056
         }
       },
       "2": {
         "BASE": {
-          "mape": 1.709,
-          "smape": 1.7201,
-          "rmse": 97.1179,
-          "da": 43.75,
-          "r2_price": 0.8563,
-          "r2_logreturn": -0.1003
+          "mape": 1.6823,
+          "smape": 1.6902,
+          "rmse": 94.7632,
+          "da": 46.4789,
+          "r2_price": 0.8582,
+          "r2_logreturn": -0.037
+        },
+        "CSA": {
+          "mape": 1.68,
+          "smape": 1.6852,
+          "rmse": 93.8976,
+          "da": 56.338,
+          "r2_price": 0.8607,
+          "r2_logreturn": -0.0073
         }
       },
       "3": {
         "BASE": {
-          "mape": 2.297,
-          "smape": 2.32,
-          "rmse": 124.1628,
-          "da": 42.8571,
-          "r2_price": 0.7627,
-          "r2_logreturn": -0.1171
+          "mape": 2.2721,
+          "smape": 2.288,
+          "rmse": 121.88,
+          "da": 47.8873,
+          "r2_price": 0.7654,
+          "r2_logreturn": -0.0402
         },
         "CSA": {
-          "mape": 2.1855,
-          "smape": 2.1998,
-          "rmse": 122.1856,
-          "da": 52.381,
-          "r2_price": 0.7702,
-          "r2_logreturn": -0.0573
+          "mape": 2.2133,
+          "smape": 2.2222,
+          "rmse": 121.4833,
+          "da": 50.7042,
+          "r2_price": 0.7669,
+          "r2_logreturn": -0.0149
         }
       },
       "4": {
         "BASE": {
-          "mape": 2.7786,
-          "smape": 2.8159,
-          "rmse": 152.2038,
-          "da": 38.7097,
-          "r2_price": 0.6398,
-          "r2_logreturn": -0.1475
+          "mape": 2.7222,
+          "smape": 2.7495,
+          "rmse": 148.4915,
+          "da": 43.662,
+          "r2_price": 0.6517,
+          "r2_logreturn": -0.086
+        },
+        "CSA": {
+          "mape": 2.6803,
+          "smape": 2.6929,
+          "rmse": 145.3527,
+          "da": 53.5211,
+          "r2_price": 0.6663,
+          "r2_logreturn": -0.0163
         }
       },
       "5": {
         "BASE": {
-          "mape": 3.184,
-          "smape": 3.233,
-          "rmse": 172.4194,
-          "da": 39.3443,
-          "r2_price": 0.5318,
-          "r2_logreturn": -0.0662
+          "mape": 3.0397,
+          "smape": 3.0759,
+          "rmse": 166.5469,
+          "da": 43.662,
+          "r2_price": 0.5619,
+          "r2_logreturn": -0.0143
         },
         "CSA": {
-          "mape": 3.1826,
-          "smape": 3.2093,
-          "rmse": 175.4919,
-          "da": 59.0164,
-          "r2_price": 0.515,
-          "r2_logreturn": -0.0723
+          "mape": 2.9922,
+          "smape": 3.0128,
+          "rmse": 165.7206,
+          "da": 64.7887,
+          "r2_price": 0.5662,
+          "r2_logreturn": 0.0173
         }
       },
       "6": {
         "BASE": {
-          "mape": 3.4227,
-          "smape": 3.4884,
-          "rmse": 189.927,
-          "da": 36.6667,
-          "r2_price": 0.4266,
-          "r2_logreturn": -0.0733
+          "mape": 3.2325,
+          "smape": 3.2833,
+          "rmse": 181.9414,
+          "da": 40.8451,
+          "r2_price": 0.4771,
+          "r2_logreturn": -0.0247
         },
         "CSA": {
-          "mape": 3.4659,
-          "smape": 3.5056,
-          "rmse": 193.2248,
-          "da": 65.0,
-          "r2_price": 0.4065,
-          "r2_logreturn": -0.08
+          "mape": 3.2608,
+          "smape": 3.2899,
+          "rmse": 184.1278,
+          "da": 64.7887,
+          "r2_price": 0.4645,
+          "r2_logreturn": -0.0235
         }
       },
       "7": {
         "BASE": {
-          "mape": 3.8698,
-          "smape": 3.9506,
-          "rmse": 208.4472,
-          "da": 32.2034,
-          "r2_price": 0.2989,
-          "r2_logreturn": -0.096
+          "mape": 3.5602,
+          "smape": 3.6236,
+          "rmse": 197.15,
+          "da": 43.662,
+          "r2_price": 0.3861,
+          "r2_logreturn": -0.049
         },
         "CSA": {
-          "mape": 3.8381,
-          "smape": 3.8877,
-          "rmse": 211.4577,
-          "da": 69.4915,
-          "r2_price": 0.2785,
-          "r2_logreturn": -0.0991
+          "mape": 3.5166,
+          "smape": 3.5519,
+          "rmse": 199.0686,
+          "da": 67.6056,
+          "r2_price": 0.374,
+          "r2_logreturn": -0.0412
         }
       }
     },
     "cpo_sentiment": {
       "1": {
         "BASE": {
-          "mape": 1.1875,
-          "smape": 1.1898,
-          "rmse": 66.701,
-          "da": 53.2258,
-          "r2_price": 0.9326,
-          "r2_logreturn": -0.0086
+          "mape": 1.2061,
+          "smape": 1.209,
+          "rmse": 67.262,
+          "da": 44.4444,
+          "r2_price": 0.9323,
+          "r2_logreturn": -0.0217
+        },
+        "CSA": {
+          "mape": 1.2006,
+          "smape": 1.2029,
+          "rmse": 67.0553,
+          "da": 52.381,
+          "r2_price": 0.9328,
+          "r2_logreturn": -0.0124
         }
       },
       "2": {
         "BASE": {
-          "mape": 1.7175,
-          "smape": 1.7276,
-          "rmse": 96.0218,
-          "da": 39.3443,
-          "r2_price": 0.8582,
-          "r2_logreturn": -0.0851
+          "mape": 1.708,
+          "smape": 1.7186,
+          "rmse": 96.355,
+          "da": 47.619,
+          "r2_price": 0.8611,
+          "r2_logreturn": -0.0916
+        },
+        "CSA": {
+          "mape": 1.6699,
+          "smape": 1.6767,
+          "rmse": 93.9723,
+          "da": 55.5556,
+          "r2_price": 0.8679,
+          "r2_logreturn": -0.0266
         }
       },
       "3": {
         "BASE": {
-          "mape": 2.337,
-          "smape": 2.359,
-          "rmse": 125.7619,
-          "da": 55.0,
-          "r2_price": 0.7546,
-          "r2_logreturn": -0.1191
+          "mape": 2.2573,
+          "smape": 2.2789,
+          "rmse": 122.9325,
+          "da": 50.7937,
+          "r2_price": 0.774,
+          "r2_logreturn": -0.0835
+        },
+        "CSA": {
+          "mape": 2.1985,
+          "smape": 2.2114,
+          "rmse": 121.4565,
+          "da": 55.5556,
+          "r2_price": 0.7794,
+          "r2_logreturn": -0.0363
         }
       },
       "4": {
         "BASE": {
-          "mape": 2.8137,
-          "smape": 2.8523,
-          "rmse": 153.0035,
-          "da": 47.4576,
-          "r2_price": 0.6336,
-          "r2_logreturn": -0.11
+          "mape": 2.7248,
+          "smape": 2.7621,
+          "rmse": 149.9735,
+          "da": 49.2063,
+          "r2_price": 0.6636,
+          "r2_logreturn": -0.1087
+        },
+        "CSA": {
+          "mape": 2.7037,
+          "smape": 2.7248,
+          "rmse": 147.8658,
+          "da": 39.6825,
+          "r2_price": 0.673,
+          "r2_logreturn": -0.0525
         }
       },
       "5": {
         "BASE": {
-          "mape": 3.3458,
-          "smape": 3.4032,
-          "rmse": 179.9959,
-          "da": 43.1034,
-          "r2_price": 0.4872,
-          "r2_logreturn": -0.1108
+          "mape": 3.141,
+          "smape": 3.1935,
+          "rmse": 172.5887,
+          "da": 42.8571,
+          "r2_price": 0.5545,
+          "r2_logreturn": -0.0881
+        },
+        "CSA": {
+          "mape": 3.1039,
+          "smape": 3.1309,
+          "rmse": 172.6681,
+          "da": 49.2063,
+          "r2_price": 0.5541,
+          "r2_logreturn": -0.0589
         }
       },
       "6": {
         "BASE": {
-          "mape": 3.63,
-          "smape": 3.705,
-          "rmse": 200.0101,
-          "da": 40.3509,
-          "r2_price": 0.3619,
-          "r2_logreturn": -0.1377
+          "mape": 3.4215,
+          "smape": 3.4931,
+          "rmse": 193.2102,
+          "da": 42.8571,
+          "r2_price": 0.4417,
+          "r2_logreturn": -0.1541
+        },
+        "CSA": {
+          "mape": 3.3729,
+          "smape": 3.4131,
+          "rmse": 189.9019,
+          "da": 31.746,
+          "r2_price": 0.4606,
+          "r2_logreturn": -0.0831
         }
       },
       "7": {
         "BASE": {
-          "mape": 4.1791,
-          "smape": 4.2704,
-          "rmse": 219.9844,
-          "da": 32.1429,
-          "r2_price": 0.2177,
-          "r2_logreturn": -0.176
+          "mape": 3.8648,
+          "smape": 3.9521,
+          "rmse": 210.8042,
+          "da": 39.6825,
+          "r2_price": 0.3354,
+          "r2_logreturn": -0.1985
+        },
+        "CSA": {
+          "mape": 3.6836,
+          "smape": 3.7399,
+          "rmse": 206.8701,
+          "da": 34.9206,
+          "r2_price": 0.36,
+          "r2_logreturn": -0.1268
         }
       }
     },
     "full": {
       "1": {
         "BASE": {
-          "mape": 1.1845,
-          "smape": 1.1869,
-          "rmse": 66.6029,
-          "da": 51.6129,
-          "r2_price": 0.9328,
-          "r2_logreturn": -0.0059
+          "mape": 1.1993,
+          "smape": 1.202,
+          "rmse": 67.1999,
+          "da": 49.2063,
+          "r2_price": 0.9325,
+          "r2_logreturn": -0.0187
         },
         "CSA": {
-          "mape": 1.1947,
-          "smape": 1.1972,
-          "rmse": 67.0993,
-          "da": 50.0,
-          "r2_price": 0.9318,
-          "r2_logreturn": -0.0154
+          "mape": 1.2018,
+          "smape": 1.2041,
+          "rmse": 67.1329,
+          "da": 50.7937,
+          "r2_price": 0.9326,
+          "r2_logreturn": -0.0147
         }
       },
       "2": {
         "BASE": {
-          "mape": 1.7006,
-          "smape": 1.7104,
-          "rmse": 95.8008,
-          "da": 42.623,
-          "r2_price": 0.8589,
-          "r2_logreturn": -0.0808
+          "mape": 1.6793,
+          "smape": 1.6896,
+          "rmse": 95.4781,
+          "da": 42.8571,
+          "r2_price": 0.8637,
+          "r2_logreturn": -0.0735
         },
         "CSA": {
-          "mape": 1.6785,
-          "smape": 1.687,
-          "rmse": 95.228,
-          "da": 45.9016,
-          "r2_price": 0.8605,
-          "r2_logreturn": -0.0539
+          "mape": 1.6687,
+          "smape": 1.6752,
+          "rmse": 93.9056,
+          "da": 52.381,
+          "r2_price": 0.8681,
+          "r2_logreturn": -0.0245
         }
       },
       "3": {
         "BASE": {
-          "mape": 2.3279,
-          "smape": 2.3498,
-          "rmse": 124.1835,
-          "da": 50.0,
-          "r2_price": 0.7607,
-          "r2_logreturn": -0.0944
+          "mape": 2.2466,
+          "smape": 2.2664,
+          "rmse": 121.7249,
+          "da": 53.9683,
+          "r2_price": 0.7784,
+          "r2_logreturn": -0.0606
+        },
+        "CSA": {
+          "mape": 2.1999,
+          "smape": 2.2123,
+          "rmse": 121.5751,
+          "da": 53.9683,
+          "r2_price": 0.7789,
+          "r2_logreturn": -0.0372
         }
       },
       "4": {
         "BASE": {
-          "mape": 2.8083,
-          "smape": 2.845,
-          "rmse": 152.2725,
-          "da": 47.4576,
-          "r2_price": 0.6371,
-          "r2_logreturn": -0.1015
+          "mape": 2.7082,
+          "smape": 2.7429,
+          "rmse": 149.2743,
+          "da": 47.619,
+          "r2_price": 0.6667,
+          "r2_logreturn": -0.0974
+        },
+        "CSA": {
+          "mape": 2.7026,
+          "smape": 2.7223,
+          "rmse": 147.8852,
+          "da": 53.9683,
+          "r2_price": 0.6729,
+          "r2_logreturn": -0.0523
         }
       },
       "5": {
         "BASE": {
-          "mape": 3.3276,
-          "smape": 3.3777,
-          "rmse": 177.9431,
-          "da": 39.6552,
-          "r2_price": 0.4988,
-          "r2_logreturn": -0.0844
+          "mape": 3.0969,
+          "smape": 3.142,
+          "rmse": 169.4065,
+          "da": 46.0317,
+          "r2_price": 0.5708,
+          "r2_logreturn": -0.0475
+        },
+        "CSA": {
+          "mape": 3.0169,
+          "smape": 3.0498,
+          "rmse": 166.1089,
+          "da": 66.6667,
+          "r2_price": 0.5873,
+          "r2_logreturn": 0.0074
         }
       },
       "6": {
         "BASE": {
-          "mape": 3.5679,
-          "smape": 3.6349,
-          "rmse": 195.1661,
-          "da": 35.0877,
-          "r2_price": 0.3925,
-          "r2_logreturn": -0.081
+          "mape": 3.3303,
+          "smape": 3.3897,
+          "rmse": 185.4779,
+          "da": 38.0952,
+          "r2_price": 0.4855,
+          "r2_logreturn": -0.061
+        },
+        "CSA": {
+          "mape": 3.3671,
+          "smape": 3.4043,
+          "rmse": 188.2967,
+          "da": 61.9048,
+          "r2_price": 0.4697,
+          "r2_logreturn": -0.0634
         }
       },
       "7": {
         "BASE": {
-          "mape": 4.0251,
-          "smape": 4.1085,
-          "rmse": 213.3286,
-          "da": 33.9286,
-          "r2_price": 0.2643,
-          "r2_logreturn": -0.1041
+          "mape": 3.6543,
+          "smape": 3.7282,
+          "rmse": 200.884,
+          "da": 38.0952,
+          "r2_price": 0.3965,
+          "r2_logreturn": -0.0849
+        },
+        "CSA": {
+          "mape": 3.6031,
+          "smape": 3.6494,
+          "rmse": 204.1711,
+          "da": 68.254,
+          "r2_price": 0.3765,
+          "r2_logreturn": -0.0891
         }
       }
     }

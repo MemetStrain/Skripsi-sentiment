@@ -11,4 +11,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 from django.core.wsgi import get_wsgi_application
+
 application = get_wsgi_application()
+
+# Vercel's @vercel/python builder auto-detects a WSGI callable named `app`.
+app = application

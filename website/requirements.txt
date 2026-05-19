@@ -1,11 +1,9 @@
-# Web app — Django + Firestore + live XGBoost inference
+# Web app — Django + Firestore (Vercel-hosted, read-only).
+#
+# XGBoost inference is NOT run on Vercel — the ML stack (xgboost, scikit-learn,
+# scipy, pandas, numpy) is ~930 MB and exceeds Vercel's 500 MB function limit.
+# Forecasts are precomputed offline by website/precompute_forecasts.py and
+# stored in Firestore; see requirements-ml.txt for the offline-only deps.
 Django>=6.0,<7.0
 firebase-admin>=6.0
 google-cloud-firestore>=2.13
-
-# Live prediction inference (loads prediction/saved_models/*/xgboost_csa/)
-numpy>=1.26
-pandas>=2.0
-scikit-learn>=1.4
-xgboost>=2.0
-joblib>=1.3
