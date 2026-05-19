@@ -4,11 +4,21 @@ main.py — CPO Prediction Scheduler entry point (local-only).
 Usage:
   python main.py --mode initial    # one-time bulk load from local CSVs to Firestore
   python main.py --mode daily      # incremental: fetch price, scrape+score news,
-                                   #              recompute aggregates, refresh HMM
+                                   #              reconcile Firestore, refresh HMM
+                                   #              + forecasts
 
 Local CSVs are the source of truth. Firestore is a downstream mirror that the
-website reads. Predictions are no longer computed here — the website performs
-live inference using the offline-trained weights under prediction/saved_models/.
+website reads.
+
+Every daily run finishes by RECONCILING the full CSVs against Firestore
+(see reconcile.py) — so a skipped run or a CSV edited by another offline
+script can no longer leave Firestore permanently behind; the next run heals
+the drift.
+
+The run then refreshes the rolling forecast trail by invoking
+website/precompute_forecasts.py (XGBoost inference is too heavy for Vercel's
+serverless functions, so it is precomputed here and the site only reads the
+`forecasts/latest` document).
 
 Environment variables required:
   FIREBASE_CREDENTIALS_JSON       Full JSON string of Firebase service account key
@@ -128,6 +138,7 @@ def run_initial_load(db):
     2. MPOB news   →  news_articles  (uses pre-computed sentiment in the tone CSV)
     3. Aggregates  →  sentiment_aggregates  (recomputed from full news CSV)
     4. HMM states  →  hmm_states
+    5. Forecasts   →  forecasts/latest  (via website/precompute_forecasts.py)
 
     Each step is checkpointed; delete initial_load_progress.json (or run with
     --reset-progress) to start fresh.
@@ -186,6 +197,16 @@ def run_initial_load(db):
         update_hmm_states(db)
         _mark_done(progress, 'step4')
 
+    # Step 5: Forecasts (precomputed from the freshly-loaded Firestore data).
+    if progress.get('step5'):
+        logger.info('Step 5: SKIPPED (already done)')
+    else:
+        logger.info('Step 5: Precomputing forecasts...')
+        if _step_forecasts():
+            _mark_done(progress, 'step5')
+        else:
+            logger.warning('Step 5: forecast precompute failed — rerun to retry.')
+
     logger.info('=== INITIAL LOAD COMPLETE ===')
     logger.info(f'  (Progress file: {_PROGRESS_FILE} — delete it to re-run from scratch)')
 
@@ -194,18 +215,15 @@ def run_initial_load(db):
 # Daily update — incremental, CSV-as-source-of-truth
 # ---------------------------------------------------------------------------
 
-def _is_aggregates_empty(db) -> bool:
-    """True if the Firestore `sentiment_aggregates` collection has no documents."""
-    return not list(db.collection('sentiment_aggregates').limit(1).stream())
-
-
-def _step_price(db, paths: dict) -> bool:
+def _step_price(paths: dict) -> bool:
     """
-    Fetch the latest price; if newer than the local CSV, append the CSV,
-    re-run preprocessing, and upsert Firestore. Returns True if anything changed.
+    Fetch the latest price; if newer than the local CSV, append the CSV and
+    re-run preprocessing. Returns True if the CSV changed.
+
+    Firestore is NOT written here — `reconcile_all` mirrors the full CSV into
+    Firestore afterwards, so a single place owns CSV->Firestore sync.
     """
     from price_fetcher import fetch_latest_price, most_recent_trading_day, preprocess_price_csv
-    from firestore_writer import write_price
     from local_csv_writer import latest_price_date, append_price_row_indonesian
 
     cutoff = most_recent_trading_day()
@@ -231,8 +249,7 @@ def _step_price(db, paths: dict) -> bool:
     logger.info('  Re-running CPO preprocessing pipeline...')
     preprocess_price_csv(paths['cpo_raw'], paths['cpo_preproc'])
 
-    write_price(db, price)
-    logger.info(f'  Mirrored price {price["date"]} to Firestore.')
+    logger.info(f'  Appended price {price["date"]} to local CSV.')
     return True
 
 
@@ -279,66 +296,94 @@ def _step_news(paths: dict) -> tuple[list, bool]:
     return scored, True
 
 
+def _step_forecasts() -> bool:
+    """Refresh `forecasts/latest` by running website/precompute_forecasts.py.
+
+    Run as a subprocess (not an import) so the heavy XGBoost/ML stack stays
+    isolated from the scheduler process and a forecast failure can only fail
+    this step — never abort the whole run. The subprocess inherits the
+    scheduler's environment, so FIREBASE_CREDENTIALS_JSON carries through.
+
+    Returns True if the forecast document was refreshed.
+    """
+    import subprocess
+
+    script = os.path.abspath(os.path.join(_BASE, '..', 'website', 'precompute_forecasts.py'))
+    if not os.path.exists(script):
+        logger.warning(f'  precompute_forecasts.py not found at {script}; skipping.')
+        return False
+
+    logger.info('  Running precompute_forecasts.py (XGBoost inference)...')
+    try:
+        result = subprocess.run(
+            [sys.executable, script],
+            cwd=os.path.dirname(script),
+            capture_output=True, text=True, timeout=1800,
+        )
+    except subprocess.TimeoutExpired:
+        logger.error('  precompute_forecasts.py timed out after 30 min.')
+        return False
+    except Exception as e:
+        logger.error(f'  Could not launch precompute_forecasts.py: {e}')
+        return False
+
+    for line in (result.stdout or '').splitlines():
+        logger.info(f'  [forecasts] {line}')
+    if result.returncode != 0:
+        logger.error(f'  precompute_forecasts.py failed (exit {result.returncode}).')
+        for line in (result.stderr or '').splitlines()[-20:]:
+            logger.error(f'  [forecasts] {line}')
+        return False
+
+    logger.info('  Forecasts refreshed (forecasts/latest).')
+    return True
+
+
 def run_daily_update(db):
     """
-    Incremental update against the local CSVs and Firestore mirror:
+    Incremental update against the local CSVs, then a full reconcile so the
+    Firestore mirror can never drift out of sync with the CSVs:
 
-    1. Price: fetch, dedup against local CSV, append + preprocess if new.
-    2. News:  scrape since latest tone-CSV date, preprocess, score with FinBERT-Tone,
-              append to all three news CSVs.
-    3. Mirror new news articles into Firestore.
-    4. Recompute sentiment aggregates from the full local tone CSV → Firestore.
-    5. Recompute HMM states.
+    1. Price:     fetch, dedup against local CSV, append + preprocess if new.
+    2. News:      scrape since latest tone-CSV date, preprocess, score with
+                  FinBERT-Tone, append to all three news CSVs.
+    3. Reconcile: diff the FULL CSVs against Firestore and write any missing /
+                  stale prices, news and sentiment aggregates. Self-healing —
+                  a skipped run or an externally-edited CSV is corrected here.
+    4. HMM:       decode states from the now-current daily_prices.
+    5. Forecasts: refresh forecasts/latest via website/precompute_forecasts.py.
 
-    Predictions are NOT computed here — the website handles inference live.
+    Steps 1-2 only acquire data into the CSVs (the source of truth); step 3 is
+    the single place that writes CSV data to Firestore.
     """
     logger.info('=== DAILY UPDATE START ===')
     paths = _paths()
 
-    # 1. Price.
-    logger.info('Step 1: Price update')
-    _step_price(db, paths)
+    # 1. Price acquisition → local CSV.
+    logger.info('Step 1: Price acquisition')
+    price_changed = _step_price(paths)
 
-    # 2. News.
-    logger.info('Step 2: News update')
-    new_articles, news_changed = _step_news(paths)
+    # 2. News acquisition → local CSVs.
+    logger.info('Step 2: News acquisition')
+    _, news_changed = _step_news(paths)  # articles mirrored by reconcile, below
 
-    # 3. Mirror new news to Firestore.
-    if news_changed and new_articles:
-        from firestore_writer import write_news_articles
-        write_news_articles(db, new_articles)
-        logger.info(f'  Mirrored {len(new_articles)} new articles to Firestore.')
+    # 3. Reconcile full CSVs → Firestore (prices, news, sentiment aggregates).
+    logger.info('Step 3: Reconcile CSVs -> Firestore')
+    from reconcile import reconcile_all
+    recon_writes = reconcile_all(db, paths)
 
-    # 4. Sentiment aggregates — incremental, with one-shot rebuild on re-init.
-    logger.info('Step 4: Updating sentiment aggregates...')
-    from news_extractor import load_news_from_csv
-    from sentiment_runner import compute_sentiment_aggregates
-    from firestore_writer import write_sentiment_aggregates
-
-    if news_changed and new_articles:
-        # Recompute only the dates that received new articles, but include ALL
-        # articles on those dates (avoids undercounting when a date already
-        # had partial aggregates from a prior run).
-        affected_dates = {a['date'] for a in new_articles if a.get('date')}
-        all_articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
-        affected = [a for a in all_articles if a.get('date') in affected_dates]
-        aggregates = compute_sentiment_aggregates(affected)
-        if aggregates:
-            write_sentiment_aggregates(db, aggregates)
-            logger.info(f'  Updated aggregates for {len(aggregates)} affected date(s).')
-    elif _is_aggregates_empty(db):
-        logger.info('  Firestore aggregates empty (post-reinit). Rebuilding from full CSV...')
-        all_articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
-        aggregates = compute_sentiment_aggregates(all_articles)
-        if aggregates:
-            write_sentiment_aggregates(db, aggregates)
-    else:
-        logger.info('  No news change; aggregates already up to date.')
-
-    # 5. HMM states.
-    logger.info('Step 5: Updating HMM states...')
+    # 4. HMM states — decoded from the freshly-reconciled daily_prices.
+    logger.info('Step 4: Updating HMM states...')
     from hmm_updater import update_hmm_states
     update_hmm_states(db)
+
+    # 5. Forecasts — refresh the rolling trail so the dashboard tracks the new
+    #    data. Skipped when nothing changed (the 90-day trail is unchanged).
+    logger.info('Step 5: Refreshing forecasts...')
+    if price_changed or news_changed or recon_writes > 0:
+        _step_forecasts()
+    else:
+        logger.info('  No data changes this run; forecasts already current. Skip.')
 
     logger.info('=== DAILY UPDATE COMPLETE ===')
 

@@ -18,17 +18,43 @@ from datetime import datetime
 from typing import Optional
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
-MPOB_SEARCH_URL = (
-    'https://prestasisawit.mpob.gov.my/en/palmnews/advance-search/result'
-)
-SEARCH_KEYWORDS = ['cpo', 'crude palm oil']
-REQUEST_TIMEOUT = 15
-MAX_WORKERS = 4
+# MPOB's advance-search result page. The `_token` is required by the site;
+# pagination is followed via the `rel="next"` link on each page rather than a
+# page-number param. The selectors below target the live markup — keep them in
+# sync with news/scrap_fast.py, the standalone scraper they were ported from.
+MPOB_BASE = 'https://prestasisawit.mpob.gov.my'
+_MPOB_TOKEN = 'YjvdaKzN9niwad2HbnwQZYgeEmK92dphtzmqeNuU'
+MPOB_SEARCH_URLS = [
+    f'{MPOB_BASE}/en/palmnews/advance-search/result'
+    f'?_token={_MPOB_TOKEN}&keyword=cpo',
+    f'{MPOB_BASE}/en/palmnews/advance-search/result'
+    f'?_token={_MPOB_TOKEN}&keyword=crude%20palm%20oil',
+]
+REQUEST_TIMEOUT = (10, 30)   # (connect, read) seconds
+MAX_WORKERS = 8
 RETRY_LIMIT = 3
+
+# MPOB serves an incomplete cert chain; scrap_fast.py uses verify=False too.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_HEADERS = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/120.0.0.0 Safari/537.36'
+    ),
+    'Accept': (
+        'text/html,application/xhtml+xml,application/xml;q=0.9,'
+        'image/avif,image/webp,*/*;q=0.8'
+    ),
+}
 
 # Make the standalone news_preprocessing module importable from `news/`.
 _NEWS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'news'))
@@ -240,6 +266,26 @@ def _normalise_date(raw: str) -> Optional[str]:
 # Incremental scrape: articles newer than a cutoff date
 # ---------------------------------------------------------------------------
 
+def _make_session() -> requests.Session:
+    """A session with retry/backoff and a connection pool sized for workers."""
+    session = requests.Session()
+    session.headers.update(_HEADERS)
+    retry = Retry(
+        total=RETRY_LIMIT,
+        backoff_factor=1,                      # wait 1s, 2s, 4s between retries
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=['GET'],
+    )
+    adapter = HTTPAdapter(
+        max_retries=retry,
+        pool_connections=MAX_WORKERS * 2,
+        pool_maxsize=MAX_WORKERS * 2,
+    )
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+
 def scrape_new_articles(cutoff_date: Optional[str]) -> list[dict]:
     """
     Scrape MPOB news articles published after `cutoff_date` (YYYY-MM-DD).
@@ -252,132 +298,143 @@ def scrape_new_articles(cutoff_date: Optional[str]) -> list[dict]:
         return []
 
     logger.info(f'Scraping MPOB news newer than {cutoff_date}')
-    articles = []
+    session = _make_session()
+    articles: list[dict] = []
+    try:
+        for start_url in MPOB_SEARCH_URLS:
+            articles.extend(_scrape_keyword(session, start_url, cutoff_date))
+    finally:
+        session.close()
 
-    for keyword in SEARCH_KEYWORDS:
-        page = 1
-        while True:
-            batch = _scrape_page(keyword, page, cutoff_date)
-            if batch is None:
-                break  # error or end of results
-            if len(batch) == 0:
-                break  # no more new articles on this page
-            articles.extend(batch)
-            page += 1
-            time.sleep(random.uniform(0.5, 1.5))
-
-    # Deduplicate by URL
-    seen_urls = set()
+    # Deduplicate by URL (the two keyword searches overlap heavily).
+    seen: set[str] = set()
     unique = []
     for a in articles:
-        if a['url'] not in seen_urls:
-            seen_urls.add(a['url'])
+        if a['url'] and a['url'] not in seen:
+            seen.add(a['url'])
             unique.append(a)
 
     logger.info(f'Scraped {len(unique)} new articles')
     return unique
 
 
-def _scrape_page(keyword: str, page: int, cutoff_date: str) -> Optional[list[dict]]:
+def _scrape_keyword(session: requests.Session, start_url: str,
+                    cutoff_date: str) -> list[dict]:
     """
-    Scrape one result page for the given keyword.
-    Returns [] if all articles on this page are older than cutoff_date.
-    Returns None on error.
+    Walk the result pages for one keyword URL, newest-first, collecting
+    articles dated after `cutoff_date`. Stops at the first article that is
+    not newer than the cutoff (the listing is ordered, so the rest are older).
     """
-    params = {
-        'q': keyword,
-        'page': page,
-        'per_page': 20,
-    }
-    headers = {
-        'User-Agent': (
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/120.0.0.0 Safari/537.36'
-        )
-    }
+    articles: list[dict] = []
+    current_url: Optional[str] = start_url
+    page = 1
 
-    for attempt in range(RETRY_LIMIT):
+    while current_url:
         try:
-            resp = requests.get(MPOB_SEARCH_URL, params=params, headers=headers,
-                                timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 404:
-                return []  # no more pages
+            resp = session.get(current_url, timeout=REQUEST_TIMEOUT, verify=False)
             resp.raise_for_status()
-            break
         except requests.RequestException as e:
-            if attempt == RETRY_LIMIT - 1:
-                logger.warning(f'Failed to fetch page {page} for "{keyword}": {e}')
-                return None
-            time.sleep(2 ** attempt)
+            logger.warning(f'Failed to fetch list page {page}: {e}')
+            break
 
-    articles = []
-    try:
         soup = BeautifulSoup(resp.text, 'html.parser')
-        result_items = soup.select('.news-item, .result-item, article.news')
+        cards = soup.select('a > div.rounded.shadow-md')
+        if not cards:
+            break
 
-        if not result_items:
-            return []  # no articles found
+        batch, reached_cutoff = _parse_cards(cards, cutoff_date)
+        if batch:
+            _fetch_contents(batch)
+            articles.extend(batch)
 
-        for item in result_items:
-            date_el = item.select_one('.date, time, .news-date')
-            title_el = item.select_one('h2, h3, .title, .news-title')
-            link_el = item.select_one('a[href]')
-            category_el = item.select_one('.category, .tag, .news-category')
-            snippet_el = item.select_one('p, .snippet, .excerpt')
+        if reached_cutoff:
+            break
 
-            if not (date_el and title_el and link_el):
-                continue
-
-            raw_date = date_el.get_text(strip=True)
-            norm_date = _normalise_date(raw_date)
-            if not norm_date:
-                continue
-
-            # Stop if article is not newer than cutoff
-            if norm_date <= cutoff_date:
-                return []  # earlier articles won't be newer either
-
-            url = link_el['href']
-            if not url.startswith('http'):
-                url = 'https://prestasisawit.mpob.gov.my' + url
-
-            content = _fetch_article_content(url, headers)
-            snippet = snippet_el.get_text(strip=True)[:250] if snippet_el else ''
-
-            articles.append({
-                'date': norm_date,
-                'title': title_el.get_text(strip=True),
-                'category': category_el.get_text(strip=True) if category_el else 'General',
-                'content': content,
-                'snippet': snippet or (content[:200] + '…' if content else ''),
-                'url': url,
-            })
-
-    except Exception as e:
-        logger.warning(f'Parse error on page {page}: {e}')
-        return []
+        next_btn = soup.find('a', attrs={'rel': 'next'})
+        if next_btn and next_btn.has_attr('href'):
+            current_url = next_btn['href']
+            page += 1
+            time.sleep(random.uniform(0.3, 0.8))
+        else:
+            current_url = None
 
     return articles
 
 
-def _fetch_article_content(url: str, headers: dict) -> str:
-    """Fetch the full text of a single article."""
-    for attempt in range(2):
+def _parse_cards(cards, cutoff_date: str) -> tuple[list[dict], bool]:
+    """
+    Extract article stubs (no content yet) from a page's news cards.
+    Returns (articles, reached_cutoff) — reached_cutoff is True once a card
+    dated on/before `cutoff_date` is seen, signalling the caller to stop.
+    """
+    batch: list[dict] = []
+    for card in cards:
         try:
-            resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            # Look for common article body selectors
-            body = (
-                soup.select_one('.article-body, .news-content, .entry-content, article')
-                or soup.select_one('main')
-            )
-            if body:
-                for tag in body.select('script, style, nav, footer'):
-                    tag.decompose()
-                return body.get_text(' ', strip=True)
+            date_el = card.select_one('span.text-sm.text-black')
+            norm_date = _normalise_date(date_el.get_text(strip=True)) if date_el else None
+            if not norm_date:
+                continue
+            if norm_date <= cutoff_date:
+                return batch, True   # listing is newest-first — stop here
+
+            link_tag = card.parent
+            if not link_tag or not link_tag.has_attr('href'):
+                continue
+            url = link_tag['href']
+            if not url.startswith('http'):
+                url = MPOB_BASE + url
+
+            title_el = card.select_one('span.font-bold')
+            snippet_el = card.select_one('p.line-clamp-3')
+            cat_el = card.select_one('span.divider-right')
+
+            batch.append({
+                'date': norm_date,
+                'title': title_el.get_text(strip=True) if title_el else '',
+                'category': cat_el.get_text(strip=True) if cat_el else 'General',
+                'content': '',
+                'snippet': snippet_el.get_text(strip=True) if snippet_el else '',
+                'url': url,
+            })
+        except Exception as e:
+            logger.warning(f'Error parsing news card: {e}')
+            continue
+    return batch, False
+
+
+def _fetch_contents(articles: list[dict]) -> None:
+    """Fetch full article text for each stub in parallel, updating in place."""
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(_fetch_article_content, a['url']): a
+                   for a in articles}
+        for future in as_completed(futures):
+            article = futures[future]
+            try:
+                content = future.result()
+            except Exception as e:
+                logger.warning(f'Content fetch failed for {article["url"]}: {e}')
+                content = ''
+            article['content'] = content
+            if not article['snippet'] and content:
+                article['snippet'] = content[:200].rsplit(' ', 1)[0] + '…'
+
+
+def _fetch_article_content(url: str) -> str:
+    """Fetch and return the full text of a single article (own session)."""
+    session = _make_session()
+    try:
+        time.sleep(0.1)   # small courtesy delay between worker requests
+        resp = session.get(url, timeout=REQUEST_TIMEOUT, verify=False)
+        if resp.status_code != 200:
             return ''
-        except Exception:
-            time.sleep(1)
-    return ''
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        body = soup.select_one('div.w-full.h-full.text-lg')
+        if not body:
+            return ''
+        for tag in body.select('script, style, nav, footer'):
+            tag.decompose()
+        return body.get_text(separator='\n\n', strip=True)
+    except Exception:
+        return ''
+    finally:
+        session.close()

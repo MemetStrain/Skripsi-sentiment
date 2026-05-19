@@ -105,12 +105,16 @@ flowchart TD
     ROOT -->|"3 calls (raw / preproc / sent CSV)"| ANR["append_news_rows(csv, rows, fields)<br/>local_csv_writer.py"]:::util
     ROOT -->|"db, scored articles[]<br/>(via run_daily_update)"| WNA["write_news_articles(db, articles)<br/>firestore_writer.py"]:::util
 
-    SNA -->|"keyword, page, cutoff"| SP["_scrape_page()<br/>news_extractor.py"]:::priv
-    SP -->|"search URL + params, headers"| RG["requests.get(...)<br/>(external)"]:::ext
-    SP -->|"HTML text"| BS["BeautifulSoup parse<br/>(external)"]:::ext
-    SP -->|"url, headers"| FAC["_fetch_article_content()<br/>news_extractor.py"]:::priv
-    SP -->|"raw date string"| NDN["_normalise_date()<br/>news_extractor.py"]:::priv
-    FAC -->|"article URL, headers"| RG
+    SNA -->|"—"| MS["_make_session()<br/>news_extractor.py"]:::priv
+    SNA -->|"session, start_url, cutoff"| SK["_scrape_keyword(session, url, cutoff)<br/>news_extractor.py"]:::priv
+    SK -->|"list page URL"| RG["requests.get(...)<br/>(external)"]:::ext
+    SK -->|"HTML text"| BS["BeautifulSoup parse<br/>(external)"]:::ext
+    SK -->|"cards, cutoff"| PC["_parse_cards(cards, cutoff)<br/>news_extractor.py"]:::priv
+    PC -->|"raw date string"| NDN["_normalise_date()<br/>news_extractor.py"]:::priv
+    SK -->|"article stubs[]"| FC["_fetch_contents(articles)<br/>news_extractor.py"]:::priv
+    FC -->|"url — per worker (ThreadPoolExecutor)"| FAC["_fetch_article_content(url)<br/>news_extractor.py"]:::priv
+    FAC -->|"—"| MS
+    FAC -->|"article URL"| RG
     FAC -->|"HTML text"| BS
 
     PA -->|"—"| GPP["_get_preprocessor()<br/>news_extractor.py"]:::priv
@@ -152,12 +156,21 @@ flowchart TD
             <tr><td><code>scheduler/news_extractor.py</code></td><td><code>scrape_new_articles(cutoff_date)</code></td>
                 <td>cutoff <code>YYYY-MM-DD</code> atau <code>None</code></td>
                 <td><code>list[dict]</code> artikel unik per URL</td></tr>
-            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_scrape_page(kw, page, cutoff)</code></td>
-                <td>keyword + halaman + cutoff</td>
-                <td><code>list[dict] | None</code></td></tr>
-            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_fetch_article_content(url, headers)</code></td>
-                <td>URL artikel + dict headers</td>
-                <td><code>str</code> teks artikel</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_make_session()</code></td>
+                <td>—</td>
+                <td><code>requests.Session</code> dengan retry/backoff + connection pool</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_scrape_keyword(session, start_url, cutoff)</code></td>
+                <td>session + URL awal (token+keyword) + cutoff ISO</td>
+                <td><code>list[dict]</code> — artikel untuk satu cabang keyword</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_parse_cards(cards, cutoff)</code></td>
+                <td>list elemen kartu BeautifulSoup + cutoff ISO</td>
+                <td><code>(list[dict], bool)</code> — stub artikel + flag berhenti</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_fetch_contents(articles)</code></td>
+                <td><code>list[dict]</code> stub (mutasi in place)</td>
+                <td>None — mengisi field <code>content</code> via ThreadPoolExecutor</td></tr>
+            <tr><td><code>scheduler/news_extractor.py</code></td><td><code>_fetch_article_content(url)</code></td>
+                <td>URL artikel</td>
+                <td><code>str</code> teks artikel (kosong bila gagal)</td></tr>
             <tr><td><code>scheduler/news_extractor.py</code></td><td><code>preprocess_articles(articles)</code></td>
                 <td><code>list[dict]</code></td>
                 <td><code>list[dict]</code> setelah preprocessing (drop yang kosong)</td></tr>
@@ -195,9 +208,12 @@ flowchart TD
             <tr><td><code>_step_news</code></td><td><code>preprocess_articles</code></td><td>list[dict]</td><td>Stamp</td></tr>
             <tr><td><code>_step_news</code></td><td><code>run_sentiment_on_articles</code> (P3)</td><td>list[dict]</td><td>Stamp + Hybrid (mutates in place)</td></tr>
             <tr><td><code>_step_news</code></td><td><code>append_news_rows</code> ×3</td><td>path + list[dict] + field list</td><td>Stamp</td></tr>
-            <tr><td><code>scrape_new_articles</code></td><td><code>_scrape_page</code></td><td>keyword + page + cutoff</td><td>Data</td></tr>
-            <tr><td><code>_scrape_page</code></td><td><code>requests.get</code></td><td>URL + params + headers</td><td>Data + Stamp</td></tr>
-            <tr><td><code>_scrape_page</code></td><td><code>_fetch_article_content</code></td><td>URL + headers</td><td>Data + Stamp</td></tr>
+            <tr><td><code>scrape_new_articles</code></td><td><code>_make_session</code></td><td>—</td><td>Data (return only)</td></tr>
+            <tr><td><code>scrape_new_articles</code></td><td><code>_scrape_keyword</code></td><td>session + start URL + cutoff</td><td>Data + Stamp (session)</td></tr>
+            <tr><td><code>_scrape_keyword</code></td><td><code>requests.get</code></td><td>URL list page</td><td>Data</td></tr>
+            <tr><td><code>_scrape_keyword</code></td><td><code>_parse_cards</code></td><td>list cards + cutoff</td><td>Stamp</td></tr>
+            <tr><td><code>_scrape_keyword</code></td><td><code>_fetch_contents</code></td><td>list stub artikel</td><td>Stamp (mutasi in place)</td></tr>
+            <tr><td><code>_fetch_contents</code></td><td><code>_fetch_article_content</code></td><td>URL (per worker)</td><td>Data</td></tr>
             <tr><td><code>preprocess_articles</code></td><td><code>NewsPreprocessor.preprocess_*</code></td><td>raw string</td><td>Data</td></tr>
             <tr><td><code>write_news_articles</code></td><td><code>_batch_write</code></td><td>list of ops tuples</td><td>Stamp</td></tr>
           </tbody>
@@ -206,6 +222,19 @@ flowchart TD
 
       <h3 class="sub-heading">Catatan Implementasi</h3>
       <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Dua URL keyword:</strong> <code>scrape_new_articles</code> mengiterasi dua
+            entry-point URL MPOB (token + <code>keyword=cpo</code> dan
+            <code>keyword=crude%20palm%20oil</code>) lalu dedup hasilnya berdasarkan URL —
+            kedua keyword cukup tumpang tindih.</li>
+        <li><strong>Paginasi via <code>rel="next"</code>:</strong> setiap halaman list diikuti
+            lewat <code>href</code> dari elemen <code>&lt;a rel="next"&gt;</code> (bukan
+            parameter <code>?page=N</code>); berhenti ketika tag tersebut tidak ada atau
+            kartu pertama yang lebih lama dari cutoff ditemui (listing newest-first).</li>
+        <li><strong>Konten paralel:</strong> setelah satu halaman list di-parse,
+            <code>_fetch_contents</code> men-download body artikel paralel via
+            <code>ThreadPoolExecutor</code> (<code>MAX_WORKERS=8</code>), masing-masing
+            worker memakai sesi sendiri dengan retry adapter dan <code>verify=False</code>
+            (cert MPOB tidak lengkap).</li>
         <li><strong>Tiga CSV, tiga append:</strong> CSV raw ditulis lebih dulu sebagai
             arsip mentah; preprocessing kemudian dapat membuang artikel kosong,
             dan barulah hasilnya di-append ke CSV preproc + sentiment.</li>

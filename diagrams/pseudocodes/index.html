@@ -95,10 +95,10 @@
             </tr>
             <tr>
               <td>5.0</td>
-              <td><strong>Dashboard &amp; Live Inference</strong></td>
+              <td><strong>Dashboard Web</strong></td>
               <td><a class="nav-pill" href="../flowcharts/P5_dashboard.html">P5 FC</a></td>
               <td><a class="nav-pill" href="P5_dashboard.html">P5 PC →</a></td>
-              <td><code>website/web/views.py</code> + <code>web/predictor.py</code></td>
+              <td><code>website/web/views.py</code> (+ <code>web/winners.py</code>); offline: <code>website/precompute_forecasts.py</code> + <code>web/predictor.py</code></td>
             </tr>
           </tbody>
         </table>
@@ -146,8 +146,8 @@
         </a>
         <a href="P5_dashboard.html" class="card block md:col-span-2">
           <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
-          <div class="text-base font-semibold mt-1">Dashboard &amp; Live Inference</div>
-          <div class="text-sm text-slate-600 mt-1">4 view (<code>dashboard</code>, <code>news</code>, <code>about</code>, <code>forecasts_api</code>) + <code>compute_forecast_trails</code> dengan loop horizon × anchor.</div>
+          <div class="text-base font-semibold mt-1">Dashboard Web</div>
+          <div class="text-sm text-slate-600 mt-1">4 view read-only (<code>dashboard</code>, <code>news</code>, <code>about</code>, <code>forecasts_api</code>) + algoritma <em>offline</em> <code>compute_forecast_trails</code> via <code>precompute_forecasts.py</code>.</div>
         </a>
       </div>
     </section>

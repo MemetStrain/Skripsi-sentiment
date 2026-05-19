@@ -87,9 +87,9 @@
             </tr>
             <tr>
               <td>5.0</td>
-              <td><strong>Dashboard &amp; Live Inference</strong></td>
+              <td><strong>Dashboard Web</strong></td>
               <td><code>python manage.py runserver</code></td>
-              <td><code>website/manage.py</code> → Django boot → <code>web/urls.py</code> → <code>web/views.py</code> + <code>web/predictor.py</code> + <code>prediction/feature_engineering.py</code></td>
+              <td><code>website/manage.py</code> → Django boot → <code>web/urls.py</code> → <code>web/views.py</code> (+ <code>web/winners.py</code>)</td>
               <td><a class="nav-pill" href="P5_dashboard.html">P5 →</a></td>
             </tr>
           </tbody>
@@ -137,8 +137,8 @@
         </a>
         <a href="P5_dashboard.html" class="card block md:col-span-2">
           <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
-          <div class="text-base font-semibold mt-1">Dashboard &amp; Live Inference</div>
-          <div class="text-sm text-slate-600 mt-1">Akar: <code>python manage.py runserver</code> · Django boot → URL dispatcher → 4 views → predictor + feature_engineering + XGBoost <code>.pkl</code>.</div>
+          <div class="text-base font-semibold mt-1">Dashboard Web</div>
+          <div class="text-sm text-slate-600 mt-1">Akar: <code>python manage.py runserver</code> · Django boot → URL dispatcher → 4 view read-only; <code>forecasts_api</code> membaca <code>forecasts/latest</code> dari Firestore.</div>
         </a>
       </div>
     </section>

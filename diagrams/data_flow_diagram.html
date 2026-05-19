@@ -147,8 +147,11 @@ flowchart LR
         Proses 0 didekomposisi menjadi lima fungsi utama. Empat proses
         pertama (1.0–4.0) dipicu oleh Operator melalui CLI scheduler;
         proses 5.0 dipicu oleh Pengunjung Publik melalui HTTP request.
-        Setiap proses tertaut langsung ke modul Python yang
-        diimplementasinya.
+        Inferensi XGBoost dijalankan terpisah secara <em>offline</em> oleh
+        skrip <code>precompute_forecasts.py</code> (digambarkan sebagai node
+        offline, bukan proses bernomor) yang menulis hasilnya ke data store
+        D8 <code>forecasts</code>. Setiap proses tertaut langsung ke modul
+        Python yang mengimplementasinya.
       </p>
       <div class="diagram-card">
         <pre class="mermaid">
@@ -163,7 +166,8 @@ flowchart LR
     P2(("2.0<br/>News<br/>Acquisition"))
     P3(("3.0<br/>Sentiment<br/>Analysis &amp;<br/>Aggregation"))
     P4(("4.0<br/>HMM State<br/>Decoding"))
-    P5(("5.0<br/>Dashboard &amp;<br/>Live Inference"))
+    P5(("5.0<br/>Dashboard<br/>Web"))
+    PRE["precompute_forecasts.py<br/>(skrip offline)"]
 
     D1[("D1: daily_prices")]
     D2[("D2: news_articles")]
@@ -172,11 +176,13 @@ flowchart LR
     D5[("D5: hmm_models")]
     D6[("D6: saved_models/*.pkl")]
     D7[("D7: winners.json")]
+    D8[("D8: forecasts")]
 
     Operator -->|trigger --mode daily| P1
     Operator -->|trigger --mode daily| P2
     Operator -->|trigger --mode daily| P3
     Operator -->|trigger --mode daily| P4
+    Operator -->|jalankan skrip offline| PRE
 
     Inv -->|OHLCV| P1
     P1 -->|harga harian| D1
@@ -193,22 +199,39 @@ flowchart LR
     D1 -->|deret close| P4
     P4 -->|state per tanggal| D4
 
+    D1 -->|90 hari OHLCV| PRE
+    D3 -->|90 hari sentimen| PRE
+    D4 -->|90 hari state| PRE
+    D6 -->|model.pkl + scaler.pkl| PRE
+    D7 -->|pemenang per horizon| PRE
+    PRE -->|trail forecast| D8
+
     Visitor -->|HTTP GET| P5
     D1 -->|90 hari OHLCV| P5
+    D2 -->|artikel + sentimen| P5
     D3 -->|90 hari sentimen| P5
     D4 -->|90 hari state| P5
-    D6 -->|model.pkl + scaler.pkl| P5
-    D7 -->|pemenang per horizon| P5
+    D7 -->|metrik pemenang| P5
+    D8 -->|trail forecast precomputed| P5
     P5 -->|HTML + JSON trails| Visitor
 
     classDef entity fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#92400e;
     classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef offline fill:#ede9fe,stroke:#6d28d9,stroke-width:2px,color:#4c1d95;
     classDef store fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
     class Operator,Visitor,Inv,MPOB,HF entity;
     class P1,P2,P3,P4,P5 process;
-    class D1,D2,D3,D4,D5,D6,D7 store;
+    class PRE offline;
+    class D1,D2,D3,D4,D5,D6,D7,D8 store;
         </pre>
       </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda:
+        <span class="px-1 rounded" style="background:#fef3c7;border:1px solid #92400e">krem</span> = entitas eksternal,
+        <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = proses bernomor (1.0–5.0),
+        <span class="px-1 rounded" style="background:#ede9fe;border:1px solid #6d28d9">ungu</span> = skrip offline (bukan proses bernomor),
+        <span class="px-1 rounded" style="background:#dbeafe;border:1px solid #1e40af">biru</span> = data store.
+      </p>
 
       <h3 class="sub-heading">Tabel — Proses (Level 1)</h3>
       <div class="overflow-x-auto rounded-lg border border-slate-200">
@@ -240,14 +263,23 @@ flowchart LR
               <td><code>scheduler/hmm_updater.py</code> · <code>update_hmm_states</code> (forward filter, bukan Viterbi)</td>
             </tr>
             <tr>
-              <td>5.0</td><td><strong>Dashboard &amp; Live Inference</strong></td>
-              <td>D1/D3/D4 untuk konteks; D6/D7 untuk inferensi</td>
-              <td>HTML dashboard; JSON <code>forecast trails</code> untuk Chart.js</td>
-              <td><code>website/web/views.py</code> · <code>dashboard</code>, <code>news</code>, <code>forecasts_api</code> + <code>website/web/predictor.py</code></td>
+              <td>5.0</td><td><strong>Dashboard Web</strong></td>
+              <td>D1/D2/D3/D4 untuk konteks; D7 untuk tabel metrik; D8 untuk trail forecast</td>
+              <td>HTML dashboard; JSON <code>forecast trails</code> untuk Chart.js (dibaca dari D8)</td>
+              <td><code>website/web/views.py</code> · <code>dashboard</code>, <code>news</code>, <code>about</code>, <code>forecasts_api</code> (+ <code>web/winners.py</code>)</td>
             </tr>
           </tbody>
         </table>
       </div>
+      <p class="text-xs text-slate-500 mt-2">
+        Inferensi XGBoost <strong>tidak</strong> lagi dijalankan oleh proses 5.0 saat request.
+        Skrip <em>offline</em> <code>website/precompute_forecasts.py</code> memanggil
+        <code>predictor.compute_forecast_trails</code> dan menulis hasilnya ke D8
+        <code>forecasts</code>; <code>forecasts_api</code> hanya membaca dokumen tersebut.
+        Skrip ini diperlakukan sebagai produsen <em>offline</em> dari data store D8 — analog
+        dengan skrip pelatihan <code>horizon_forecast_C1..C4</code> yang memproduksi D6 —
+        sehingga tidak digambar sebagai proses bernomor.
+      </p>
 
       <h3 class="sub-heading">Tabel — Data Stores</h3>
       <div class="overflow-x-auto rounded-lg border border-slate-200">
@@ -275,6 +307,9 @@ flowchart LR
             <tr><td>D7</td><td><code>winners.json</code></td><td>Filesystem (JSON)</td>
               <td><code>winners_by_horizon, configs_by_horizon, metrics</code></td>
               <td><code>prediction/compute_winners.py</code></td></tr>
+            <tr><td>D8</td><td><code>forecasts</code></td><td>Firestore (doc ID = <code>latest</code>)</td>
+              <td><code>payload</code> (string JSON ringkas berisi <code>horizons, winners, configs, trails, metrics, tag_to_config, generated_at</code>), <code>generated_at</code></td>
+              <td><code>website/precompute_forecasts.py</code> (offline)</td></tr>
           </tbody>
         </table>
       </div>
@@ -297,8 +332,13 @@ flowchart LR
             <tr><td>4.0</td><td>D4</td><td>State per tanggal</td><td>Forward filter (online), bukan Viterbi — agar histori tidak berubah seiring waktu.</td></tr>
             <tr><td>Pengunjung</td><td>5.0</td><td>HTTP GET</td><td>Endpoint: <code>/</code>, <code>/news/</code>, <code>/about/</code>, <code>/api/forecasts/</code>.</td></tr>
             <tr><td>D1+D3+D4</td><td>5.0</td><td>Window 90 hari</td><td>Untuk konteks chart (harga + sentimen + state).</td></tr>
-            <tr><td>D6+D7</td><td>5.0</td><td>Model pemenang per horizon</td><td><code>predictor.load_winners</code> + <code>load_model(tag,h,'csa')</code>; cached via <code>lru_cache</code>.</td></tr>
-            <tr><td>5.0</td><td>Pengunjung</td><td>HTML + JSON</td><td>Template <code>dashboard.html</code> + payload <code>compute_forecast_trails</code>.</td></tr>
+            <tr><td>D2</td><td>5.0</td><td>Artikel + sentimen</td><td>View <code>news</code> men-stream seluruh dokumen <code>news_articles</code>.</td></tr>
+            <tr><td>D7</td><td>5.0</td><td>Metrik pemenang</td><td>View <code>dashboard</code> memuat <code>winners.json</code> via <code>web/winners.py</code> untuk tabel metrik statis.</td></tr>
+            <tr><td>D8</td><td>5.0</td><td>Trail forecast precomputed</td><td><code>forecasts_api</code> membaca dokumen <code>forecasts/latest</code> — tanpa inferensi saat request.</td></tr>
+            <tr><td>5.0</td><td>Pengunjung</td><td>HTML + JSON</td><td>Template <code>dashboard.html</code> + payload trail dibaca dari D8.</td></tr>
+            <tr><td>D1+D3+D4</td><td>precompute (offline)</td><td>Window 90 hari</td><td>Skrip <code>precompute_forecasts.py</code> membangun frame inferensi (<code>build_inference_frame</code>).</td></tr>
+            <tr><td>D6+D7</td><td>precompute (offline)</td><td>Model + pemenang per horizon</td><td><code>compute_forecast_trails</code>: <code>load_model(tag,h,'csa')</code> + <code>load_winners</code>.</td></tr>
+            <tr><td>precompute (offline)</td><td>D8</td><td>Trail forecast</td><td>Hasil inferensi XGBoost ditulis ke <code>forecasts/latest</code> sebagai JSON ringkas.</td></tr>
           </tbody>
         </table>
       </div>

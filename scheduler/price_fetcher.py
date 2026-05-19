@@ -178,8 +178,21 @@ def fetch_latest_price() -> Optional[dict]:
         if isinstance(raw_date, (int, float)):
             trade_date = date.fromtimestamp(raw_date).isoformat()
         else:
-            # investiny returns ISO strings like '2026-05-06'
-            trade_date = str(raw_date)[:10]
+            # investiny echoes back the query format — we query with
+            # MM/DD/YYYY, so dates come back as e.g. '05/18/2026'. Normalise
+            # to ISO (YYYY-MM-DD) so downstream string comparisons are valid.
+            s = str(raw_date).strip()
+            parsed = None
+            for fmt in ('%Y-%m-%d', '%m/%d/%Y'):
+                try:
+                    parsed = datetime.strptime(s[:10], fmt).date()
+                    break
+                except ValueError:
+                    continue
+            if parsed is None:
+                logger.warning(f'Could not parse fetched date: {raw_date!r}')
+                return None
+            trade_date = parsed.isoformat()
 
         vol = volumes[idx] if idx < len(volumes) else 0
         return {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pseudocode — P5 Dashboard &amp; Live Inference</title>
+  <title>Pseudocode — P5 Dashboard Web</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
@@ -48,8 +48,8 @@
   <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
     <div class="max-w-5xl mx-auto">
       <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
-      <h1 class="text-2xl font-bold mt-1">Pseudocode — P5 Dashboard &amp; Live Inference</h1>
-      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk 4 view di <code>website/web/views.py</code> dan inferensi live di <code>web/predictor.py</code>.</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P5 Dashboard Web</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk 4 view di <code>website/web/views.py</code>, plus algoritma inferensi <em>offline</em> di <code>web/predictor.py</code> + <code>precompute_forecasts.py</code>.</p>
     </div>
   </header>
 
@@ -72,11 +72,15 @@
         Pseudocode ini mengikuti
         <a href="../flowcharts/P5_dashboard.html" class="text-teal-700 underline">flowchart P5</a>.
         Setiap HTTP request akan di-<em>dispatch</em> oleh Django URL router ke
-        salah satu dari empat view. Tiga view pertama
-        (<code>dashboard</code>, <code>news</code>, <code>about</code>) bersifat
-        sinkron <em>read-and-render</em>; <code>forecasts_api</code> menjalankan
-        inferensi XGBoost <em>live</em> per request — loop horizon × anchor
-        dengan <code>lru_cache</code> hit/miss dan tiga jalur error fallback.
+        salah satu dari empat view, semuanya <em>read-only</em>. Tiga view
+        (<code>dashboard</code>, <code>news</code>, <code>about</code>) melakukan
+        <em>read-and-render</em> template; <code>forecasts_api</code> hanya
+        membaca dokumen Firestore <code>forecasts/latest</code> dan
+        mengembalikannya sebagai JSON.
+        Algoritma inferensi XGBoost (<code>compute_forecast_trails</code>)
+        tidak lagi dijalankan per request — ia dipre-komputasi <em>offline</em>
+        oleh skrip <code>website/precompute_forecasts.py</code> dan
+        didokumentasikan pada bagian <em>“Algoritma Offline”</em> di bawah.
       </p>
     </section>
 
@@ -231,39 +235,66 @@
 <span class="src">SOURCE</span>: website/web/views.py :: forecasts_api
 
 <span class="kw">INPUT</span>:
-    request  <span class="cmt">// GET /api/forecasts/?max_horizon=H&amp;window_days=W</span>
+    request  <span class="cmt">// GET /api/forecasts/  (tanpa parameter query)</span>
 
 <span class="kw">OUTPUT</span>:
-    JsonResponse (200 ok / 400 bad-param / 503 missing-artifacts / 500 other)
+    JsonResponse (200 ok / 503 forecasts-belum-ada / 500 other)
 
 <span class="kw">BEGIN</span>
     <span class="kw">TRY</span>
-        max_horizon = int(request.GET.get("max_horizon", 7))
-        window_days = int(request.GET.get("window_days", 90))
-    <span class="kw">CATCH</span> (ValueError, TypeError)
-        <span class="kw">RETURN</span> JsonResponse({ error: "Invalid integer parameter" }, status=400)
-    <span class="kw">END TRY</span>
-
-    max_horizon = max(1, min(max_horizon, 7))            <span class="cmt">// clamp [1, 7]</span>
-    window_days = max(7, min(window_days, 365))          <span class="cmt">// clamp [7, 365]</span>
-
-    <span class="kw">TRY</span>
-        db      = firestore.client()
-        payload = compute_forecast_trails(db, max_horizon, window_days)
+        db  = firestore.client()
+        doc = db.collection("forecasts").document("latest").get()    <span class="cmt">// ← D8</span>
+        <span class="kw">IF</span> <span class="kw">NOT</span> doc.exists <span class="kw">THEN</span>
+            <span class="kw">RETURN</span> JsonResponse({ error: "No precomputed forecasts available yet." }, status=503)
+        <span class="kw">END IF</span>
+        data    = doc.to_dict() <span class="kw">OR</span> {}
+        payload = json.loads(data["payload"]) <span class="kw">IF</span> "payload" <span class="kw">IN</span> data <span class="kw">ELSE</span> data
         <span class="kw">RETURN</span> JsonResponse(payload)
-    <span class="kw">CATCH</span> FileNotFoundError <span class="kw">AS</span> e
-        <span class="kw">RETURN</span> JsonResponse({ error: str(e) }, status=503)
     <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
         <span class="kw">RETURN</span> JsonResponse({ error: str(e) }, status=500)
     <span class="kw">END TRY</span>
-<span class="kw">END</span></pre>
+<span class="kw">END</span>
+
+<span class="cmt">// Inferensi XGBoost tidak dijalankan di sini. Endpoint hanya membaca</span>
+<span class="cmt">// dokumen forecasts/latest yang dipre-komputasi offline — lihat bagian</span>
+<span class="cmt">// "Algoritma Offline — Precompute Forecast" di bawah.</span></pre>
       </div>
     </section>
 
     <section class="page-break">
-      <h2 class="text-xl font-semibold section-heading">ALGORITHM compute_forecast_trails</h2>
+      <h2 class="text-xl font-semibold section-heading">Algoritma Offline — Precompute Forecast</h2>
+      <p class="text-sm text-slate-700 leading-relaxed mb-4">
+        Algoritma di bawah ini <strong>tidak</strong> dijalankan oleh server web saat
+        request. Operator menjalankannya secara <em>offline</em> melalui
+        <code>python precompute_forecasts.py</code> (mis. setelah refresh data harian).
+        Skrip memanggil <code>compute_forecast_trails</code>, lalu menulis payload hasil
+        ke dokumen Firestore <code>forecasts/latest</code> (data store D8) yang kemudian
+        dibaca oleh <code>forecasts_api</code>. Stack ML (~930 MB) hanya dibutuhkan di
+        lingkungan offline ini, bukan di fungsi serverless Vercel.
+      </p>
       <div class="diagram-card">
-<pre class="algorithm"><span class="kw">ALGORITHM</span> compute_forecast_trails
+<pre class="algorithm"><span class="kw">PROCEDURE</span> main
+<span class="src">SOURCE</span>: website/precompute_forecasts.py :: main
+
+<span class="kw">BEGIN</span>
+    _init_firebase()                                  <span class="cmt">// FIREBASE_CREDENTIALS_JSON / file kredensial</span>
+    db      = firestore.client()
+    payload = compute_forecast_trails(db, max_horizon=7, window_days=90)
+
+    doc = {
+        payload      : json.dumps(payload, separators=(",", ":")),   <span class="cmt">// JSON ringkas</span>
+        generated_at : payload.get("generated_at") }
+
+    size_kb = |doc.payload| / 1024
+    <span class="kw">IF</span> size_kb &gt; 1000 <span class="kw">THEN</span>                            <span class="cmt">// batas 1 MB per dokumen Firestore</span>
+        <span class="kw">RAISE</span> SystemExit("Payload exceeds Firestore 1 MB limit")
+    <span class="kw">END IF</span>
+
+    db.collection("forecasts").document("latest").set(doc)   <span class="cmt">// → D8</span>
+<span class="kw">END</span>
+
+
+<span class="kw">ALGORITHM</span> compute_forecast_trails
 <span class="src">SOURCE</span>: website/web/predictor.py :: compute_forecast_trails
 
 <span class="kw">INPUT</span>:
@@ -427,11 +458,13 @@
             <tr><td><code>dashboard(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
             <tr><td><code>news(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
             <tr><td><code>about(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
-            <tr><td><code>forecasts_api(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>forecasts_api(request)</code></td><td>idem (baca <code>forecasts/latest</code>)</td><td><code>website/web/views.py</code></td></tr>
             <tr><td><code>_empty_dashboard_ctx()</code></td><td>private helper</td><td><code>website/web/views.py</code></td></tr>
-            <tr><td><code>compute_forecast_trails(db, h_max, w)</code></td><td>idem</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>build_inference_frame(db)</code></td><td>idem</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>load_winners()</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>load_winners()</code> — dipakai <code>dashboard</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>website/web/winners.py</code></td></tr>
+            <tr><td><code>main()</code> — orkestrator precompute offline</td><td>idem</td><td><code>website/precompute_forecasts.py</code></td></tr>
+            <tr><td><code>compute_forecast_trails(db, h_max, w)</code></td><td>idem (dijalankan offline)</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>build_inference_frame(db)</code></td><td>idem (dijalankan offline)</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>load_winners()</code> — dipakai <code>compute_forecast_trails</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>website/web/predictor.py</code></td></tr>
             <tr><td><code>load_model(tag, h, variant)</code></td><td>idem; <code>@lru_cache(maxsize=64)</code></td><td><code>website/web/predictor.py</code></td></tr>
             <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helpers</td><td><code>website/web/predictor.py</code></td></tr>
             <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>website/web/predictor.py</code></td></tr>
@@ -462,9 +495,14 @@
             <tr><td><code>total_pages, page_number, news_page</code></td><td>int, int, <code>list[dict]</code></td><td>pagination clamp + slice</td></tr>
             <tr><td><code>pagination</code></td><td>dict (current_page, has_previous, …)</td><td><code>build_pagination(...)</code></td></tr>
 
-            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— forecasts_api / compute_forecast_trails —</td></tr>
-            <tr><td><code>(max_horizon, window_days)</code></td><td>int, int (clamped)</td><td><code>int(request.GET.get(...))</code></td></tr>
-            <tr><td><code>payload</code></td><td>JSON-serializable dict</td><td><code>compute_forecast_trails(db, h, w)</code></td></tr>
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— forecasts_api (read-only) —</td></tr>
+            <tr><td><code>doc</code></td><td>Firestore <code>DocumentSnapshot</code></td><td><code>db.collection("forecasts").document("latest").get()</code></td></tr>
+            <tr><td><code>data</code></td><td><code>dict</code></td><td><code>doc.to_dict()</code></td></tr>
+            <tr><td><code>payload</code></td><td>JSON dict (dikembalikan ke klien)</td><td><code>json.loads(data["payload"])</code></td></tr>
+
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— precompute offline: main + compute_forecast_trails —</td></tr>
+            <tr><td><code>payload</code></td><td>JSON-serializable dict</td><td><code>compute_forecast_trails(db, 7, 90)</code></td></tr>
+            <tr><td><code>doc</code></td><td><code>dict</code> ({payload, generated_at})</td><td>dirakit di <code>main()</code> → <code>set()</code> ke D8</td></tr>
             <tr><td><code>winners_payload</code></td><td>dict (from <code>winners.json</code>)</td><td><code>load_winners()</code></td></tr>
             <tr><td><code>(winners, configs)</code></td><td>dict[int,str] each</td><td>unpack <code>winners_payload</code></td></tr>
             <tr><td><code>df</code></td><td><code>pd.DataFrame</code> superset fitur</td><td><code>build_inference_frame(db)</code></td></tr>
@@ -485,11 +523,18 @@
       <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
         <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik dan
             read-only.</li>
-        <li><strong>Cache:</strong> <code>load_winners</code> di-cache dengan
-            <code>@lru_cache(maxsize=1)</code>;
-            <code>load_model</code> dengan <code>@lru_cache(maxsize=64)</code>.
-            Maksimum kombinasi yang dibutuhkan: 4 tags × 7 horizon × 1 varian
-            CSA = 28 entri.</li>
+        <li><strong>Pemisahan online/offline:</strong> <code>forecasts_api</code>
+            hanya membaca dokumen <code>forecasts/latest</code> (D8). Algoritma
+            <code>compute_forecast_trails</code> dijalankan terpisah secara
+            <em>offline</em> oleh <code>precompute_forecasts.py</code> — sehingga
+            situs Vercel tidak perlu mem-<em>bundle</em> atau menjalankan stack ML.</li>
+        <li><strong>Cache (jalur offline):</strong> <code>load_winners</code> di-cache
+            dengan <code>@lru_cache(maxsize=1)</code>; <code>load_model</code> dengan
+            <code>@lru_cache(maxsize=64)</code>. Maksimum kombinasi yang dibutuhkan:
+            4 tags × 7 horizon × 1 varian CSA = 28 entri.</li>
+        <li><strong>Batas ukuran payload:</strong> <code>main()</code> menolak
+            (<code>SystemExit</code>) bila payload JSON &gt; 1 MB — batas keras
+            satu dokumen Firestore.</li>
         <li><strong>Convergence trail:</strong> setiap horizon
             <em>h</em>-step-ahead diakhiri pada <code>next_td</code> yang
             sama → 7 trail bertemu di titik prediksi yang sama.</li>
