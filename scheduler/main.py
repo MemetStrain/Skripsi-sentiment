@@ -15,10 +15,12 @@ Every daily run finishes by RECONCILING the full CSVs against Firestore
 script can no longer leave Firestore permanently behind; the next run heals
 the drift.
 
-The run then refreshes the rolling forecast trail by invoking
-website/precompute_forecasts.py (XGBoost inference is too heavy for Vercel's
-serverless functions, so it is precomputed here and the site only reads the
-`forecasts/latest` document).
+The run then refreshes the rolling forecast trail by calling
+scheduler/precompute_forecasts.py in-process — it imports
+prediction/inference.py and writes per-(horizon, anchor) docs to the
+`forecasts` collection plus `forecast_meta/Daily`. XGBoost inference is
+too heavy for Vercel's serverless functions, so it is precomputed here
+and the site only reads those Firestore docs.
 
 Environment variables required:
   FIREBASE_CREDENTIALS_JSON       Full JSON string of Firebase service account key
@@ -138,7 +140,7 @@ def run_initial_load(db):
     2. MPOB news   →  news_articles  (uses pre-computed sentiment in the tone CSV)
     3. Aggregates  →  sentiment_aggregates  (recomputed from full news CSV)
     4. HMM states  →  hmm_states
-    5. Forecasts   →  forecasts/latest  (via website/precompute_forecasts.py)
+    5. Forecasts   →  forecasts/* + forecast_meta/Daily  (precompute_forecasts.precompute_and_write)
 
     Each step is checkpointed; delete initial_load_progress.json (or run with
     --reset-progress) to start fresh.
@@ -198,11 +200,13 @@ def run_initial_load(db):
         _mark_done(progress, 'step4')
 
     # Step 5: Forecasts (precomputed from the freshly-loaded Firestore data).
+    # Must run AFTER HMM (step 4): inference reads daily_prices, sentiment_aggregates,
+    # and hmm_states, so all three must be committed first.
     if progress.get('step5'):
         logger.info('Step 5: SKIPPED (already done)')
     else:
         logger.info('Step 5: Precomputing forecasts...')
-        if _step_forecasts():
+        if _step_precompute(db):
             _mark_done(progress, 'step5')
         else:
             logger.warning('Step 5: forecast precompute failed — rerun to retry.')
@@ -296,47 +300,23 @@ def _step_news(paths: dict) -> tuple[list, bool]:
     return scored, True
 
 
-def _step_forecasts() -> bool:
-    """Refresh `forecasts/latest` by running website/precompute_forecasts.py.
+def _step_precompute(db) -> bool:
+    """Refresh the rolling forecast trail by calling the in-process orchestrator.
 
-    Run as a subprocess (not an import) so the heavy XGBoost/ML stack stays
-    isolated from the scheduler process and a forecast failure can only fail
-    this step — never abort the whole run. The subprocess inherits the
-    scheduler's environment, so FIREBASE_CREDENTIALS_JSON carries through.
+    Wrapped in try/except: forecast failure must NOT roll back the
+    already-committed price / news / reconcile / HMM updates earlier in
+    the run. The orchestrator imports prediction/inference.py and writes
+    per-(horizon, anchor) docs to `forecasts` + `forecast_meta/Daily`.
 
-    Returns True if the forecast document was refreshed.
+    Returns True if at least one forecast document was written.
     """
-    import subprocess
-
-    script = os.path.abspath(os.path.join(_BASE, '..', 'website', 'precompute_forecasts.py'))
-    if not os.path.exists(script):
-        logger.warning(f'  precompute_forecasts.py not found at {script}; skipping.')
-        return False
-
-    logger.info('  Running precompute_forecasts.py (XGBoost inference)...')
     try:
-        result = subprocess.run(
-            [sys.executable, script],
-            cwd=os.path.dirname(script),
-            capture_output=True, text=True, timeout=1800,
-        )
-    except subprocess.TimeoutExpired:
-        logger.error('  precompute_forecasts.py timed out after 30 min.')
-        return False
+        import precompute_forecasts
+        n = precompute_forecasts.precompute_and_write(db)
     except Exception as e:
-        logger.error(f'  Could not launch precompute_forecasts.py: {e}')
+        logger.exception(f'  Forecast precompute failed: {e}')
         return False
-
-    for line in (result.stdout or '').splitlines():
-        logger.info(f'  [forecasts] {line}')
-    if result.returncode != 0:
-        logger.error(f'  precompute_forecasts.py failed (exit {result.returncode}).')
-        for line in (result.stderr or '').splitlines()[-20:]:
-            logger.error(f'  [forecasts] {line}')
-        return False
-
-    logger.info('  Forecasts refreshed (forecasts/latest).')
-    return True
+    return n > 0
 
 
 def run_daily_update(db):
@@ -351,7 +331,8 @@ def run_daily_update(db):
                   stale prices, news and sentiment aggregates. Self-healing —
                   a skipped run or an externally-edited CSV is corrected here.
     4. HMM:       decode states from the now-current daily_prices.
-    5. Forecasts: refresh forecasts/latest via website/precompute_forecasts.py.
+    5. Forecasts: refresh forecasts/* + forecast_meta/Daily by calling
+                  precompute_forecasts.precompute_and_write in-process.
 
     Steps 1-2 only acquire data into the CSVs (the source of truth); step 3 is
     the single place that writes CSV data to Firestore.
@@ -378,10 +359,13 @@ def run_daily_update(db):
     update_hmm_states(db)
 
     # 5. Forecasts — refresh the rolling trail so the dashboard tracks the new
-    #    data. Skipped when nothing changed (the 90-day trail is unchanged).
+    #    data. Skipped when nothing changed upstream (deterministic doc IDs
+    #    mean a re-run would just overwrite the same docs). Isolated in
+    #    try/except inside _step_precompute so a forecast failure cannot
+    #    roll back the already-committed price/news/HMM updates above.
     logger.info('Step 5: Refreshing forecasts...')
     if price_changed or news_changed or recon_writes > 0:
-        _step_forecasts()
+        _step_precompute(db)
     else:
         logger.info('  No data changes this run; forecasts already current. Skip.')
 
