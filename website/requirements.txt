@@ -2,8 +2,10 @@
 #
 # XGBoost inference is NOT run on Vercel — the ML stack (xgboost, scikit-learn,
 # scipy, pandas, numpy) is ~930 MB and exceeds Vercel's 500 MB function limit.
-# Forecasts are precomputed offline by website/precompute_forecasts.py and
-# stored in Firestore; see requirements-ml.txt for the offline-only deps.
+# Forecasts are precomputed by the local scheduler (scheduler/main.py runs
+# scheduler/precompute_forecasts.py as its final phase) and stored in
+# Firestore at `forecasts/*` + `forecast_meta/Daily`. The website only reads
+# those docs.
 Django>=6.0,<7.0
 firebase-admin>=6.0
 google-cloud-firestore>=2.13
