@@ -208,3 +208,61 @@ def write_sentiment_aggregates(db, aggregates: List[Dict]) -> int:
     count = _batch_write(db, ops)
     logger.info(f'Wrote {count} sentiment aggregate documents.')
     return count
+
+
+# ---------------------------------------------------------------------------
+# Forecasts (precomputed by the scheduler from XGBoost inference)
+# ---------------------------------------------------------------------------
+
+def write_forecasts(db, points: List[Dict]) -> int:
+    """Batch-write rolling forecast points to the `forecasts` collection.
+
+    Each input dict is one (horizon, anchor_date) point and must contain
+    scalar-only fields: `frequency, horizon, tag, config, anchor_date,
+    predicted_date, predicted_price` (plus any optional scalar extras like
+    `anchor_price` / `log_return`). No nested arrays — Firestore rejects them.
+
+    Doc ID = `{frequency}_h{horizon}_{anchor_date}` so re-runs overwrite the
+    same doc idempotently (full-recompute is self-healing).
+    """
+    ops = []
+    for p in points:
+        freq    = p.get('frequency', 'Daily')
+        horizon = int(p['horizon'])
+        anchor  = p['anchor_date']
+        doc_id  = f'{freq}_h{horizon}_{anchor}'
+        doc_ref = db.collection('forecasts').document(doc_id)
+        ops.append((doc_ref, {**p, 'generated_at': _now_iso()}, False))
+    count = _batch_write(db, ops)
+    logger.info(f'Wrote {count} forecast point documents.')
+    return count
+
+
+def write_forecast_meta(db, meta: Dict) -> None:
+    """Persist forecast run metadata to `forecast_meta/{frequency}`.
+
+    Surfaces a few scalar fields natively for readability (`frequency`,
+    `generated_at`, `max_horizon`, `window_days`) and bundles the rest
+    (`winners_by_horizon`, `configs_by_horizon`, `metrics`, `tag_to_config`,
+    `horizons`) into a single `payload_json` string. The metrics tree
+    contains nested dicts and the winners/configs dicts use int-derived
+    keys — JSON-stringifying sidesteps Firestore's nested-array rule and
+    keeps key types stable on read.
+    """
+    frequency = str(meta.get('frequency', 'Daily'))
+    doc_ref = db.collection('forecast_meta').document(frequency)
+    doc_ref.set({
+        'frequency':    frequency,
+        'generated_at': str(meta.get('generated_at', _now_iso())),
+        'max_horizon':  int(meta.get('max_horizon', 0)),
+        'window_days':  int(meta.get('window_days', 0)),
+        'updated_at':   _now_iso(),
+        'payload_json': json.dumps({
+            'winners_by_horizon': meta.get('winners_by_horizon', {}),
+            'configs_by_horizon': meta.get('configs_by_horizon', {}),
+            'metrics':            meta.get('metrics', {}),
+            'tag_to_config':      meta.get('tag_to_config', {}),
+            'horizons':           meta.get('horizons', []),
+        }),
+    })
+    logger.info(f'Wrote forecast meta doc: forecast_meta/{frequency}')
