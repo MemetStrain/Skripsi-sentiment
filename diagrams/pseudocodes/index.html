@@ -95,10 +95,17 @@
             </tr>
             <tr>
               <td>5.0</td>
+              <td><strong>Forecast Precompute</strong></td>
+              <td>—</td>
+              <td><a class="nav-pill" href="P5_dashboard.html#scheduler-precompute">P5 PC §</a></td>
+              <td><code>scheduler/precompute_forecasts.py</code> + <code>prediction/inference.py</code> + <code>scheduler/firestore_writer.py</code> (write_forecasts, write_forecast_meta)</td>
+            </tr>
+            <tr>
+              <td>6.0</td>
               <td><strong>Dashboard Web</strong></td>
               <td><a class="nav-pill" href="../flowcharts/P5_dashboard.html">P5 FC</a></td>
               <td><a class="nav-pill" href="P5_dashboard.html">P5 PC →</a></td>
-              <td><code>website/web/views.py</code> (+ <code>web/winners.py</code>); offline: <code>website/precompute_forecasts.py</code> + <code>web/predictor.py</code></td>
+              <td><code>website/web/views.py</code> (read-only; baca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code>)</td>
             </tr>
           </tbody>
         </table>
@@ -132,7 +139,7 @@
         <a href="orchestration.html" class="card block md:col-span-2">
           <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">Orkestrasi · Pipeline Scheduler Harian</div>
           <div class="text-base font-semibold mt-1">Pseudocode Orchestration</div>
-          <div class="text-sm text-slate-600 mt-1"><code>run_daily_update(db)</code> — 5 langkah berurutan dengan <em>skip-if-current</em> guard, plus 3-way branch agregat sentimen.</div>
+          <div class="text-sm text-slate-600 mt-1"><code>run_daily_update(db)</code> — 5 langkah berurutan (price → news → reconcile → HMM → precompute) dengan <em>skip-if-current</em> guard pada langkah 1–2 dan try/except pada langkah 5.</div>
         </a>
         <a href="P3_sentiment.html" class="card block">
           <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P3 · DFD 3.0</div>
@@ -145,9 +152,9 @@
           <div class="text-sm text-slate-600 mt-1"><code>update_hmm_states(db, write_existing=False)</code>. Frozen params, online forward filter, 3 early-returns.</div>
         </a>
         <a href="P5_dashboard.html" class="card block md:col-span-2">
-          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
-          <div class="text-base font-semibold mt-1">Dashboard Web</div>
-          <div class="text-sm text-slate-600 mt-1">4 view read-only (<code>dashboard</code>, <code>news</code>, <code>about</code>, <code>forecasts_api</code>) + algoritma <em>offline</em> <code>compute_forecast_trails</code> via <code>precompute_forecasts.py</code>.</div>
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0 + 6.0</div>
+          <div class="text-base font-semibold mt-1">Forecast Precompute (Proses 5.0) + Dashboard Web (Proses 6.0)</div>
+          <div class="text-sm text-slate-600 mt-1">4 view read-only (<code>dashboard</code>, <code>news</code>, <code>about</code>, <code>forecasts_api</code>) yang membaca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code>; serta algoritma scheduler <code>precompute_and_write</code> → <code>compute_forecast_trails</code> yang memproduksinya.</div>
         </a>
       </div>
     </section>

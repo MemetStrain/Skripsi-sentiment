@@ -48,8 +48,8 @@
   <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
     <div class="max-w-5xl mx-auto">
       <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
-      <h1 class="text-2xl font-bold mt-1">Pseudocode — P5 Dashboard Web</h1>
-      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk 4 view di <code>website/web/views.py</code>, plus algoritma inferensi <em>offline</em> di <code>web/predictor.py</code> + <code>precompute_forecasts.py</code>.</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — Dashboard Web (Proses 6.0) + Algoritma Precompute (Proses 5.0)</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk 4 view read-only di <code>website/web/views.py</code>, plus algoritma inferensi yang dijalankan oleh scheduler di <code>prediction/inference.py</code> + <code>scheduler/precompute_forecasts.py</code>.</p>
     </div>
   </header>
 
@@ -74,13 +74,14 @@
         Setiap HTTP request akan di-<em>dispatch</em> oleh Django URL router ke
         salah satu dari empat view, semuanya <em>read-only</em>. Tiga view
         (<code>dashboard</code>, <code>news</code>, <code>about</code>) melakukan
-        <em>read-and-render</em> template; <code>forecasts_api</code> hanya
-        membaca dokumen Firestore <code>forecasts/latest</code> dan
-        mengembalikannya sebagai JSON.
+        <em>read-and-render</em> template; <code>forecasts_api</code> membaca
+        <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code> dari
+        Firestore, memfilter di Python, dan merakit ulang payload trail.
         Algoritma inferensi XGBoost (<code>compute_forecast_trails</code>)
-        tidak lagi dijalankan per request — ia dipre-komputasi <em>offline</em>
-        oleh skrip <code>website/precompute_forecasts.py</code> dan
-        didokumentasikan pada bagian <em>“Algoritma Offline”</em> di bawah.
+        dipre-komputasi oleh scheduler (Proses 5.0 —
+        <code>scheduler/precompute_forecasts.py</code> memanggil
+        <code>prediction/inference.py</code>) dan didokumentasikan pada bagian
+        <em>“Algoritma Scheduler — Precompute Forecast”</em> di bawah.
       </p>
     </section>
 
@@ -129,19 +130,26 @@
     stats = compute_window_stats(price_list)              <span class="cmt">// current/avg/max/min/total</span>
     latest_date = (price_list[-1].date) <span class="kw">IF</span> price_list <span class="kw">ELSE</span> "N/A"
 
-    <span class="cmt">// (5) winners.json optional — D7</span>
+    <span class="cmt">// (5) winners + metrics dari forecast_meta/Daily — D9 (Firestore, bukan filesystem)</span>
     metrics = { mape: 0, r2: 0, accuracy: 0, best_model: "N/A" }
     winners_payload = {}
     <span class="kw">TRY</span>
-        winners_payload = load_winners()                  <span class="cmt">// lru_cache(maxsize=1)</span>
-        h1_metrics = winners_payload.metrics
-                         .get(winners.winners_by_horizon["1"], {})
-                         .get("1", {}).get("CSA", {})
-        <span class="kw">IF</span> h1_metrics <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
-            metrics = extract_h1_metrics(h1_metrics, winners_payload)
+        meta_doc = db.collection("forecast_meta").document("Daily").get()
+        <span class="kw">IF</span> meta_doc.exists <span class="kw">THEN</span>
+            meta_raw        = meta_doc.to_dict() <span class="kw">OR</span> {}
+            winners_payload = json.loads(meta_raw.get("payload_json", "{}"))
+            h1_tag = winners_payload.winners_by_horizon.get("1")
+            <span class="kw">IF</span> h1_tag <span class="kw">IS NOT NULL</span> <span class="kw">THEN</span>
+                h1_metrics = winners_payload.metrics
+                                 .get(h1_tag, {})
+                                 .get("1", {}).get("CSA", {})
+                <span class="kw">IF</span> h1_metrics <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+                    metrics = extract_h1_metrics(h1_metrics, winners_payload)
+                <span class="kw">END IF</span>
+            <span class="kw">END IF</span>
         <span class="kw">END IF</span>
-    <span class="kw">CATCH</span> FileNotFoundError
-        pass                                              <span class="cmt">// keep N/A defaults</span>
+    <span class="kw">CATCH</span> Exception
+        pass                                              <span class="cmt">// keep N/A defaults bila doc belum diproduksi</span>
     <span class="kw">END TRY</span>
 
     <span class="cmt">// (6) sentiment_aggregates D3, last 90 days (best-effort)</span>
@@ -235,67 +243,166 @@
 <span class="src">SOURCE</span>: website/web/views.py :: forecasts_api
 
 <span class="kw">INPUT</span>:
-    request  <span class="cmt">// GET /api/forecasts/  (tanpa parameter query)</span>
+    request  <span class="cmt">// GET /api/forecasts/?max_horizon=&amp;window_days=</span>
 
 <span class="kw">OUTPUT</span>:
-    JsonResponse (200 ok / 503 forecasts-belum-ada / 500 other)
+    JsonResponse {horizons, winners, configs, trails, metrics, tag_to_config, generated_at}
+                  (200 ok / 503 forecast_meta-atau-forecasts-belum-ada / 500 other)
 
 <span class="kw">BEGIN</span>
+    <span class="cmt">// (1) Clamp query params</span>
+    max_horizon = clamp(int(request.GET.get("max_horizon", 7)), 1, 7)
+    window_days = clamp(int(request.GET.get("window_days", 90)), 7, 365)
+
     <span class="kw">TRY</span>
-        db  = firestore.client()
-        doc = db.collection("forecasts").document("latest").get()    <span class="cmt">// ← D8</span>
-        <span class="kw">IF</span> <span class="kw">NOT</span> doc.exists <span class="kw">THEN</span>
-            <span class="kw">RETURN</span> JsonResponse({ error: "No precomputed forecasts available yet." }, status=503)
+        db = firestore.client()
+
+        <span class="cmt">// (2) forecast_meta/Daily → winners + configs + metrics</span>
+        meta_doc = db.collection("forecast_meta").document("Daily").get()  <span class="cmt">// ← D9</span>
+        <span class="kw">IF</span> <span class="kw">NOT</span> meta_doc.exists <span class="kw">THEN</span>
+            <span class="kw">RETURN</span> JsonResponse(
+                { error: "forecast_meta/Daily not found. Run scheduler/main.py to populate forecasts." },
+                status=503)
         <span class="kw">END IF</span>
-        data    = doc.to_dict() <span class="kw">OR</span> {}
-        payload = json.loads(data["payload"]) <span class="kw">IF</span> "payload" <span class="kw">IN</span> data <span class="kw">ELSE</span> data
-        <span class="kw">RETURN</span> JsonResponse(payload)
+        meta_raw     = meta_doc.to_dict() <span class="kw">OR</span> {}
+        meta_payload = json.loads(meta_raw.get("payload_json", "{}"))
+
+        <span class="cmt">// (3) Stream forecasts collection, filter di Python</span>
+        cutoff       = (today() - timedelta(days=window_days)).isoformat()
+        trails_by_h  = {}
+        <span class="kw">FOR</span> d <span class="kw">IN</span> db.collection("forecasts").stream() <span class="kw">DO</span>     <span class="cmt">// ← D8</span>
+            x = d.to_dict() <span class="kw">OR</span> {}
+            <span class="kw">IF</span> (x.frequency <span class="kw">OR</span> "Daily") != "Daily" <span class="kw">THEN</span> <span class="kw">CONTINUE</span>
+            h = int(x.horizon)
+            <span class="kw">IF</span> h &lt; 1 <span class="kw">OR</span> h &gt; max_horizon <span class="kw">THEN</span> <span class="kw">CONTINUE</span>
+            pred_date = x.predicted_date
+            <span class="kw">IF</span> pred_date <span class="kw">IS EMPTY</span> <span class="kw">OR</span> pred_date &lt; cutoff <span class="kw">THEN</span> <span class="kw">CONTINUE</span>
+            trails_by_h.setdefault(h, []).append({
+                anchor_date     : x.anchor_date,
+                anchor_price    : round(float(x.anchor_price), 2),
+                predicted_date  : pred_date,
+                predicted_price : round(float(x.predicted_price), 2),
+                log_return      : round(float(x.log_return), 6) })
+        <span class="kw">END FOR</span>
+
+        <span class="kw">IF</span> trails_by_h <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+            <span class="kw">RETURN</span> JsonResponse(
+                { error: "forecasts collection empty. Run scheduler/main.py to populate forecasts." },
+                status=503)
+        <span class="kw">END IF</span>
+
+        <span class="cmt">// (4) Group + sort + assemble — payload shape identik dengan jalur lama</span>
+        winners = meta_payload.get("winners_by_horizon", {})    <span class="cmt">// keys: str(h)</span>
+        configs = meta_payload.get("configs_by_horizon", {})
+        trails  = []
+        <span class="kw">FOR</span> h <span class="kw">IN</span> sorted(trails_by_h.keys()) <span class="kw">DO</span>
+            points = sorted(trails_by_h[h], key = <span class="kw">LAMBDA</span> p: p.anchor_date)
+            trails.append({
+                horizon : h,
+                tag     : winners.get(str(h), ""),
+                config  : configs.get(str(h), ""),
+                points  : points })
+        <span class="kw">END FOR</span>
+
+        <span class="kw">RETURN</span> JsonResponse({
+            horizons      : meta_payload.get("horizons", range(1, max_horizon + 1)),
+            winners       : winners,
+            configs       : configs,
+            trails        : trails,
+            metrics       : meta_payload.get("metrics", {}),
+            tag_to_config : meta_payload.get("tag_to_config", {}),
+            generated_at  : meta_raw.get("generated_at", "") })
     <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
         <span class="kw">RETURN</span> JsonResponse({ error: str(e) }, status=500)
     <span class="kw">END TRY</span>
 <span class="kw">END</span>
 
 <span class="cmt">// Inferensi XGBoost tidak dijalankan di sini. Endpoint hanya membaca</span>
-<span class="cmt">// dokumen forecasts/latest yang dipre-komputasi offline — lihat bagian</span>
-<span class="cmt">// "Algoritma Offline — Precompute Forecast" di bawah.</span></pre>
+<span class="cmt">// forecast_meta/Daily + koleksi forecasts yang sudah dipre-komputasi oleh</span>
+<span class="cmt">// scheduler — lihat bagian "Algoritma Scheduler — Precompute Forecast".</span></pre>
       </div>
     </section>
 
     <section class="page-break">
-      <h2 class="text-xl font-semibold section-heading">Algoritma Offline — Precompute Forecast</h2>
+      <h2 class="text-xl font-semibold section-heading">Algoritma Scheduler — Precompute Forecast (Proses 5.0)</h2>
       <p class="text-sm text-slate-700 leading-relaxed mb-4">
-        Algoritma di bawah ini <strong>tidak</strong> dijalankan oleh server web saat
-        request. Operator menjalankannya secara <em>offline</em> melalui
-        <code>python precompute_forecasts.py</code> (mis. setelah refresh data harian).
-        Skrip memanggil <code>compute_forecast_trails</code>, lalu menulis payload hasil
-        ke dokumen Firestore <code>forecasts/latest</code> (data store D8) yang kemudian
-        dibaca oleh <code>forecasts_api</code>. Stack ML (~930 MB) hanya dibutuhkan di
-        lingkungan offline ini, bukan di fungsi serverless Vercel.
+        Algoritma di bawah ini dijalankan oleh <em>scheduler</em> (Proses 5.0 di DFD), bukan oleh
+        server web. <code>run_daily_update</code> dan <code>run_initial_load</code> di
+        <code>scheduler/main.py</code> memanggil <code>_step_precompute(db)</code> sebagai
+        langkah terakhir, yang membungkus <code>precompute_and_write</code> dalam
+        <code>try/except</code> agar kegagalan inferensi tidak membatalkan langkah price /
+        news / reconcile / HMM. Orkestrator memanggil
+        <code>inference.compute_forecast_trails</code>, mem-flatten trails ke dokumen
+        per-titik (skalar saja), lalu menulis koleksi <code>forecasts</code> (D8) +
+        dokumen <code>forecast_meta/Daily</code> (D9). Stack ML (~930 MB) hanya
+        dibutuhkan di lingkungan scheduler, bukan di fungsi serverless Vercel.
       </p>
       <div class="diagram-card">
-<pre class="algorithm"><span class="kw">PROCEDURE</span> main
-<span class="src">SOURCE</span>: website/precompute_forecasts.py :: main
+<pre class="algorithm"><span class="kw">PROCEDURE</span> precompute_and_write
+<span class="src">SOURCE</span>: scheduler/precompute_forecasts.py :: precompute_and_write
+
+<span class="kw">INPUT</span>:
+    db                <span class="cmt">// Firestore client (disuplai oleh scheduler/main.py)</span>
+
+<span class="kw">OUTPUT</span>:
+    int               <span class="cmt">// jumlah dokumen forecast point yang ditulis (0 jika trails kosong)</span>
+
+<span class="kw">CONSTANTS</span>:
+    PRECOMPUTE_WINDOW_DAYS = 365
+    PRECOMPUTE_MAX_HORIZON = 7
+    FREQUENCY              = "Daily"
 
 <span class="kw">BEGIN</span>
-    _init_firebase()                                  <span class="cmt">// FIREBASE_CREDENTIALS_JSON / file kredensial</span>
-    db      = firestore.client()
-    payload = compute_forecast_trails(db, max_horizon=7, window_days=90)
+    inference = _import_inference()                  <span class="cmt">// sys.path += prediction/ → import inference</span>
 
-    doc = {
-        payload      : json.dumps(payload, separators=(",", ":")),   <span class="cmt">// JSON ringkas</span>
-        generated_at : payload.get("generated_at") }
+    payload = inference.compute_forecast_trails(
+                  db,
+                  max_horizon = PRECOMPUTE_MAX_HORIZON,
+                  window_days = PRECOMPUTE_WINDOW_DAYS)
 
-    size_kb = |doc.payload| / 1024
-    <span class="kw">IF</span> size_kb &gt; 1000 <span class="kw">THEN</span>                            <span class="cmt">// batas 1 MB per dokumen Firestore</span>
-        <span class="kw">RAISE</span> SystemExit("Payload exceeds Firestore 1 MB limit")
+    trails = payload.get("trails", [])
+    <span class="kw">IF</span> trails <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log_warning("no trails; nothing written")
+        <span class="kw">RETURN</span> 0
     <span class="kw">END IF</span>
 
-    db.collection("forecasts").document("latest").set(doc)   <span class="cmt">// → D8</span>
+    <span class="cmt">// Flatten trail (nested) → list per-titik dengan field skalar</span>
+    points = []
+    <span class="kw">FOR</span> trail <span class="kw">IN</span> trails <span class="kw">DO</span>
+        <span class="kw">FOR</span> p <span class="kw">IN</span> trail.points <span class="kw">DO</span>
+            points.append({
+                frequency       : FREQUENCY,
+                horizon         : int(trail.horizon),
+                tag             : str(trail.tag),
+                config          : str(trail.config),
+                anchor_date     : str(p.anchor_date),
+                anchor_price    : float(p.anchor_price),
+                predicted_date  : str(p.predicted_date),
+                predicted_price : float(p.predicted_price),
+                log_return      : float(p.log_return) })
+        <span class="kw">END FOR</span>
+    <span class="kw">END FOR</span>
+
+    n = write_forecasts(db, points)                  <span class="cmt">// → D8 (~1.4k doc, ID = Daily_h{h}_{anchor})</span>
+
+    write_forecast_meta(db, {                        <span class="cmt">// → D9 (forecast_meta/Daily)</span>
+        frequency          : FREQUENCY,
+        generated_at       : payload.get("generated_at", ""),
+        max_horizon        : PRECOMPUTE_MAX_HORIZON,
+        window_days        : PRECOMPUTE_WINDOW_DAYS,
+        winners_by_horizon : payload.get("winners", {}),
+        configs_by_horizon : payload.get("configs", {}),
+        metrics            : payload.get("metrics", {}),
+        tag_to_config      : payload.get("tag_to_config", {}),
+        horizons           : payload.get("horizons", []) })
+
+    _delete_legacy_doc(db)                           <span class="cmt">// hapus forecasts/latest legacy (idempotent)</span>
+    <span class="kw">RETURN</span> n
 <span class="kw">END</span>
 
 
 <span class="kw">ALGORITHM</span> compute_forecast_trails
-<span class="src">SOURCE</span>: website/web/predictor.py :: compute_forecast_trails
+<span class="src">SOURCE</span>: prediction/inference.py :: compute_forecast_trails
 
 <span class="kw">INPUT</span>:
     db, max_horizon, window_days
@@ -380,7 +487,7 @@
 
 
 <span class="kw">PROCEDURE</span> build_inference_frame
-<span class="src">SOURCE</span>: website/web/predictor.py :: build_inference_frame
+<span class="src">SOURCE</span>: prediction/inference.py :: build_inference_frame
 
 <span class="kw">BEGIN</span>
     price_df     = _load_prices(db)             <span class="cmt">// ← D1</span>
@@ -420,7 +527,7 @@
 
 
 <span class="kw">PROCEDURE</span> load_model
-<span class="src">SOURCE</span>: website/web/predictor.py :: load_model  (@lru_cache(maxsize=64))
+<span class="src">SOURCE</span>: prediction/inference.py :: load_model  (@lru_cache(maxsize=64))
 
 <span class="kw">INPUT</span>:
     tag, horizon, variant = "csa"
@@ -455,19 +562,23 @@
         <table class="w-full border-collapse">
           <thead><tr><th>Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
           <tbody>
-            <tr><td><code>dashboard(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>dashboard(request)</code></td><td>idem (membaca <code>forecast_meta/Daily</code> untuk metrik)</td><td><code>website/web/views.py</code></td></tr>
             <tr><td><code>news(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
             <tr><td><code>about(request)</code></td><td>idem</td><td><code>website/web/views.py</code></td></tr>
-            <tr><td><code>forecasts_api(request)</code></td><td>idem (baca <code>forecasts/latest</code>)</td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>forecasts_api(request)</code></td><td>idem (baca <code>forecast_meta/Daily</code> + stream koleksi <code>forecasts</code>, filter Python)</td><td><code>website/web/views.py</code></td></tr>
             <tr><td><code>_empty_dashboard_ctx()</code></td><td>private helper</td><td><code>website/web/views.py</code></td></tr>
-            <tr><td><code>load_winners()</code> — dipakai <code>dashboard</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>website/web/winners.py</code></td></tr>
-            <tr><td><code>main()</code> — orkestrator precompute offline</td><td>idem</td><td><code>website/precompute_forecasts.py</code></td></tr>
-            <tr><td><code>compute_forecast_trails(db, h_max, w)</code></td><td>idem (dijalankan offline)</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>build_inference_frame(db)</code></td><td>idem (dijalankan offline)</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>load_winners()</code> — dipakai <code>compute_forecast_trails</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>load_model(tag, h, variant)</code></td><td>idem; <code>@lru_cache(maxsize=64)</code></td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helpers</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>_step_precompute(db)</code></td><td>wrapper try/except (langkah 5 pipeline)</td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>precompute_and_write(db)</code></td><td>orkestrator scheduler-side</td><td><code>scheduler/precompute_forecasts.py</code></td></tr>
+            <tr><td><code>_flatten_trails(trails)</code></td><td>nested trails → list per-titik (skalar)</td><td><code>scheduler/precompute_forecasts.py</code></td></tr>
+            <tr><td><code>_delete_legacy_doc(db)</code></td><td>hapus <code>forecasts/latest</code> legacy bila ada</td><td><code>scheduler/precompute_forecasts.py</code></td></tr>
+            <tr><td><code>write_forecasts(db, points)</code></td><td>batch write (doc ID <code>Daily_h{h}_{anchor}</code>)</td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td><code>write_forecast_meta(db, meta)</code></td><td>satu doc <code>Daily</code> + <code>payload_json</code></td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td><code>compute_forecast_trails(db, h_max, w)</code></td><td>idem (dijalankan in-process oleh scheduler)</td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>build_inference_frame(db)</code></td><td>idem</td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>load_winners()</code> — dipakai <code>compute_forecast_trails</code></td><td>idem; <code>@lru_cache(maxsize=1)</code></td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>load_model(tag, h, variant)</code></td><td>idem; <code>@lru_cache(maxsize=64)</code></td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helpers</td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>prediction/inference.py</code></td></tr>
             <tr><td><code>add_price_features, add_hmm_derived_features,</code><br/><code>engineer_all_features, select_feature_matrix</code></td><td>idem</td><td><code>prediction/feature_engineering.py</code></td></tr>
             <tr><td><code>model.predict(X)</code></td><td><code>XGBRegressor.predict</code> dari pkl</td><td><code>prediction/saved_models/{tag}/Daily/h{h}/xgboost_csa/model.pkl</code></td></tr>
             <tr><td><code>scaler.transform(X)</code></td><td><code>StandardScaler.transform</code> dari pkl</td><td><code>.../scaler.pkl</code></td></tr>
@@ -496,14 +607,17 @@
             <tr><td><code>pagination</code></td><td>dict (current_page, has_previous, …)</td><td><code>build_pagination(...)</code></td></tr>
 
             <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— forecasts_api (read-only) —</td></tr>
-            <tr><td><code>doc</code></td><td>Firestore <code>DocumentSnapshot</code></td><td><code>db.collection("forecasts").document("latest").get()</code></td></tr>
-            <tr><td><code>data</code></td><td><code>dict</code></td><td><code>doc.to_dict()</code></td></tr>
-            <tr><td><code>payload</code></td><td>JSON dict (dikembalikan ke klien)</td><td><code>json.loads(data["payload"])</code></td></tr>
+            <tr><td><code>max_horizon, window_days</code></td><td>int (clamped [1,7] dan [7,365])</td><td><code>request.GET.get(...)</code> + clamp</td></tr>
+            <tr><td><code>meta_doc</code></td><td>Firestore <code>DocumentSnapshot</code></td><td><code>db.collection("forecast_meta").document("Daily").get()</code></td></tr>
+            <tr><td><code>meta_payload</code></td><td><code>dict</code> {winners_by_horizon, configs_by_horizon, metrics, tag_to_config, horizons}</td><td><code>json.loads(meta_raw["payload_json"])</code></td></tr>
+            <tr><td><code>trails_by_h</code></td><td><code>dict[int, list[dict]]</code></td><td>iterasi <code>db.collection("forecasts").stream()</code> + filter Python</td></tr>
+            <tr><td><code>trails</code></td><td><code>list[dict]</code> (sorted per horizon)</td><td>group + sort + assemble</td></tr>
 
-            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— precompute offline: main + compute_forecast_trails —</td></tr>
-            <tr><td><code>payload</code></td><td>JSON-serializable dict</td><td><code>compute_forecast_trails(db, 7, 90)</code></td></tr>
-            <tr><td><code>doc</code></td><td><code>dict</code> ({payload, generated_at})</td><td>dirakit di <code>main()</code> → <code>set()</code> ke D8</td></tr>
-            <tr><td><code>winners_payload</code></td><td>dict (from <code>winners.json</code>)</td><td><code>load_winners()</code></td></tr>
+            <tr><td colspan="3" class="bg-slate-100 text-xs font-semibold text-slate-700">— scheduler precompute: precompute_and_write + compute_forecast_trails —</td></tr>
+            <tr><td><code>payload</code></td><td>JSON-serializable dict</td><td><code>inference.compute_forecast_trails(db, 7, 365)</code></td></tr>
+            <tr><td><code>points</code></td><td><code>list[dict]</code> per-titik (skalar saja)</td><td><code>_flatten_trails(payload.trails)</code></td></tr>
+            <tr><td><code>n</code></td><td><code>int</code> jumlah dokumen point yang ditulis</td><td><code>write_forecasts(db, points)</code></td></tr>
+            <tr><td><code>winners_payload</code></td><td>dict (from <code>prediction/winners.json</code>)</td><td><code>inference.load_winners()</code></td></tr>
             <tr><td><code>(winners, configs)</code></td><td>dict[int,str] each</td><td>unpack <code>winners_payload</code></td></tr>
             <tr><td><code>df</code></td><td><code>pd.DataFrame</code> superset fitur</td><td><code>build_inference_frame(db)</code></td></tr>
             <tr><td><code>(dates_sorted, last_idx, next_td, cutoff, window_idx)</code></td><td>list, int, Timestamp, Timestamp, list[int]</td><td>turunan dari <code>df.Date</code> + <code>_next_trading_day_after</code></td></tr>
@@ -523,18 +637,23 @@
       <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
         <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik dan
             read-only.</li>
-        <li><strong>Pemisahan online/offline:</strong> <code>forecasts_api</code>
-            hanya membaca dokumen <code>forecasts/latest</code> (D8). Algoritma
-            <code>compute_forecast_trails</code> dijalankan terpisah secara
-            <em>offline</em> oleh <code>precompute_forecasts.py</code> — sehingga
-            situs Vercel tidak perlu mem-<em>bundle</em> atau menjalankan stack ML.</li>
-        <li><strong>Cache (jalur offline):</strong> <code>load_winners</code> di-cache
+        <li><strong>Pemisahan website / scheduler:</strong> <code>forecasts_api</code>
+            membaca <code>forecast_meta/Daily</code> (D9) + koleksi <code>forecasts</code>
+            (D8); tidak ada impor ML di <code>website/</code>. Algoritma
+            <code>compute_forecast_trails</code> dijalankan oleh scheduler
+            (<code>scheduler/precompute_forecasts.py</code> → <code>prediction/inference.py</code>)
+            sebagai langkah 5 daily run — sehingga situs Vercel tidak perlu
+            mem-<em>bundle</em> atau menjalankan stack ML.</li>
+        <li><strong>Cache (jalur scheduler):</strong> <code>load_winners</code> di-cache
             dengan <code>@lru_cache(maxsize=1)</code>; <code>load_model</code> dengan
             <code>@lru_cache(maxsize=64)</code>. Maksimum kombinasi yang dibutuhkan:
             4 tags × 7 horizon × 1 varian CSA = 28 entri.</li>
-        <li><strong>Batas ukuran payload:</strong> <code>main()</code> menolak
-            (<code>SystemExit</code>) bila payload JSON &gt; 1 MB — batas keras
-            satu dokumen Firestore.</li>
+        <li><strong>Idempotensi:</strong> <code>write_forecasts</code> memakai doc ID
+            deterministik <code>Daily_h{h}_{anchor}</code> sehingga full-recompute pada
+            window 365 hari secara aman menulis ulang dokumen yang sama (tidak ada batas
+            1 MB Firestore — payload disebar ke ~1.4k dokumen skalar, bukan satu blob).
+            <code>write_forecast_meta</code> mem-bundle nested arrays ke <code>payload_json</code>
+            (mengikuti pola <code>write_hmm_params</code>).</li>
         <li><strong>Convergence trail:</strong> setiap horizon
             <em>h</em>-step-ahead diakhiri pada <code>next_td</code> yang
             sama → 7 trail bertemu di titik prediksi yang sama.</li>

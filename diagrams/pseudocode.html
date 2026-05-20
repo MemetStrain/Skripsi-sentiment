@@ -336,17 +336,21 @@
 
     <!-- ── Algorithm 3 ─────────────────────────────────── -->
     <section class="page-break">
-      <h2 class="text-xl font-semibold section-heading">Algoritma 3 — Inferensi Live untuk Dashboard</h2>
+      <h2 class="text-xl font-semibold section-heading">Algoritma 3 — Inferensi Forecast (Precompute oleh Scheduler)</h2>
       <p class="text-sm text-slate-600 mb-2">
-        Sumber: <code>website/web/predictor.py::compute_forecast_trails</code>
-        (dipanggil dari <code>views.forecasts_api</code>). Untuk setiap
-        horizon h ∈ {1..7}, model XGBoost pemenang (lowest base MAPE per
-        horizon) dipakai untuk memprediksi log-return, lalu dieksponensiasi
-        menjadi harga prediksi.
+        Sumber: <code>prediction/inference.py::compute_forecast_trails</code>
+        (dipanggil dari <code>scheduler/precompute_forecasts.py::precompute_and_write</code>
+        sebagai langkah 5 <code>run_daily_update</code> / <code>run_initial_load</code>).
+        Untuk setiap horizon h ∈ {1..7}, model XGBoost pemenang (lowest base
+        MAPE per horizon) dipakai untuk memprediksi log-return, lalu
+        dieksponensiasi menjadi harga prediksi. Hasil ditulis ke koleksi
+        <code>forecasts</code> (per-titik, scalar fields) + dokumen
+        <code>forecast_meta/Daily</code> (winners + metrics dibundel ke
+        <code>payload_json</code>).
       </p>
       <div class="diagram-card">
 <pre class="algorithm"><span class="kw">ALGORITHM</span> compute_forecast_trails
-<span class="src">SOURCE</span>: website/web/predictor.py :: compute_forecast_trails
+<span class="src">SOURCE</span>: prediction/inference.py :: compute_forecast_trails
 
 <span class="kw">INPUT</span>:
     db              <span class="cmt">// Firestore client</span>
@@ -433,7 +437,7 @@
 
 
 <span class="kw">PROCEDURE</span> build_inference_frame
-<span class="src">SOURCE</span>: website/web/predictor.py :: build_inference_frame
+<span class="src">SOURCE</span>: prediction/inference.py :: build_inference_frame
 
 <span class="kw">BEGIN</span>
     price_df      = _load_prices(db)              <span class="cmt">// daily_prices</span>
@@ -471,14 +475,15 @@
         <table class="w-full border-collapse">
           <thead><tr><th>Langkah Pseudocode</th><th>Fungsi Konkret</th><th>File</th></tr></thead>
           <tbody>
-            <tr><td><code>load_winners()</code></td><td>idem; <code>lru_cache(maxsize=1)</code></td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>build_inference_frame(db)</code></td><td>idem</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helper</td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>load_winners()</code></td><td>idem; <code>lru_cache(maxsize=1)</code></td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>build_inference_frame(db)</code></td><td>idem</td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>_load_prices, _load_sentiment, _load_hmm_state</code></td><td>private helper</td><td><code>prediction/inference.py</code></td></tr>
             <tr><td><code>add_price_features, add_hmm_derived_features, engineer_all_features, select_feature_matrix</code></td><td>idem</td><td><code>prediction/feature_engineering.py</code></td></tr>
-            <tr><td><code>load_model(tag, h, "csa")</code></td><td>idem; <code>lru_cache(maxsize=64)</code></td><td><code>website/web/predictor.py</code></td></tr>
+            <tr><td><code>load_model(tag, h, "csa")</code></td><td>idem; <code>lru_cache(maxsize=64)</code></td><td><code>prediction/inference.py</code></td></tr>
             <tr><td><code>model.predict(X)</code></td><td><code>XGBRegressor.predict</code> dari pkl</td><td><code>prediction/saved_models/{tag}/Daily/h{h}/xgboost_csa/model.pkl</code></td></tr>
-            <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>website/web/predictor.py</code></td></tr>
-            <tr><td>HTTP endpoint &amp; clamping</td><td><code>forecasts_api</code></td><td><code>website/web/views.py</code></td></tr>
+            <tr><td><code>_next_trading_day_after</code></td><td>idem (skip Sat/Sun)</td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td>Orchestrator + flatten ke per-titik + write</td><td><code>precompute_and_write</code> → <code>write_forecasts</code> + <code>write_forecast_meta</code></td><td><code>scheduler/precompute_forecasts.py</code> + <code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td>Pemanggil pseudocode + clamping HTTP</td><td><code>forecasts_api</code> (membaca hasil, bukan menjalankan inferensi)</td><td><code>website/web/views.py</code></td></tr>
           </tbody>
         </table>
       </div>

@@ -73,11 +73,14 @@
         — alur kontrol untuk <code>--mode daily</code> di
         <code>scheduler/main.py::run_daily_update(db)</code>. Tiga sub-prosedur
         ditampilkan eksplisit: <code>_step_price</code> (P1),
-        <code>_step_news</code> (P2 + memanggil P3a
-        <code>run_sentiment_on_articles</code>), dan blok orkestrasi 3-way
-        agregat sentimen (P3b) + pemicu P4
-        (<code>update_hmm_states</code>). Detail internal P3 dan P4 berada di
-        berkas pseudocode masing-masing.
+        <code>_step_news</code> (P2 + memanggil P3
+        <code>run_sentiment_on_articles</code>), reconcile CSV → Firestore
+        (Langkah 3, single source of truth), pemicu P4
+        (<code>update_hmm_states</code>), dan langkah baru P5
+        (<code>_step_precompute</code> → <code>precompute_and_write</code> →
+        <code>inference.compute_forecast_trails</code>) yang dibungkus
+        try/except. Detail internal P3, P4, dan P5 berada di berkas
+        pseudocode masing-masing.
       </p>
     </section>
 
@@ -140,39 +143,49 @@
     paths = _paths()      <span class="cmt">// {cpo_raw, cpo_preproc, news_raw, news_preproc, news_sent}</span>
 
     <span class="cmt">// ── Step 1 · P1: PRICE ─────────────────────────────────────</span>
-    _step_price(db, paths)
+    price_changed = _step_price(paths)                        <span class="cmt">// CSV-only; tidak menulis Firestore</span>
 
-    <span class="cmt">// ── Step 2 · P2: NEWS (scrape + preprocess + title-only sentiment) ─</span>
-    (new_articles, news_changed) = _step_news(paths)
+    <span class="cmt">// ── Step 2 · P2: NEWS (scrape + preprocess + sentiment) ────</span>
+    (_, news_changed) = _step_news(paths)                     <span class="cmt">// append 3 CSV; tidak menulis Firestore</span>
 
-    <span class="cmt">// ── Step 3 · P3: mirror artikel baru ke D2 ─────────────────</span>
-    <span class="kw">IF</span> news_changed <span class="kw">AND</span> new_articles <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
-        write_news_articles(db, new_articles)   <span class="cmt">// doc ID = md5(url)</span>
-    <span class="kw">END IF</span>
+    <span class="cmt">// ── Step 3 · Reconcile CSV → Firestore (single source of truth) ─</span>
+    <span class="cmt">// Diff full CSV vs Firestore untuk prices + news + sentiment_aggregates;</span>
+    <span class="cmt">// tulis hanya dokumen yang missing/stale. Self-healing terhadap skip-run.</span>
+    recon_writes = reconcile_all(db, paths)
 
-    <span class="cmt">// ── Step 4 · P3: sentiment_aggregates (3-way branch) ───────</span>
-    <span class="kw">IF</span> news_changed <span class="kw">AND</span> new_articles <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
-        affected_dates = { a.date <span class="kw">FOR</span> a <span class="kw">IN</span> new_articles <span class="kw">IF</span> a.date }
-        all_articles   = load_news_from_csv(paths.news_raw, paths.news_sent)
-        affected       = [ a <span class="kw">FOR</span> a <span class="kw">IN</span> all_articles <span class="kw">IF</span> a.date <span class="kw">IN</span> affected_dates ]
-        aggregates     = compute_sentiment_aggregates(affected)
-        <span class="kw">IF</span> aggregates <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
-            write_sentiment_aggregates(db, aggregates)
-        <span class="kw">END IF</span>
-    <span class="kw">ELSE IF</span> _is_aggregates_empty(db) <span class="kw">THEN</span>
-        all_articles = load_news_from_csv(paths.news_raw, paths.news_sent)
-        aggregates   = compute_sentiment_aggregates(all_articles)
-        <span class="kw">IF</span> aggregates <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
-            write_sentiment_aggregates(db, aggregates)
-        <span class="kw">END IF</span>
+    <span class="cmt">// ── Step 4 · P4: HMM state decoding ────────────────────────</span>
+    update_hmm_states(db)                                     <span class="cmt">// see P4 pseudocode</span>
+
+    <span class="cmt">// ── Step 5 · P5: Forecast precompute (try/except, isolated) ─</span>
+    <span class="cmt">// Skip jika tidak ada perubahan di langkah 1–3; deterministic doc IDs</span>
+    <span class="cmt">// menjamin re-run idempotent.</span>
+    <span class="kw">IF</span> price_changed <span class="kw">OR</span> news_changed <span class="kw">OR</span> recon_writes &gt; 0 <span class="kw">THEN</span>
+        _step_precompute(db)                                  <span class="cmt">// see Precompute pseudocode</span>
     <span class="kw">ELSE</span>
-        log_info("aggregates already up to date — skip")
+        log_info("no data changes; forecasts already current — skip")
     <span class="kw">END IF</span>
-
-    <span class="cmt">// ── Step 5 · P4: HMM state decoding ────────────────────────</span>
-    update_hmm_states(db)                       <span class="cmt">// see P4 pseudocode</span>
 
     <span class="kw">RETURN</span> log_DAILY_UPDATE_COMPLETE
+<span class="kw">END</span>
+
+
+<span class="kw">PROCEDURE</span> _step_precompute
+<span class="src">SOURCE</span>: scheduler/main.py :: _step_precompute
+
+<span class="kw">INPUT</span>:
+    db   <span class="cmt">// Firestore client</span>
+
+<span class="kw">OUTPUT</span>:
+    bool — TRUE jika ≥1 dokumen forecast point ditulis
+
+<span class="kw">BEGIN</span>
+    <span class="kw">TRY</span>
+        n = precompute_forecasts.precompute_and_write(db)     <span class="cmt">// see P5 pseudocode</span>
+    <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
+        log_exception("forecast precompute failed: " + str(e))
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>                                        <span class="cmt">// jangan rollback langkah 1–4</span>
+    <span class="kw">END TRY</span>
+    <span class="kw">RETURN</span> n &gt; 0
 <span class="kw">END</span></pre>
       </div>
     </section>
@@ -268,8 +281,13 @@
             <tr><td><code>latest_price_date, append_price_row_indonesian,</code><br/><code>latest_news_date, append_news_rows</code></td><td>idem</td><td><code>scheduler/local_csv_writer.py</code></td></tr>
             <tr><td><code>scrape_new_articles, preprocess_articles, load_news_from_csv,</code><br/><code>article_to_raw_row, article_to_sentiment_row</code></td><td>idem</td><td><code>scheduler/news_extractor.py</code></td></tr>
             <tr><td><code>run_sentiment_on_articles, compute_sentiment_aggregates</code></td><td>idem (lihat P3 pseudocode)</td><td><code>scheduler/sentiment_runner.py</code></td></tr>
-            <tr><td><code>write_price, write_news_articles, write_sentiment_aggregates</code></td><td>idem</td><td><code>scheduler/firestore_writer.py</code></td></tr>
+            <tr><td><code>reconcile_all(db, paths)</code></td><td>diff full CSV vs Firestore → tulis missing/stale</td><td><code>scheduler/reconcile.py</code></td></tr>
+            <tr><td><code>write_prices_batch, write_news_articles, write_sentiment_aggregates</code></td><td>batch writers dipanggil dari reconcile</td><td><code>scheduler/firestore_writer.py</code></td></tr>
             <tr><td><code>update_hmm_states</code></td><td>idem (lihat P4 pseudocode)</td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td><code>_step_precompute(db)</code></td><td>wrapper try/except langkah 5</td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td><code>precompute_and_write(db)</code></td><td>orkestrator forecast precompute (lihat P5 pseudocode)</td><td><code>scheduler/precompute_forecasts.py</code></td></tr>
+            <tr><td><code>compute_forecast_trails(db, h_max, w)</code></td><td>algoritma inferensi XGBoost (relokasi)</td><td><code>prediction/inference.py</code></td></tr>
+            <tr><td><code>write_forecasts(db, points)</code>, <code>write_forecast_meta(db, meta)</code></td><td>writers per-titik + meta (idempotent doc IDs)</td><td><code>scheduler/firestore_writer.py</code></td></tr>
             <tr><td><code>migrate_hmm_to_firestore.main</code></td><td>delegasi <code>--mode rebuild-hmm</code></td><td><code>scheduler/migrate_hmm_to_firestore.py</code></td></tr>
           </tbody>
         </table>
@@ -289,10 +307,11 @@
             <tr><td><code>raw</code></td><td><code>list[dict]</code></td><td><code>scrape_new_articles(have)</code></td></tr>
             <tr><td><code>cleaned</code></td><td><code>list[dict]</code></td><td><code>preprocess_articles(raw)</code></td></tr>
             <tr><td><code>scored</code></td><td><code>list[dict]</code> + sentiment fields</td><td><code>run_sentiment_on_articles(cleaned)</code></td></tr>
-            <tr><td><code>(new_articles, news_changed)</code></td><td><code>(list[dict], bool)</code></td><td><code>_step_news(paths)</code></td></tr>
-            <tr><td><code>affected_dates</code></td><td><code>set[str]</code></td><td>set-comprehension dari <code>new_articles</code></td></tr>
-            <tr><td><code>all_articles</code></td><td><code>list[dict]</code></td><td><code>load_news_from_csv(raw, sent)</code></td></tr>
-            <tr><td><code>aggregates</code></td><td><code>list[dict]</code> per-tanggal</td><td><code>compute_sentiment_aggregates(...)</code></td></tr>
+            <tr><td><code>price_changed</code></td><td><code>bool</code></td><td><code>_step_price(paths)</code></td></tr>
+            <tr><td><code>(_, news_changed)</code></td><td><code>(list[dict], bool)</code></td><td><code>_step_news(paths)</code></td></tr>
+            <tr><td><code>recon_writes</code></td><td><code>int</code> jumlah doc Firestore yang ditulis</td><td><code>reconcile_all(db, paths)</code></td></tr>
+            <tr><td><code>aggregates</code></td><td><code>list[dict]</code> per-tanggal</td><td><code>compute_sentiment_aggregates(...)</code> (dipanggil di dalam reconcile)</td></tr>
+            <tr><td><code>n</code></td><td><code>int</code> jumlah dokumen forecast point ditulis</td><td><code>precompute_forecasts.precompute_and_write(db)</code></td></tr>
           </tbody>
         </table>
       </div>
