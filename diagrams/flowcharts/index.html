@@ -108,9 +108,16 @@
             </tr>
             <tr>
               <td>5.0</td>
+              <td><strong>Forecast Precompute</strong></td>
+              <td><span class="badge-no">Tidak</span></td>
+              <td>Linear: <code>compute_forecast_trails</code> (loop horizon × anchor) → flatten ke per-titik → batch write → write meta → hapus legacy. Dibungkus try/except agar kegagalan tidak membatalkan langkah 1–4.</td>
+              <td><a class="nav-pill" href="orchestration.html">Lihat di Orchestration</a></td>
+            </tr>
+            <tr>
+              <td>6.0</td>
               <td><strong>Dashboard Web</strong></td>
               <td><span class="badge-yes">Ya</span></td>
-              <td>Empat sub-route (<code>/, /news/, /about/, /api/forecasts/</code>); view <code>news</code> melakukan filter+sort+paginate di Python; <code>forecasts_api</code> membaca dokumen <code>forecasts/latest</code> yang dipre-komputasi (fallback 503/500).</td>
+              <td>Empat sub-route (<code>/, /news/, /about/, /api/forecasts/</code>); view <code>news</code> melakukan filter+sort+paginate di Python; <code>forecasts_api</code> + <code>dashboard</code> membaca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code> (fallback 503/500).</td>
               <td><a class="nav-pill" href="P5_dashboard.html">P5 →</a></td>
             </tr>
           </tbody>
@@ -141,7 +148,7 @@
         <a href="orchestration.html" class="card block md:col-span-2">
           <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">Orkestrasi · Pipeline Scheduler Harian</div>
           <div class="text-base font-semibold mt-1">Flowchart Orchestration</div>
-          <div class="text-sm text-slate-600 mt-1">P1 → P2 → P3 → P4 dengan <em>skip-if-current</em> guard per langkah. Tautan ke detail P3 &amp; P4 disisipkan pada langkah yang relevan.</div>
+          <div class="text-sm text-slate-600 mt-1">P1 → P2 → reconcile → P4 (HMM) → P5 (Precompute) dengan <em>skip-if-current</em> guard pada langkah 1–2. Tautan ke detail P3 &amp; P4 disisipkan pada langkah yang relevan; P5 dijelaskan sebagai algoritma di pseudocode.</div>
         </a>
         <a href="P3_sentiment.html" class="card block">
           <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P3 · DFD 3.0</div>
@@ -154,9 +161,9 @@
           <div class="text-sm text-slate-600 mt-1">Frozen params + online forward filter, skip dates yang sudah ditulis.</div>
         </a>
         <a href="P5_dashboard.html" class="card block md:col-span-2">
-          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 6.0</div>
           <div class="text-base font-semibold mt-1">Dashboard Web</div>
-          <div class="text-sm text-slate-600 mt-1">URL routing ke 4 view read-only; <code>forecasts_api</code> membaca trail forecast yang dipre-komputasi dari Firestore.</div>
+          <div class="text-sm text-slate-600 mt-1">URL routing ke 4 view read-only; <code>dashboard</code> + <code>forecasts_api</code> membaca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code> dari Firestore.</div>
         </a>
       </div>
     </section>

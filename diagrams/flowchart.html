@@ -97,9 +97,14 @@
       <h2 class="text-xl font-semibold section-heading">1 — Pipeline Scheduler Harian (<code>--mode daily</code>)</h2>
       <p class="text-sm text-slate-600 mb-4">
         Lima langkah berurutan dengan keputusan <em>skip-if-current</em>
-        di setiap langkah. Sumber utama (single source of truth) adalah
+        pada langkah 1 dan 2. Sumber utama (single source of truth) adalah
         tiga CSV lokal di <code>cpo/</code> dan <code>news/</code>;
-        Firestore hanya dijadikan cermin downstream.
+        Firestore hanya dijadikan cermin downstream lewat
+        <em>reconcile</em> (Langkah 3). Langkah 5 (precompute forecast)
+        memanggil <code>prediction/inference.py</code> secara
+        <em>in-process</em> dan menulis hasilnya ke koleksi
+        <code>forecasts</code> + <code>forecast_meta/Daily</code> di
+        Firestore.
       </p>
       <div class="diagram-card">
         <pre class="mermaid">
@@ -113,9 +118,8 @@ flowchart TD
     S1Q -->|Ya| S1Skip["skip price"]:::process
     S1Q -->|Tidak| S1F["fetch_latest_price<br/>via investiny"]:::process
     S1F --> S1A["append_price_row_indonesian<br/>+ preprocess_price_csv"]:::process
-    S1A --> S1W["firestore_writer.write_price"]:::process
     S1Skip --> S2
-    S1W --> S2
+    S1A --> S2
 
     S2["Langkah 2: _step_news"]:::process
     S2 --> S2Q{"news CSV<br/>latest &gt;= cutoff?"}:::decision
@@ -127,34 +131,32 @@ flowchart TD
     S2Skip --> S3
     S2A --> S3
 
-    S3["Langkah 3: mirror artikel baru"]:::process
-    S3 --> S3Q{"ada artikel<br/>baru?"}:::decision
-    S3Q -->|Tidak| S4
-    S3Q -->|Ya| S3W["write_news_articles<br/>(MD5(url) sebagai doc ID)"]:::process
+    S3["Langkah 3: reconcile.reconcile_all<br/>(CSV → Firestore)"]:::process
+    S3 --> S3W["write_prices_batch +<br/>write_news_articles +<br/>write_sentiment_aggregates<br/>(hanya doc yang missing/stale)"]:::process
     S3W --> S4
 
-    S4["Langkah 4: sentiment_aggregates"]:::process
-    S4 --> S4Q{"news berubah?"}:::decision
-    S4Q -->|Ya| S4A["compute_sentiment_aggregates<br/>untuk tanggal yang terdampak"]:::process
-    S4Q -->|Tidak| S4E{"Firestore<br/>aggregates kosong?"}:::decision
-    S4E -->|Ya| S4B["rebuild dari full CSV"]:::process
-    S4E -->|Tidak| S4Skip["skip aggregates"]:::process
-    S4A --> S4W["write_sentiment_aggregates"]:::process
-    S4B --> S4W
-    S4Skip --> S5
+    S4["Langkah 4: update_hmm_states"]:::process
+    S4 --> S4R["read_hmm_params hmm_models/Daily"]:::process
+    S4R --> S4Q{"params<br/>ada?"}:::decision
+    S4Q -->|Tidak| S4Err["Error: jalankan<br/>migrate_hmm_to_firestore dulu"]:::error
+    S4Q -->|Ya| S4F["_build_hmm_features<br/>(5 feature Z-score)"]:::process
+    S4F --> S4M["_hmm_from_params<br/>(rekonstruksi GaussianHMM)"]:::process
+    S4M --> S4D["_forward_filter<br/>(online, BUKAN Viterbi)"]:::process
+    S4D --> S4W["write_hmm_states_batch<br/>(tanggal yang belum ada saja)"]:::process
     S4W --> S5
 
-    S5["Langkah 5: update_hmm_states"]:::process
-    S5 --> S5R["read_hmm_params hmm_models/Daily"]:::process
-    S5R --> S5Q{"params<br/>ada?"}:::decision
-    S5Q -->|Tidak| S5Err["Error: jalankan<br/>migrate_hmm_to_firestore dulu"]:::error
-    S5Q -->|Ya| S5F["_build_hmm_features<br/>(5 feature Z-score)"]:::process
-    S5F --> S5M["_hmm_from_params<br/>(rekonstruksi GaussianHMM)"]:::process
-    S5M --> S5D["_forward_filter<br/>(online, BUKAN Viterbi)"]:::process
-    S5D --> S5W["write_hmm_states_batch<br/>(tanggal yang belum ada saja)"]:::process
+    S5["Langkah 5: _step_precompute(db)<br/>(try/except — kegagalan tidak<br/>membatalkan langkah 1–4)"]:::process
+    S5 --> S5C["precompute_forecasts.<br/>precompute_and_write(db)"]:::process
+    S5C --> S5I["inference.compute_forecast_trails<br/>(max_horizon=7, window_days=365)"]:::process
+    S5I --> S5IQ{"trails kosong?"}:::decision
+    S5IQ -->|Ya| S5Skip["log warning;<br/>tidak menulis"]:::process
+    S5IQ -->|Tidak| S5W1["write_forecasts → koleksi forecasts<br/>(~1.4k doc skalar)"]:::process
+    S5W1 --> S5W2["write_forecast_meta → forecast_meta/Daily"]:::process
+    S5W2 --> S5Del["delete legacy forecasts/latest<br/>(jika masih ada)"]:::process
 
-    S5W --> End(["SELESAI: log DAILY UPDATE COMPLETE"]):::startend
-    S5Err --> End
+    S5Del --> End(["SELESAI: log DAILY UPDATE COMPLETE"]):::startend
+    S5Skip --> End
+    S4Err --> End
 
     classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
     classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1px,color:#134e4a;
@@ -169,11 +171,11 @@ flowchart TD
           <thead><tr><th>Langkah</th><th>Aksi</th><th>Fungsi Utama</th><th>File</th></tr></thead>
           <tbody>
             <tr><td>0</td><td>Inisialisasi Firebase Admin (env / file JSON / ADC fallback)</td><td><code>init_firebase</code></td><td><code>scheduler/main.py</code></td></tr>
-            <tr><td>1</td><td>Bandingkan latest CSV dengan cutoff, fetch + append + preprocess + mirror</td><td><code>_step_price</code></td><td><code>scheduler/main.py</code></td></tr>
+            <tr><td>1</td><td>Bandingkan latest CSV dengan cutoff, fetch + append + preprocess</td><td><code>_step_price</code></td><td><code>scheduler/main.py</code></td></tr>
             <tr><td>2</td><td>Scrape MPOB news baru, preprocess, scoring FinBERT-Tone, append 3 CSV</td><td><code>_step_news</code></td><td><code>scheduler/main.py</code></td></tr>
-            <tr><td>3</td><td>Mirror artikel baru ke Firestore (idempoten via MD5(url))</td><td><code>write_news_articles</code></td><td><code>scheduler/firestore_writer.py</code></td></tr>
-            <tr><td>4</td><td>Recompute sentiment_aggregates (incremental atau rebuild penuh bila kosong)</td><td><code>compute_sentiment_aggregates</code></td><td><code>scheduler/sentiment_runner.py</code></td></tr>
-            <tr><td>5</td><td>Decode state HMM dengan parameter beku + online forward filter</td><td><code>update_hmm_states</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>3</td><td>Reconcile CSV → Firestore (prices + news + sentiment_aggregates dalam satu pass; idempoten via doc ID skalar / MD5(url))</td><td><code>reconcile_all</code></td><td><code>scheduler/reconcile.py</code></td></tr>
+            <tr><td>4</td><td>Decode state HMM dengan parameter beku + online forward filter</td><td><code>update_hmm_states</code></td><td><code>scheduler/hmm_updater.py</code></td></tr>
+            <tr><td>5</td><td>Precompute trail forecast XGBoost → tulis koleksi <code>forecasts</code> + <code>forecast_meta/Daily</code>; hapus legacy <code>forecasts/latest</code></td><td><code>_step_precompute</code> → <code>precompute_and_write</code> → <code>inference.compute_forecast_trails</code></td><td><code>scheduler/main.py</code> + <code>scheduler/precompute_forecasts.py</code> + <code>prediction/inference.py</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -185,9 +187,10 @@ flowchart TD
       <p class="text-sm text-slate-600 mb-4">
         Dua sub-alur terpisah: render HTML awal (server-side, sinkron) dan
         pemuatan trail forecast (asinkron, lewat <code>/api/forecasts/</code>).
-        Inferensi XGBoost berjalan <em>live</em> di proses Django; model
-        di-cache lewat <code>@lru_cache</code> sehingga pkl hanya dimuat
-        sekali per proses gunicorn / Vercel.
+        Inferensi XGBoost <strong>tidak</strong> berjalan di proses Django
+        — semua trail dipre-komputasi oleh scheduler (Langkah 5) dan ditulis
+        ke <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code>;
+        view hanya membaca dan merakit ulang.
       </p>
       <div class="diagram-card">
         <pre class="mermaid">
@@ -201,39 +204,32 @@ flowchart TD
     F1 --> F2["Firestore: hmm_states<br/>(90 hari Daily)"]:::process
     F2 --> F3["Firestore: sentiment_aggregates<br/>(90 hari Daily)"]:::process
 
-    F3 --> W{"winners.json<br/>tersedia?"}:::decision
-    W -->|Tidak| Wfb["metrics = N/A<br/>(template tetap render)"]:::process
-    W -->|Ya| WJ["load_winners()<br/>+ ekstrak h=1 CSA metrics"]:::process
+    F3 --> W{"forecast_meta/Daily<br/>tersedia?"}:::decision
+    W -->|Tidak| Wfb["metrics = N/A; winners_payload = {}<br/>(template tetap render)"]:::process
+    W -->|Ya| WJ["json.loads(payload_json)<br/>+ ekstrak h=1 CSA metrics"]:::process
 
-    Wfb --> CTX["bangun context<br/>(chart_data, stats, sentiment_data)"]:::process
+    Wfb --> CTX["bangun context<br/>(chart_data, stats, sentiment_data,<br/>winners_data, metrics)"]:::process
     WJ --> CTX
 
     CTX --> RH["render dashboard.html"]:::process
     RH --> JS["Browser eksekusi Chart.js<br/>+ fetch /api/forecasts/"]:::process
 
-    JS --> AX(["Asinkron: GET /api/forecasts/"]):::startend
+    JS --> AX(["Asinkron: GET /api/forecasts/<br/>?max_horizon=&amp;window_days="]):::startend
     AX --> VF["views.forecasts_api"]:::process
-    VF --> AQ{"max_horizon &amp;<br/>window_days valid?"}:::decision
-    AQ -->|Tidak| AR400["JsonResponse 400"]:::error
-    AQ -->|Ya| BIF["predictor.<br/>build_inference_frame(db)"]:::process
+    VF --> AC["clamp max_horizon ∈ [1,7]<br/>window_days ∈ [7,365]"]:::process
+    AC --> AM{"forecast_meta/Daily<br/>ada?"}:::decision
+    AM -->|Tidak| AR503M["JsonResponse 503<br/>(forecast_meta belum ada)"]:::error
+    AM -->|Ya| AMP["json.loads(payload_json)<br/>winners, configs, metrics, tag_to_config, horizons"]:::process
 
-    BIF --> EE["_load_prices + _load_sentiment + _load_hmm_state"]:::process
-    EE --> FE["engineer_all_features<br/>(price + HMM-derived + sentiment + lags)"]:::process
-
-    FE --> Loop{"untuk h = 1..max_horizon"}:::decision
-    Loop --> LM["load_model(winner_tag, h, 'csa')<br/>(lru_cache 64 entri)"]:::process
-    LM --> LMQ{"pkl + meta.json<br/>ditemukan?"}:::decision
-    LMQ -->|Tidak| LMS["skip horizon h<br/>log warning"]:::process
-    LMQ -->|Ya| TR["loop anchor date<br/>predict log-return"]:::process
-    TR --> PX["scaler.transform<br/>model.predict"]:::process
-    PX --> PP["harga = anchor_close<br/>× exp(clip(log_ret))"]:::process
-    PP --> Loop
-
-    LMS --> Loop
-    Loop -->|done| OUT["bangun payload trails + metrics"]:::process
-    OUT --> JR["JsonResponse"]:::process
+    AMP --> AS["db.collection('forecasts').stream()<br/>filter Python:<br/>predicted_date ≥ today−window_days<br/>&amp; horizon ≤ max_horizon"]:::process
+    AS --> ASQ{"koleksi forecasts<br/>kosong?"}:::decision
+    ASQ -->|Ya| AR503F["JsonResponse 503<br/>(forecasts belum ada)"]:::error
+    ASQ -->|Tidak| GRP["group by horizon<br/>+ sort points by anchor_date"]:::process
+    GRP --> OUT["rakit payload<br/>{horizons, winners, configs, trails,<br/>metrics, tag_to_config, generated_at}"]:::process
+    OUT --> JR["JsonResponse 200"]:::process
     JR --> Done(["SELESAI: chart trails dirender"]):::startend
-    AR400 --> Done
+    AR503M --> Done
+    AR503F --> Done
 
     classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
     classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1px,color:#134e4a;
@@ -251,12 +247,12 @@ flowchart TD
             <tr><td>R2</td><td>Ambil 90 hari OHLCV dari Firestore</td><td><code>dashboard</code> (block <code>price_docs</code>)</td><td><code>web/views.py</code></td></tr>
             <tr><td>R3</td><td>Ambil 90 hari state HMM Daily</td><td><code>dashboard</code> (block <code>state_docs</code>)</td><td><code>web/views.py</code></td></tr>
             <tr><td>R4</td><td>Ambil 90 hari sentiment aggregate Daily</td><td><code>dashboard</code> (block <code>sent_docs</code>)</td><td><code>web/views.py</code></td></tr>
-            <tr><td>R5</td><td>Muat <code>winners.json</code> (fallback bila file tidak ada)</td><td><code>predictor.load_winners</code></td><td><code>web/predictor.py</code></td></tr>
+            <tr><td>R5</td><td>Baca <code>forecast_meta/Daily</code> dan parse <code>payload_json</code> untuk badge h=1 + tabel 4×7 (fallback N/A bila doc absen)</td><td><code>dashboard</code></td><td><code>web/views.py</code></td></tr>
             <tr><td>R6</td><td>Render template dengan JSON-encoded context</td><td><code>django.shortcuts.render</code></td><td>—</td></tr>
             <tr><td>A1</td><td>Browser memanggil <code>/api/forecasts/?max_horizon=7&amp;window_days=90</code></td><td><code>forecasts_api</code></td><td><code>web/views.py</code></td></tr>
-            <tr><td>A2</td><td>Bangun frame inferensi penuh dari Firestore + fitur</td><td><code>build_inference_frame</code></td><td><code>web/predictor.py</code></td></tr>
-            <tr><td>A3</td><td>Per horizon: muat model pemenang, prediksi log-return, eksponensiasi ke harga</td><td><code>compute_forecast_trails</code></td><td><code>web/predictor.py</code></td></tr>
-            <tr><td>A4</td><td>Kembalikan JSON ke browser; Chart.js merender trail</td><td>—</td><td><code>web/templates/dashboard.html</code></td></tr>
+            <tr><td>A2</td><td>Baca <code>forecast_meta/Daily</code> + parse <code>payload_json</code></td><td><code>forecasts_api</code></td><td><code>web/views.py</code></td></tr>
+            <tr><td>A3</td><td>Stream <code>forecasts</code> collection, filter di Python berdasarkan <code>predicted_date</code> + <code>horizon</code>, group by horizon, sort by <code>anchor_date</code></td><td><code>forecasts_api</code></td><td><code>web/views.py</code></td></tr>
+            <tr><td>A4</td><td>Rakit dan kembalikan JSON dengan shape yang sama seperti jalur lama; Chart.js merender trail</td><td>—</td><td><code>web/templates/dashboard.html</code></td></tr>
           </tbody>
         </table>
       </div>

@@ -54,8 +54,8 @@
   <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
     <div class="max-w-5xl mx-auto">
       <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
-      <h1 class="text-2xl font-bold mt-1">Flowchart — P5 Dashboard Web</h1>
-      <p class="text-teal-100 text-sm mt-1">Alur kontrol detail untuk proses 5.0 — URL routing, dashboard render, dan endpoint forecast read-only.</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — Dashboard Web (Proses 6.0)</h1>
+      <p class="text-teal-100 text-sm mt-1">Alur kontrol detail untuk proses 6.0 — URL routing, dashboard render, dan endpoint forecast read-only (tanpa inferensi ML di jalur request).</p>
     </div>
   </header>
 
@@ -75,28 +75,33 @@
     <section>
       <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
       <p class="text-sm text-slate-700 leading-relaxed">
-        Proses <strong>P5 — Dashboard Web</strong> dimulai
+        Proses <strong>6.0 — Dashboard Web</strong> dimulai
         dari <code>python manage.py runserver</code> yang menyalakan
         Django <em>development server</em> di <code>127.0.0.1:8000</code>.
         Setiap HTTP request akan di-<em>dispatch</em> oleh URL router
         (<code>config/urls.py</code> → <code>web/urls.py</code>) ke salah
         satu dari empat <em>view</em>: <code>dashboard</code>, <code>news</code>,
         <code>about</code>, atau <code>forecasts_api</code>. Keempat view
-        bersifat <em>read-only</em>: tiga view pertama melakukan
-        <em>read-and-render</em> template, sedangkan
-        <code>forecasts_api</code> hanya membaca satu dokumen Firestore
-        <code>forecasts/latest</code> dan mengembalikannya sebagai JSON.
+        bersifat <em>read-only</em> dan <strong>tidak</strong> mengimpor
+        modul ML (<code>joblib</code> / <code>numpy</code> / <code>pandas</code>
+        / <code>xgboost</code>).
       </p>
       <p class="text-sm text-slate-700 leading-relaxed mt-3">
-        Inferensi XGBoost <strong>tidak</strong> lagi dijalankan saat
-        request — terlalu berat untuk fungsi serverless Vercel. Inferensi
-        dipre-komputasi <em>offline</em> oleh skrip
-        <code>website/precompute_forecasts.py</code> yang menulis hasilnya
-        ke data store D8 (<code>forecasts/latest</code>). Flowchart ini
-        menampilkan empat sub-alur view, masing-masing diakhiri respons
-        HTTP. Sub-alur <code>forecasts_api</code> kini ringkas: satu
-        pembacaan Firestore dengan dua jalur error fallback (503 bila
-        dokumen belum ada, 500 untuk exception lain).
+        Inferensi XGBoost dipre-komputasi oleh scheduler (Proses 5.0 —
+        <code>scheduler/precompute_forecasts.py</code> memanggil
+        <code>prediction/inference.py::compute_forecast_trails</code>)
+        dan ditulis ke dua dokumen Firestore:
+        <code>forecast_meta/Daily</code> (winners + metrics dalam
+        <code>payload_json</code>) dan koleksi <code>forecasts</code>
+        (satu dokumen skalar per <em>anchor × horizon</em>). Flowchart
+        ini menampilkan empat sub-alur view:
+        <code>dashboard</code> menggabungkan 3 query konteks dengan
+        baca <code>forecast_meta/Daily</code> untuk badge metrik;
+        <code>forecasts_api</code> meng-clamp parameter, baca
+        <code>forecast_meta/Daily</code>, men-stream koleksi
+        <code>forecasts</code>, filter di Python, dan merakit ulang
+        payload trail dengan <em>shape</em> yang persis sama dengan
+        jalur lama.
       </p>
     </section>
 
@@ -119,9 +124,9 @@ flowchart TD
     VDF -->|Tidak| VDE["empty ctx<br/>(metrics N/A)"]:::error
     VDE --> RD1["render('dashboard.html', ctx)"]:::process
     VDF -->|Ya| VDQ["3 queries Firestore (≥ 90 hari):<br/>D1 daily_prices, D4 hmm_states,<br/>D3 sentiment_aggregates"]:::process
-    VDQ --> VDW{"winners.json<br/>tersedia?"}:::decision
-    VDW -->|Tidak| VDM["metrics N/A<br/>(template tetap render)"]:::process
-    VDW -->|Ya| VDL["load_winners()<br/>+ ekstrak h=1 CSA metrics"]:::process
+    VDQ --> VDW{"forecast_meta/Daily<br/>tersedia?"}:::decision
+    VDW -->|Tidak| VDM["metrics N/A<br/>winners_data = {}"]:::process
+    VDW -->|Ya| VDL["json.loads(payload_json)<br/>+ ekstrak h=1 CSA metrics<br/>(badge dashboard)"]:::process
     VDM --> RD1
     VDL --> RD1
     RD1 --> RET1(["HTTP 200 · dashboard.html"]):::startend
@@ -137,15 +142,22 @@ flowchart TD
     RD3 --> RET3(["HTTP 200 · about.html"]):::startend
 
     %% --- forecasts_api subflow ---
-    VF --> VFC["db = firestore.client()<br/>doc = forecasts/latest .get() ← D8"]:::process
-    VFC --> VFE{"doc.exists?"}:::decision
-    VFE -->|Tidak| VF503["JsonResponse 503<br/>'No precomputed forecasts available'"]:::error
-    VFE -->|Ya| VFP["payload = json.loads(data['payload'])<br/>(trail forecast precomputed)"]:::process
-    VFP --> VFOK["JsonResponse(payload) 200"]:::process
-    VFC -.->|"Exception"| VF500["JsonResponse 500<br/>{error: ...}"]:::error
+    VF --> VFP["clamp params:<br/>max_horizon ∈ [1,7]<br/>window_days ∈ [7,365]"]:::process
+    VFP --> VFM["forecast_meta/Daily.get() ← D9"]:::process
+    VFM --> VFME{"forecast_meta<br/>ada?"}:::decision
+    VFME -->|Tidak| VF503M["JsonResponse 503<br/>'forecast_meta/Daily not found'"]:::error
+    VFME -->|Ya| VFMP["json.loads(payload_json)<br/>winners, configs, metrics, ..."]:::process
+    VFMP --> VFS["db.collection('forecasts').stream() ← D8"]:::process
+    VFS --> VFFI["filter Python:<br/>predicted_date ≥ today−window_days<br/>&amp; horizon ≤ max_horizon"]:::process
+    VFFI --> VFCE{"trails_by_h<br/>kosong?"}:::decision
+    VFCE -->|Ya| VF503F["JsonResponse 503<br/>'forecasts collection empty'"]:::error
+    VFCE -->|Tidak| VFA["sort points per horizon by anchor_date<br/>+ rakit payload {horizons, winners, configs,<br/>trails, metrics, tag_to_config, generated_at}"]:::process
+    VFA --> VFOK["JsonResponse(payload) 200"]:::process
+    VFM -.->|"Exception"| VF500["JsonResponse 500<br/>{error: ...}"]:::error
 
     VFOK --> RET4(["JSON 200 · trails"]):::startend
-    VF503 --> RET4err(["JSON error"]):::startend
+    VF503M --> RET4err(["JSON error"]):::startend
+    VF503F --> RET4err
     VF500 --> RET4err
 
     classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
@@ -171,8 +183,8 @@ flowchart TD
           <thead><tr><th>Endpoint</th><th>View</th><th>Aksi Utama</th><th>Data store dibaca</th><th>Respons</th></tr></thead>
           <tbody>
             <tr><td><code>GET /</code></td><td><code>dashboard(request)</code></td>
-                <td>3 query Firestore (≥ 90d), opsional muat <code>winners.json</code>, render template</td>
-                <td>D1, D3, D4 + D7</td>
+                <td>3 query Firestore (≥ 90d) + baca <code>forecast_meta/Daily</code> untuk badge metrik h=1, render template</td>
+                <td>D1, D3, D4 + D9</td>
                 <td><code>HttpResponse</code> 200 (dashboard.html)</td></tr>
             <tr><td><code>GET /news/</code></td><td><code>news(request)</code></td>
                 <td>Stream seluruh <code>news_articles</code>, filter+sort+paginate di Python, render template</td>
@@ -182,9 +194,9 @@ flowchart TD
                 <td>Render template statis</td>
                 <td>—</td>
                 <td><code>HttpResponse</code> 200 (about.html)</td></tr>
-            <tr><td><code>GET /api/forecasts/</code></td><td><code>forecasts_api(request)</code></td>
-                <td>Baca dokumen <code>forecasts/latest</code> dari Firestore → kembalikan payload JSON</td>
-                <td>D8</td>
+            <tr><td><code>GET /api/forecasts/<br/>?max_horizon=&amp;window_days=</code></td><td><code>forecasts_api(request)</code></td>
+                <td>Clamp params, baca <code>forecast_meta/Daily</code>, stream koleksi <code>forecasts</code>, filter Python, rakit payload trail</td>
+                <td>D8 + D9</td>
                 <td><code>JsonResponse</code> 200 / 503 / 500</td></tr>
           </tbody>
         </table>
@@ -195,9 +207,13 @@ flowchart TD
         <table class="w-full border-collapse">
           <thead><tr><th>Decision</th><th>Cabang Ya</th><th>Cabang Tidak</th><th>Lokasi</th></tr></thead>
           <tbody>
-            <tr><td>dokumen <code>forecasts/latest</code> ada (<code>doc.exists</code>)?</td>
-                <td>parse <code>payload</code> JSON → <code>JsonResponse</code> 200</td>
-                <td><code>JsonResponse</code> 503 <em>No precomputed forecasts available</em></td>
+            <tr><td>dokumen <code>forecast_meta/Daily</code> ada?</td>
+                <td>parse <code>payload_json</code> → lanjut ke pembacaan koleksi <code>forecasts</code></td>
+                <td><code>JsonResponse</code> 503 <em>"forecast_meta/Daily not found. Run scheduler/main.py to populate forecasts."</em></td>
+                <td><code>web/views.py::forecasts_api</code></td></tr>
+            <tr><td>setelah filter, <code>trails_by_h</code> tidak kosong?</td>
+                <td>group + sort + rakit payload → <code>JsonResponse</code> 200</td>
+                <td><code>JsonResponse</code> 503 <em>"forecasts collection empty. Run scheduler/main.py to populate forecasts."</em></td>
                 <td><code>web/views.py::forecasts_api</code></td></tr>
             <tr><td>terjadi exception saat membaca Firestore?</td>
                 <td><code>JsonResponse</code> 500 <code>{error: str(e)}</code></td>
@@ -212,18 +228,23 @@ flowchart TD
         <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik dan
             <em>read-only</em>. Tidak ada login, sesi, atau CSRF check
             untuk GET API.</li>
-        <li><strong>Forecast dipre-komputasi:</strong> <code>forecasts_api</code>
-            <em>tidak</em> menjalankan inferensi — ia hanya membaca dokumen
-            <code>forecasts/latest</code> (D8) dari Firestore dan
-            mengembalikan field <code>payload</code> apa adanya. Inferensi
-            XGBoost dijalankan <em>offline</em> oleh
-            <code>website/precompute_forecasts.py</code> (memanggil
-            <code>predictor.compute_forecast_trails</code>), karena stack ML
-            ~930 MB terlalu berat untuk fungsi serverless Vercel.</li>
-        <li><strong>Fallback 503:</strong> bila skrip precompute belum pernah
-            dijalankan, dokumen <code>forecasts/latest</code> belum ada →
-            endpoint membalas <code>503</code> dan dashboard tetap merender
-            (chart overlay forecast kosong).</li>
+        <li><strong>Forecast dipre-komputasi oleh scheduler:</strong>
+            <code>forecasts_api</code> <em>tidak</em> menjalankan inferensi
+            — ia membaca <code>forecast_meta/Daily</code> (D9) untuk
+            winners + metrics dan men-stream koleksi <code>forecasts</code>
+            (D8, ~1.4k doc skalar) lalu memfilter di Python berdasarkan
+            <code>predicted_date</code> dan <code>horizon</code>, dan
+            merakit ulang trails dengan shape yang sama dengan jalur
+            inferensi lama. Inferensi XGBoost dijalankan oleh proses 5.0
+            (<code>scheduler/precompute_forecasts.py</code> memanggil
+            <code>inference.compute_forecast_trails</code>) karena stack
+            ML ~930 MB terlalu berat untuk fungsi serverless Vercel.</li>
+        <li><strong>Fallback 503:</strong> bila scheduler belum pernah
+            dijalankan, <code>forecast_meta/Daily</code> dan/atau koleksi
+            <code>forecasts</code> kosong → endpoint membalas <code>503</code>
+            dengan pesan yang menyebut <code>scheduler/main.py</code>;
+            dashboard tetap merender (chart overlay forecast kosong, badge
+            metrik N/A).</li>
         <li><strong>Composite-index avoidance:</strong> <code>news</code>
             view sengaja meng-stream seluruh dokumen
             <code>news_articles</code> tanpa filter Firestore — filter
