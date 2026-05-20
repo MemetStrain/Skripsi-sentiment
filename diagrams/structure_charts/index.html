@@ -87,9 +87,16 @@
             </tr>
             <tr>
               <td>5.0</td>
+              <td><strong>Forecast Precompute</strong></td>
+              <td><code>_step_precompute(db)</code> di <code>scheduler/main.py</code></td>
+              <td><code>scheduler/precompute_forecasts.py</code> → <code>prediction/inference.py</code> (joblib, numpy, pandas, xgboost) → <code>firestore_writer.write_forecasts/write_forecast_meta</code></td>
+              <td><em>n/a</em> (lihat <a href="../pseudocodes/P5_dashboard.html">Pseudocode P5</a> bagian “Algoritma Offline”)</td>
+            </tr>
+            <tr>
+              <td>6.0</td>
               <td><strong>Dashboard Web</strong></td>
               <td><code>python manage.py runserver</code></td>
-              <td><code>website/manage.py</code> → Django boot → <code>web/urls.py</code> → <code>web/views.py</code> (+ <code>web/winners.py</code>)</td>
+              <td><code>website/manage.py</code> → Django boot → <code>web/urls.py</code> → <code>web/views.py</code> (membaca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code>; tanpa impor ML)</td>
               <td><a class="nav-pill" href="P5_dashboard.html">P5 →</a></td>
             </tr>
           </tbody>
@@ -136,9 +143,9 @@
           <div class="text-sm text-slate-600 mt-1">Akar: <code>update_hmm_states(db)</code> · Frozen params + forward filter, no Viterbi.</div>
         </a>
         <a href="P5_dashboard.html" class="card block md:col-span-2">
-          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 5.0</div>
+          <div class="text-xs text-teal-700 font-semibold tracking-wide uppercase">P5 · DFD 6.0</div>
           <div class="text-base font-semibold mt-1">Dashboard Web</div>
-          <div class="text-sm text-slate-600 mt-1">Akar: <code>python manage.py runserver</code> · Django boot → URL dispatcher → 4 view read-only; <code>forecasts_api</code> membaca <code>forecasts/latest</code> dari Firestore.</div>
+          <div class="text-sm text-slate-600 mt-1">Akar: <code>python manage.py runserver</code> · Django boot → URL dispatcher → 4 view read-only; <code>dashboard</code> + <code>forecasts_api</code> membaca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code> dari Firestore — tanpa impor ML.</div>
         </a>
       </div>
     </section>

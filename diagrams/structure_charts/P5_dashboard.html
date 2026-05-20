@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Structure Chart — P5 Dashboard Web</title>
+  <title>Structure Chart — Dashboard Web (Proses 6.0)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>
@@ -54,8 +54,8 @@
   <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
     <div class="max-w-5xl mx-auto">
       <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
-      <h1 class="text-2xl font-bold mt-1">Structure Chart — P5 Dashboard Web</h1>
-      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 5.0 (DFD Level 1) — Django server, empat view read-only dari Firestore.</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — Dashboard Web (Proses 6.0)</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 6.0 (DFD Level 1) — Django server, empat view read-only dari Firestore. Tidak ada inferensi ML di jalur request.</p>
     </div>
   </header>
  
@@ -76,7 +76,7 @@
     <section>
       <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
       <p class="text-sm text-slate-700 leading-relaxed">
-        Proses <strong>P5 — Dashboard Web</strong> dari DFD
+        Proses <strong>6.0 — Dashboard Web</strong> dari DFD
         Level 1 dimulai dari perintah <code>python manage.py runserver</code>
         yang dijalankan oleh Operator untuk menyalakan Django <em>development
         server</em> pada <code>127.0.0.1:8000</code>. Secara internal, perintah
@@ -107,9 +107,15 @@
         bawah setiap <em>view</em> menampilkan modul-modul aplikasi yang
         sebenarnya: <em>loader</em> Firestore dan <em>render</em> template.
         Keempat view bersifat <em>read-only</em> — tidak ada inferensi
-        XGBoost di jalur request; <code>forecasts_api</code> hanya membaca
-        dokumen Firestore <code>forecasts/latest</code> (D8) yang diproduksi
-        oleh skrip <em>offline</em> <code>website/precompute_forecasts.py</code>.
+        XGBoost di jalur request. <code>dashboard</code> membaca
+        <code>forecast_meta/Daily</code> (D9) untuk badge metrik h=1 dan
+        tabel komparasi 4×7; <code>forecasts_api</code> membaca
+        <code>forecast_meta/Daily</code> ditambah seluruh koleksi
+        <code>forecasts</code> (D8, satu dokumen per <em>anchor × horizon</em>)
+        dan merakit ulang payload trail yang sama dengan jalur lama. Kedua
+        store diproduksi oleh proses 5.0 (Forecast Precompute) di scheduler
+        — modul <code>scheduler/precompute_forecasts.py</code> + algoritma
+        di <code>prediction/inference.py</code>.
         Detail modul boot Django tetap didokumentasikan pada tabel
         <em>“Modul Boot &amp; Dispatch”</em> di bawah untuk kelengkapan
         referensi.
@@ -126,31 +132,34 @@ flowchart TD
     ROOT -->|"GET /"| VD["views.dashboard(request)<br/>web/views.py"]:::view
     ROOT -->|"GET /news/"| VN["views.news(request)<br/>web/views.py"]:::view
     ROOT -->|"GET /about/"| VA["views.about(request)<br/>web/views.py"]:::view
-    ROOT -->|"GET /api/forecasts/"| VF["views.forecasts_api(request)<br/>web/views.py"]:::view
+    ROOT -->|"GET /api/forecasts/<br/>?max_horizon=&amp;window_days="| VF["views.forecasts_api(request)<br/>web/views.py"]:::view
 
-    %% --- shared modules (called by multiple views) ---
+    %% --- shared modules ---
     FC["firestore.client()<br/>firebase_admin"]:::ext
     RENDER["render(template, ctx)<br/>django.shortcuts"]:::ext
-    LW["load_winners()<br/>web/winners.py"]:::util
-    Q["db.collection(...).where()<br/>.order_by().stream()<br/>← D1 / D2 / D3 / D4"]:::query
+    JR["JsonResponse(payload)<br/>django.http"]:::ext
 
     %% --- dashboard ---
     VD -->|"—"| FC
-    VD -->|"3 queries (daily_prices,<br/>hmm_states, sentiment_aggregates;<br/>≥ 90 hari)"| Q
-    VD -->|"—"| LW
+    VD -->|"3 queries (daily_prices,<br/>hmm_states, sentiment_aggregates;<br/>≥ 90 hari)"| QD["db.collection(...).where()<br/>.order_by().stream()<br/>← D1 / D3 / D4"]:::query
+    VD -->|"document('Daily').get()<br/>+ json.loads(payload_json)"| QFM["db.collection('forecast_meta')<br/>← D9"]:::query
     VD -->|"'dashboard.html', ctx"| RENDER
 
-    LW -->|"_WINNERS_PATH"| WJ[("prediction/winners.json<br/>← D7")]:::store
+    QFM -->|"winners + metrics"| D9[("forecast_meta/Daily<br/>← D9")]:::store
 
-    %% --- forecasts_api (read-only Firestore) ---
+    %% --- forecasts_api ---
+    VF -->|"clamp params"| VFP["max_horizon ∈ [1,7]<br/>window_days ∈ [7,365]"]:::util
     VF -->|"—"| FC
-    VF -->|"db"| QF["db.collection('forecasts')<br/>.document('latest').get()"]:::query
-    VF -->|"payload dict"| JR["JsonResponse(payload)<br/>django.http"]:::ext
-    QF -->|"dokumen forecasts/latest"| D8[("forecasts/latest<br/>← D8")]:::store
+    VF -->|"document('Daily').get()<br/>+ json.loads(payload_json)"| QFM2["db.collection('forecast_meta')<br/>← D9"]:::query
+    VF -->|"stream() + filter Python<br/>(predicted_date ≥ today−window_days<br/>&amp; horizon ≤ max_h)"| QF["db.collection('forecasts')<br/>← D8"]:::query
+    VF -->|"sort points per horizon"| ASM["rakit trails:<br/>{horizon, tag, config, points[]}"]:::util
+    VF -->|"payload dict"| JR
+    QF  -->|"~1.4k dokumen skalar"| D8[("forecasts (per-point)<br/>← D8")]:::store
+    QFM2 -->|"winners + configs +<br/>metrics + horizons"| D9
 
     %% --- news view ---
     VN -->|"—"| FC
-    VN -->|"news_articles (full stream)"| Q
+    VN -->|"news_articles (full stream)"| QN["db.collection('news_articles')<br/>.stream() ← D2"]:::query
     VN -->|"'news.html', ctx"| RENDER
 
     %% --- about view ---
@@ -159,7 +168,6 @@ flowchart TD
     classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
     classDef view  fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
     classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
-    classDef priv  fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#312e81;
     classDef ext   fill:#fae8ff,stroke:#86198f,stroke-width:1px,color:#701a75;
     classDef query fill:#fef9c3,stroke:#a16207,stroke-width:1px,color:#713f12;
     classDef store fill:#f3e8ff,stroke:#7e22ce,stroke-width:1px,color:#581c87;
@@ -172,7 +180,7 @@ flowchart TD
         <span class="px-1 rounded" style="background:#dbeafe;border:1px solid #1e40af">biru</span> = fungsi modul internal,
         <span class="px-1 rounded" style="background:#fae8ff;border:1px solid #86198f">ungu</span> = pustaka eksternal,
         <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #a16207">krem-kuning</span> = query Firestore inline,
-        <span class="px-1 rounded" style="background:#f3e8ff;border:1px solid #7e22ce">lavender</span> = data store (D7 winners.json / D8 forecasts).
+        <span class="px-1 rounded" style="background:#f3e8ff;border:1px solid #7e22ce">lavender</span> = data store (D8 forecasts per-point / D9 forecast_meta).
       </p>
     </section>
  
@@ -219,23 +227,21 @@ flowchart TD
                 <td>—</td>
                 <td><code>HttpResponse</code> (about.html)</td></tr>
             <tr><td><code>web/views.py</code></td><td><code>forecasts_api(request)</code></td>
-                <td>—</td>
-                <td><code>JsonResponse</code> — field <code>payload</code> dari dokumen <code>forecasts/latest</code> (200 / 503 / 500)</td></tr>
-            <tr><td><code>web/winners.py</code></td><td><code>load_winners()</code></td>
-                <td>—</td>
-                <td><code>dict</code> dari <code>winners.json</code> (cached <code>lru_cache(1)</code>) — dipakai view <code>dashboard</code> untuk tabel metrik</td></tr>
+                <td>Query opsional: <code>max_horizon</code> (1–7), <code>window_days</code> (7–365)</td>
+                <td><code>JsonResponse</code> — payload <code>{horizons, winners, configs, trails, metrics, tag_to_config, generated_at}</code> (200 / 503 jika <code>forecast_meta/Daily</code> atau koleksi <code>forecasts</code> kosong / 500)</td></tr>
           </tbody>
         </table>
       </div>
       <p class="text-xs text-slate-500 mt-2">
-        Modul inferensi <code>web/predictor.py</code>
-        (<code>compute_forecast_trails</code>, <code>build_inference_frame</code>,
-        <code>load_model</code>, <code>_load_*</code>) dan
-        <code>prediction/feature_engineering.py</code> <strong>tidak</strong> lagi
-        dipanggil oleh <em>view</em> mana pun. Modul-modul tersebut kini dijalankan
-        <em>offline</em> oleh skrip <code>website/precompute_forecasts.py</code> dan
-        didokumentasikan pada bagian <em>“Algoritma Offline”</em> di
-        <a href="../pseudocodes/P5_dashboard.html" class="text-teal-700 underline">Pseudocode P5</a>.
+        Tidak ada modul ML (<code>joblib</code> / <code>numpy</code> /
+        <code>pandas</code> / <code>xgboost</code>) yang di-impor oleh
+        <code>website/</code>. Algoritma inferensi
+        <code>compute_forecast_trails</code> (sebelumnya di
+        <code>website/web/predictor.py</code>) telah direlokasi ke
+        <code>prediction/inference.py</code> dan dijalankan oleh proses 5.0
+        (Forecast Precompute) di scheduler — lihat
+        <a href="../pseudocodes/P5_dashboard.html" class="text-teal-700 underline">Pseudocode P5</a>
+        untuk algoritma offline.
       </p>
  
       <h3 class="sub-heading">Tabel — Coupling (Data yang Dilewatkan)</h3>
@@ -244,10 +250,11 @@ flowchart TD
           <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
           <tbody>
             <tr><td><code>runserver</code> (akar)</td><td><em>view function</em></td><td><code>HttpRequest</code> (via URL dispatcher)</td><td>Stamp</td></tr>
-            <tr><td><code>dashboard</code></td><td>Firestore</td><td>filter <code>date ≥ 90d</code></td><td>Data</td></tr>
-            <tr><td><code>dashboard</code></td><td><code>load_winners</code></td><td>—</td><td>Common (membaca file lokal D7)</td></tr>
-            <tr><td><code>forecasts_api</code></td><td>Firestore</td><td>path dokumen <code>forecasts/latest</code></td><td>Data</td></tr>
-            <tr><td><code>news</code></td><td>Firestore</td><td>stream tanpa filter</td><td>Data</td></tr>
+            <tr><td><code>dashboard</code></td><td>Firestore <code>daily_prices/hmm_states/sentiment_aggregates</code></td><td>filter <code>date ≥ 90d</code></td><td>Data</td></tr>
+            <tr><td><code>dashboard</code></td><td>Firestore <code>forecast_meta/Daily</code></td><td>doc ID skalar; parse <code>payload_json</code></td><td>Data (JSON)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td>Firestore <code>forecast_meta/Daily</code></td><td>doc ID skalar; parse <code>payload_json</code></td><td>Data (JSON)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td>Firestore <code>forecasts</code></td><td><code>stream()</code> + filter Python (<code>predicted_date</code> ≥ cutoff, <code>horizon</code> ≤ max_h)</td><td>Data</td></tr>
+            <tr><td><code>news</code></td><td>Firestore <code>news_articles</code></td><td>stream tanpa filter</td><td>Data</td></tr>
           </tbody>
         </table>
       </div>
@@ -265,21 +272,25 @@ flowchart TD
             aplikasi.</li>
         <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik read-only.</li>
         <li><strong>forecasts_api read-only:</strong> endpoint <code>/api/forecasts/</code>
-            hanya membaca dokumen <code>forecasts/latest</code> dari Firestore — tidak ada
-            <code>joblib.load</code>, model XGBoost, atau scaler di jalur request.</li>
-        <li><strong>Inferensi dipre-komputasi offline:</strong> trail forecast diproduksi
-            oleh <code>website/precompute_forecasts.py</code> yang memanggil
-            <code>predictor.compute_forecast_trails</code> dan menulis hasilnya ke D8
-            (<code>forecasts/latest</code>). <code>prediction/feature_engineering.py</code>
-            tetap menjadi <em>single source of truth</em> fitur, dipakai bersama skrip
-            training <code>horizon_forecast_C{1..4}_*.py</code> dan path precompute —
-            agar tidak terjadi divergensi train/serve.</li>
+            hanya membaca <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code> dari
+            Firestore — tidak ada <code>joblib.load</code>, model XGBoost, atau scaler di jalur
+            request. Filter <code>predicted_date</code> dan <code>horizon</code> dilakukan di
+            Python untuk menghindari kebutuhan composite index Firestore.</li>
+        <li><strong>Inferensi dipre-komputasi oleh scheduler:</strong> trail forecast diproduksi
+            oleh proses 5.0 (<code>scheduler/precompute_forecasts.py</code>) yang memanggil
+            <code>prediction/inference.py::compute_forecast_trails</code> dan menulis
+            hasilnya ke D8 (<code>forecasts</code>) + D9 (<code>forecast_meta/Daily</code>).
+            <code>prediction/feature_engineering.py</code> tetap menjadi
+            <em>single source of truth</em> fitur, dipakai bersama skrip training
+            <code>horizon_forecast_C{1..4}_*.py</code> dan inference — agar tidak terjadi
+            divergensi train/serve.</li>
         <li><strong>Composite-index avoidance:</strong> <code>news</code> meng-fetch semua
-            doc dari <code>news_articles</code> lalu sort di Python, untuk menghindari
-            kebutuhan composite index Firestore (date + sentiment).</li>
-        <li><strong>Data store yang dibaca P5:</strong> D1 (daily_prices), D2 (news_articles),
-            D3 (sentiment_aggregates), D4 (hmm_states), D7 (winners.json via <code>web/winners.py</code>),
-            D8 (forecasts).</li>
+            doc dari <code>news_articles</code> lalu sort di Python; <code>forecasts_api</code>
+            juga men-stream seluruh koleksi <code>forecasts</code> lalu filter di Python.
+            Pola yang sama menghindari kebutuhan composite index Firestore.</li>
+        <li><strong>Data store yang dibaca P6:</strong> D1 (daily_prices), D2 (news_articles),
+            D3 (sentiment_aggregates), D4 (hmm_states), D8 (forecasts per-point), D9
+            (forecast_meta/Daily).</li>
       </ul>
     </section>
  

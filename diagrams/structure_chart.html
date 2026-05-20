@@ -98,28 +98,40 @@ flowchart TD
 
     RD --> SP["_step_price(db, paths)"]:::phase
     RD --> SN["_step_news(paths)"]:::phase
-    RD --> WN["firestore_writer.<br/>write_news_articles"]:::util
-    RD --> AGG["sentiment_runner.<br/>compute_sentiment_aggregates"]:::phase
-    RD --> WSA["firestore_writer.<br/>write_sentiment_aggregates"]:::util
+    RD --> REC["reconcile.reconcile_all(db, paths)"]:::phase
     RD --> UH["hmm_updater.<br/>update_hmm_states(db)"]:::phase
+    RD --> SPC["_step_precompute(db)"]:::phase
 
     SP --> PF1["price_fetcher.<br/>fetch_latest_price"]:::util
     SP --> PF2["price_fetcher.<br/>most_recent_trading_day"]:::util
     SP --> LC1["local_csv_writer.<br/>latest_price_date"]:::util
     SP --> LC2["local_csv_writer.<br/>append_price_row_indonesian"]:::util
     SP --> PF3["price_fetcher.<br/>preprocess_price_csv"]:::util
-    SP --> WP["firestore_writer.<br/>write_price"]:::util
 
     SN --> NE1["news_extractor.<br/>scrape_new_articles"]:::util
     SN --> NE2["news_extractor.<br/>preprocess_articles"]:::util
     SN --> SR1["sentiment_runner.<br/>run_sentiment_on_articles"]:::util
     SN --> LC3["local_csv_writer.<br/>append_news_rows"]:::util
 
+    REC --> WP["firestore_writer.<br/>write_prices_batch"]:::util
+    REC --> WN["firestore_writer.<br/>write_news_articles"]:::util
+    REC --> WSA["firestore_writer.<br/>write_sentiment_aggregates"]:::util
+    REC --> AGG["sentiment_runner.<br/>compute_sentiment_aggregates"]:::util
+
     UH --> HU1["read_hmm_params(db)"]:::util
     UH --> HU2["_build_hmm_features"]:::util
     UH --> HU3["_hmm_from_params"]:::util
     UH --> HU4["_forward_filter"]:::util
     UH --> WS["firestore_writer.<br/>write_hmm_states_batch"]:::util
+
+    SPC --> PFW["precompute_forecasts.<br/>precompute_and_write(db)"]:::util
+    PFW --> INF["inference.<br/>compute_forecast_trails(db, 7, 365)"]:::util
+    PFW --> WF["firestore_writer.<br/>write_forecasts"]:::util
+    PFW --> WFM["firestore_writer.<br/>write_forecast_meta"]:::util
+    INF --> ILW["inference.<br/>load_winners()"]:::util
+    INF --> IBI["inference.<br/>build_inference_frame(db)"]:::util
+    INF --> ILM["inference.<br/>load_model(tag, h, 'csa')"]:::util
+    IBI --> EAF["feature_engineering.<br/>engineer_all_features"]:::util
 
     classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
     classDef mode  fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#7c2d12;
@@ -144,7 +156,11 @@ flowchart TD
             <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>run_sentiment_on_articles(articles)</code></td><td>list dict + bobot finbert-tone (lazy load)</td><td><code>list[dict]</code> (diperkaya field sentimen)</td></tr>
             <tr><td><code>scheduler/sentiment_runner.py</code></td><td><code>compute_sentiment_aggregates(articles)</code></td><td>list artikel ber-sentimen</td><td><code>list[dict]</code> (per-tanggal agregat)</td></tr>
             <tr><td><code>scheduler/hmm_updater.py</code></td><td><code>update_hmm_states(db)</code></td><td><code>db</code>: Firestore client</td><td>None (menulis D4)</td></tr>
-            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>write_price[s_batch]</code>, <code>write_news_articles</code>, <code>write_sentiment_aggregates</code>, <code>write_hmm_states_batch</code>, <code>write_hmm_params</code>, <code>read_hmm_params</code></td><td>list dict; batch commit 100 doc</td><td>jumlah dokumen ditulis</td></tr>
+            <tr><td><code>scheduler/main.py</code></td><td><code>_step_precompute(db)</code></td><td><code>db</code>: Firestore client</td><td><code>bool</code> (true bila ≥1 dokumen forecast ditulis); dibungkus try/except agar kegagalan forecast tidak membatalkan langkah 1–4</td></tr>
+            <tr><td><code>scheduler/precompute_forecasts.py</code></td><td><code>precompute_and_write(db)</code></td><td><code>db</code>: Firestore client (konstanta modul: <code>PRECOMPUTE_WINDOW_DAYS=365</code>, <code>PRECOMPUTE_MAX_HORIZON=7</code>)</td><td><code>int</code> jumlah dokumen point yang ditulis; juga menulis D9 + menghapus legacy <code>forecasts/latest</code></td></tr>
+            <tr><td><code>prediction/inference.py</code></td><td><code>compute_forecast_trails(db, max_horizon, window_days)</code></td><td>Firestore client + clamps</td><td><code>dict</code> JSON-serializable (horizons, winners, configs, trails, metrics, tag_to_config, generated_at)</td></tr>
+            <tr><td><code>prediction/inference.py</code></td><td><code>load_winners()</code>, <code>load_model(tag, horizon, variant='csa')</code>, <code>build_inference_frame(db)</code></td><td>cached helpers</td><td><code>dict</code> / <code>(model, scaler, feature_cols)</code> / <code>pd.DataFrame</code></td></tr>
+            <tr><td><code>scheduler/firestore_writer.py</code></td><td><code>write_prices_batch</code>, <code>write_news_articles</code>, <code>write_sentiment_aggregates</code>, <code>write_hmm_states_batch</code>, <code>write_hmm_params</code>, <code>read_hmm_params</code>, <code>write_forecasts</code>, <code>write_forecast_meta</code></td><td>list dict; batch commit 100 doc</td><td>jumlah dokumen ditulis</td></tr>
             <tr><td><code>scheduler/local_csv_writer.py</code></td><td><code>append_news_rows</code>, <code>append_price_row_indonesian</code>, <code>latest_news_date</code>, <code>latest_price_date</code></td><td>Path CSV + baris baru</td><td>Jumlah baris ditulis / tanggal terakhir</td></tr>
           </tbody>
         </table>
@@ -162,6 +178,14 @@ flowchart TD
             <tr><td><code>_step_news</code></td><td><code>run_sentiment_on_articles</code></td><td>list[dict] artikel</td><td>Stamp coupling (dict per artikel)</td></tr>
             <tr><td><code>run_daily_update</code></td><td><code>compute_sentiment_aggregates</code></td><td>list[dict] artikel terberitra</td><td>Stamp coupling</td></tr>
             <tr><td><code>update_hmm_states</code></td><td><code>_forward_filter</code></td><td><code>model</code> objek HMM + <code>X</code> ndarray</td><td>Data (numerik) + Hybrid (objek model)</td></tr>
+            <tr><td><code>run_daily_update</code></td><td><code>_step_precompute</code></td><td><code>db</code> client Firestore</td><td>Data (objek tunggal); panggil terbungkus try/except</td></tr>
+            <tr><td><code>_step_precompute</code></td><td><code>precompute_forecasts.precompute_and_write</code></td><td><code>db</code></td><td>Data (objek tunggal)</td></tr>
+            <tr><td><code>precompute_and_write</code></td><td><code>inference.compute_forecast_trails</code></td><td><code>db, max_horizon=7, window_days=365</code></td><td>Data (scalar + objek)</td></tr>
+            <tr><td><code>precompute_and_write</code></td><td><code>write_forecasts</code></td><td>list[dict] per-titik (skalar saja)</td><td>Stamp coupling</td></tr>
+            <tr><td><code>precompute_and_write</code></td><td><code>write_forecast_meta</code></td><td><code>dict</code> (frequency, generated_at, max_horizon, window_days, winners_by_horizon, configs_by_horizon, metrics, tag_to_config, horizons)</td><td>Stamp coupling (nested arrays dibungkus <code>payload_json</code>)</td></tr>
+            <tr><td><code>compute_forecast_trails</code></td><td><code>load_model</code></td><td><code>(tag, h, 'csa')</code></td><td>Data (scalar tuple)</td></tr>
+            <tr><td><code>compute_forecast_trails</code></td><td><code>build_inference_frame</code></td><td><code>db</code></td><td>Data</td></tr>
+            <tr><td><code>build_inference_frame</code></td><td><code>engineer_all_features</code></td><td><code>pd.DataFrame</code> superset</td><td>Stamp (mendapat banyak kolom)</td></tr>
           </tbody>
         </table>
       </div>
@@ -174,8 +198,10 @@ flowchart TD
         Akar: <code>website/config/urls.py</code> mendelegasikan ke
         <code>web/urls.py</code>. Empat endpoint publik: <code>dashboard</code>,
         <code>news</code>, <code>about</code>, <code>api/forecasts/</code>.
-        Tidak ada autentikasi. Inferensi dijalankan langsung (live)
-        memakai model XGBoost yang sudah dilatih offline.
+        Tidak ada autentikasi. Website bersifat <em>read-only</em>: tidak ada
+        impor ML (joblib / numpy / pandas / xgboost) — semua inferensi
+        dijalankan oleh scheduler (Proses 5.0) dan website hanya membaca
+        dokumen Firestore yang sudah dipre-komputasi.
       </p>
       <div class="diagram-card">
         <pre class="mermaid">
@@ -190,24 +216,15 @@ flowchart TD
     VD --> Q1["Firestore: daily_prices<br/>(90d, order by date)"]:::query
     VD --> Q2["Firestore: hmm_states<br/>(90d Daily)"]:::query
     VD --> Q3["Firestore: sentiment_aggregates<br/>(90d Daily)"]:::query
-    VD --> LW["predictor.load_winners()"]:::util
+    VD --> Q4["Firestore: forecast_meta/Daily<br/>(payload_json → winners + metrics)"]:::query
     VD --> RD["render('dashboard.html', ctx)"]:::util
 
-    LW --> WJ[("winners.json")]:::store
+    VF --> VFC["clamp max_horizon ∈ [1,7]<br/>window_days ∈ [7,365]"]:::util
+    VF --> VFM["Firestore: forecast_meta/Daily<br/>(payload_json)"]:::query
+    VF --> VFS["Firestore: forecasts.stream()<br/>filter predicted_date ≥ cutoff &amp; horizon ≤ max_h"]:::query
+    VF --> VFR["rakit trails per horizon<br/>(sort by anchor_date)"]:::util
 
-    VF --> CT["predictor.<br/>compute_forecast_trails(db, h_max, window)"]:::util
-    CT --> LW2["load_winners()"]:::util
-    CT --> BIF["build_inference_frame(db)"]:::util
-    CT --> LM["load_model(tag, h, 'csa')"]:::util
-
-    BIF --> LP["_load_prices(db)"]:::util
-    BIF --> LS["_load_sentiment(db)"]:::util
-    BIF --> LH["_load_hmm_state(db)"]:::util
-    BIF --> EAF["feature_engineering.<br/>engineer_all_features"]:::util
-
-    LM --> JL[("saved_models/<br/>{tag}/Daily/h{h}/<br/>xgboost_csa/*.pkl")]:::store
-
-    VN --> Q4["Firestore: news_articles<br/>(all, sorted in Python)"]:::query
+    VN --> QN["Firestore: news_articles<br/>(all, sorted in Python)"]:::query
     VN --> PG["pagination clamp"]:::util
     VN --> RN["render('news.html', ctx)"]:::util
 
@@ -217,7 +234,6 @@ flowchart TD
     classDef view  fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
     classDef query fill:#fef3c7,stroke:#b45309,stroke-width:1px,color:#7c2d12;
     classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
-    classDef store fill:#f3e8ff,stroke:#7e22ce,stroke-width:1px,color:#581c87;
         </pre>
       </div>
 
@@ -226,15 +242,10 @@ flowchart TD
         <table class="w-full border-collapse">
           <thead><tr><th>Modul</th><th>Fungsi</th><th>Parameter</th><th>Mengembalikan</th></tr></thead>
           <tbody>
-            <tr><td><code>web/views.py</code></td><td><code>dashboard(request)</code></td><td><code>HttpRequest</code></td><td><code>HttpResponse</code> (dashboard.html)</td></tr>
+            <tr><td><code>web/views.py</code></td><td><code>dashboard(request)</code></td><td><code>HttpRequest</code></td><td><code>HttpResponse</code> (dashboard.html). Membaca <code>forecast_meta/Daily.payload_json</code> untuk badge h=1 + tabel 4×7.</td></tr>
             <tr><td><code>web/views.py</code></td><td><code>news(request)</code></td><td>Query: <code>sentiment</code>, <code>page</code></td><td><code>HttpResponse</code> (news.html)</td></tr>
             <tr><td><code>web/views.py</code></td><td><code>about(request)</code></td><td>—</td><td><code>HttpResponse</code> (about.html)</td></tr>
-            <tr><td><code>web/views.py</code></td><td><code>forecasts_api(request)</code></td><td>Query: <code>max_horizon</code> (1–7), <code>window_days</code> (7–365)</td><td><code>JsonResponse</code> (forecast trails)</td></tr>
-            <tr><td><code>web/predictor.py</code></td><td><code>load_winners()</code></td><td>—</td><td><code>dict</code> (winners_by_horizon, configs_by_horizon, metrics)</td></tr>
-            <tr><td><code>web/predictor.py</code></td><td><code>load_model(tag, horizon, variant='csa')</code></td><td>tag ∈ {cpo_only, cpo_hmm, cpo_sentiment, full}; h ∈ 1..7</td><td><code>(model, scaler, feature_cols)</code> (cached)</td></tr>
-            <tr><td><code>web/predictor.py</code></td><td><code>build_inference_frame(db)</code></td><td>Firestore client</td><td><code>pd.DataFrame</code> (price+tech+HMM+sentiment+lags)</td></tr>
-            <tr><td><code>web/predictor.py</code></td><td><code>compute_forecast_trails(db, max_horizon, window_days)</code></td><td>Firestore client + clamps</td><td><code>dict</code> JSON-serializable (trails, metrics, …)</td></tr>
-            <tr><td><code>prediction/feature_engineering.py</code></td><td><code>add_price_features</code>, <code>add_hmm_derived_features</code>, <code>engineer_all_features</code>, <code>select_feature_matrix</code></td><td>DataFrame + feature list</td><td>DataFrame / ndarray</td></tr>
+            <tr><td><code>web/views.py</code></td><td><code>forecasts_api(request)</code></td><td>Query: <code>max_horizon</code> (1–7), <code>window_days</code> (7–365)</td><td><code>JsonResponse</code> (horizons, winners, configs, trails, metrics, tag_to_config, generated_at)</td></tr>
           </tbody>
         </table>
       </div>
@@ -244,12 +255,11 @@ flowchart TD
         <table class="w-full border-collapse">
           <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
           <tbody>
-            <tr><td><code>dashboard</code></td><td>Firestore</td><td>Query filter <code>date &gt;= 90d ago</code></td><td>Data</td></tr>
-            <tr><td><code>dashboard</code></td><td><code>load_winners</code></td><td>—</td><td>Common (membaca file lokal)</td></tr>
-            <tr><td><code>forecasts_api</code></td><td><code>compute_forecast_trails</code></td><td><code>db, max_horizon, window_days</code></td><td>Data</td></tr>
-            <tr><td><code>compute_forecast_trails</code></td><td><code>load_model</code></td><td><code>(tag, h, 'csa')</code></td><td>Data (scalar tuple)</td></tr>
-            <tr><td><code>compute_forecast_trails</code></td><td><code>build_inference_frame</code></td><td><code>db</code></td><td>Data</td></tr>
-            <tr><td><code>build_inference_frame</code></td><td><code>engineer_all_features</code></td><td><code>pd.DataFrame</code> superset</td><td>Stamp (mendapat banyak kolom)</td></tr>
+            <tr><td><code>dashboard</code></td><td>Firestore <code>daily_prices/hmm_states/sentiment_aggregates</code></td><td>Filter <code>date &gt;= 90d ago</code></td><td>Data</td></tr>
+            <tr><td><code>dashboard</code></td><td>Firestore <code>forecast_meta/Daily</code></td><td>Doc ID skalar</td><td>Data (parsed JSON)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td>Firestore <code>forecast_meta/Daily</code></td><td>Doc ID skalar</td><td>Data (parsed JSON)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td>Firestore <code>forecasts</code></td><td><code>stream()</code> + filter Python (<code>predicted_date</code>, <code>horizon</code>)</td><td>Data</td></tr>
+            <tr><td><code>news</code></td><td>Firestore <code>news_articles</code></td><td><code>stream()</code> + sort+paginate Python</td><td>Data</td></tr>
           </tbody>
         </table>
       </div>
