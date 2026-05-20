@@ -27,9 +27,14 @@ For history of what was removed, see that inventory.
   (no authentication — three pages: Dashboard, News, About). The ML
   scheduler is a **local Python script** run ad-hoc by the maintainer;
   it is no longer hosted on Cloud Run.
-- **Prediction inference:** runs **live on the website** using the
-  offline-trained CSA model artefacts under `prediction/saved_models/`.
-  The scheduler does not pre-compute predictions.
+- **Prediction inference:** runs as the **final phase of the local
+  scheduler** (`scheduler/precompute_forecasts.py` calls
+  `prediction/inference.py::compute_forecast_trails` in-process using
+  the offline-trained CSA model artefacts under
+  `prediction/saved_models/`). Results are written to Firestore as a
+  per-(horizon, anchor) `forecasts` collection plus a
+  `forecast_meta/Daily` summary doc. The website does **not** import any
+  ML libraries — it only reads those documents at request time.
 
 ## Pipeline overview
 
@@ -40,19 +45,24 @@ Local CSVs (source of truth)   ──┐
                                  │
                   scheduler/ (local, run ad-hoc)
                                  │
-   1. price_fetcher.py    →  append cpo CSV    →  daily_prices  (Firestore mirror)
+   1. price_fetcher.py    →  append cpo CSV
    2. news_extractor.py   →  scrape + preprocess + FinBERT-Tone
-                          →  append 3 news CSVs →  news_articles (Firestore mirror)
-   3. sentiment_runner.py →  recompute aggregates → sentiment_aggregates
+                          →  append 3 news CSVs
+   3. reconcile.py        →  diff CSVs vs Firestore, write missing/stale
+                              prices, news_articles, sentiment_aggregates
    4. hmm_updater.py      →  hmm_states  (3-state Gaussian HMM)
+   5. precompute_forecasts.py → prediction/inference.py
+                              →  per-(horizon, anchor) docs in `forecasts`
+                              +  winners + metrics in `forecast_meta/Daily`
                                  │
                                  ▼
               website/ (Django app on Vercel — read-only)
                   ├── Dashboard reads daily_prices + hmm_states
-                  │   + sentiment_aggregates and renders chart.
-                  └── /api/forecasts/ runs live XGBoost inference per
-                      horizon using prediction/saved_models/{config}/…
-                      (auto-picks the lowest-MAPE config per horizon).
+                  │   + sentiment_aggregates + forecast_meta/Daily.
+                  └── /api/forecasts/ reads forecast_meta/Daily + streams
+                      the `forecasts` collection, filters in Python, and
+                      reassembles the same payload the JS already consumed.
+                      No ML imports under website/.
 ```
 
 ## Module layout
@@ -83,15 +93,26 @@ prediction/
   crow_search_optimizer.py              CSA implementation
   naive_baseline.py                     Naive predictors (H4 control)
   baselines/                            DM comparison + integration runner
+  feature_engineering.py                Single source of truth for features
+                                         (shared by training + inference)
+  inference.py                          XGBoost forecast engine used by the
+                                         scheduler's precompute phase
   utils/forecast_utils.py               Shared utilities (XGBoost-only)
   saved_models/                         Cached `xgboost_{base,csa}` artifacts
+  winners.json                          Auto-picked winning config per horizon
   output_horizons*/                     Per-ablation prediction outputs
   output_validation/                    Ablation validation summary
 
 scheduler/                       Local ad-hoc data pipeline
   main.py                        Entry: --mode initial | daily
+                                 (5 phases: price → news → reconcile →
+                                  HMM → forecast precompute)
   hmm_updater.py                 Daily HMM state refit
   sentiment_runner.py            FinBERT-Tone on new articles only
+  reconcile.py                   Diff full CSVs vs Firestore, mirror gaps
+  precompute_forecasts.py        Final phase — calls prediction/inference
+                                 in-process, writes forecasts/* +
+                                 forecast_meta/Daily
   news_extractor.py              Scrape + preprocess bridge to news/
   price_fetcher.py               Investing.com fetcher + trading-day helper
   firestore_writer.py            Mirror writes (CSV is source of truth)
@@ -114,12 +135,18 @@ _archive_before_cleanup/         Everything removed by the 2026-04-26 sweep.
 | `users`               | UID                                     | Legacy — historical login data, no longer read or written. Site is now public-facing read-only. |
 | `daily_prices`        | `YYYY-MM-DD`                            | OHLCV. |
 | `hmm_states`          | `{frequency}_{YYYY-MM-DD}`              | Currently `Daily_…` only. |
+| `hmm_models`          | `{frequency}` (e.g. `Daily`)            | Frozen HMM parameters. Nested arrays bundled in `payload_json`. |
 | `news_articles`       | md5(url)                                | Article metadata + FinBERT-Tone sentiment. |
 | `sentiment_aggregates`| `{frequency}_{YYYY-MM-DD}`              | Daily aggregate. |
+| `forecasts`           | `{frequency}_h{horizon}_{anchor_date}`  | One scalar-only doc per (horizon, anchor). Written by `scheduler/precompute_forecasts.py` (~1.4k docs/run for a 365-day × 7-horizon window). Deterministic doc IDs → idempotent full-recompute. |
+| `forecast_meta`       | `{frequency}` (e.g. `Daily`)            | One summary doc per frequency. Native scalars + `payload_json` bundling `winners_by_horizon`, `configs_by_horizon`, `metrics`, `tag_to_config`, `horizons`. Read by both the dashboard view (h=1 metrics badge + 4×7 metrics table) and `forecasts_api`. |
 
-The `predictions` and `HorizonModelParameters` collections were dropped —
-inference is performed live by the website using offline-trained model
-artefacts. CSA hyperparameters are baked into the saved model objects.
+The legacy single-doc `forecasts/latest` JSON-blob store and the
+filesystem `web/winners.py` reader were removed during the precompute
+migration. The `predictions` and `HorizonModelParameters` collections
+remain dropped — inference is now precomputed by the scheduler using
+offline-trained model artefacts. CSA hyperparameters are baked into the
+saved model objects.
 
 ## How to run
 

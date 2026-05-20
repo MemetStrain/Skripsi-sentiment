@@ -15,10 +15,10 @@ Function-Based View (FBV) paradigm of the codebase.
 
 | File | Scope | Contents |
 | --- | --- | --- |
-| `data_flow_diagram.html` | DFD Level 0 + Level 1 | One context bubble + 5 entities; six processes (1.0 Price, 2.0 News, 3.0 Sentiment, 4.0 HMM, 5.0 Dashboard/Live Inference) + 7 data stores (Firestore + filesystem) |
-| `structure_chart.html` | Module hierarchy | Two trees: scheduler pipeline (`scheduler/main.py` → 5 phase functions → utilities) and website (`web/urls.py` → 4 views → `predictor.py` → joblib artefacts) |
-| `flowchart.html` | Control flow | Scheduler daily pipeline (5 steps with skip-if-current decisions) + dashboard request flow (sync render + async `/api/forecasts/`) |
-| `pseudocode.html` | Algorithmic prose | Algorithm 1 — `run_daily_pipeline`; Algorithm 2 — `fit_hmm_with_restarts` (K-Means seeded × 50 restarts + label sort); Algorithm 3 — `compute_forecast_trails` (live XGBoost inference) |
+| `data_flow_diagram.html` | DFD Level 0 + Level 1 | One context bubble + 5 entities; six numbered processes (1.0 Price, 2.0 News, 3.0 Sentiment, 4.0 HMM, 5.0 Forecast Precompute, 6.0 Dashboard) + 9 data stores. Inference is a scheduler-side process (5.0), not a website concern. |
+| `structure_chart.html` | Module hierarchy | Two trees: scheduler pipeline (`scheduler/main.py` → 5 phase functions, including precompute → `prediction/inference.py`) and website (`web/urls.py` → 4 read-only views — no ML imports). |
+| `flowchart.html` | Control flow | Scheduler daily pipeline (5 steps: price → news → reconcile → HMM → precompute) + dashboard request flow (sync render reads `forecast_meta/Daily`; async `/api/forecasts/` reads `forecast_meta/Daily` + streams `forecasts` collection). |
+| `pseudocode.html` | Algorithmic prose | Algorithm 1 — `run_daily_pipeline`; Algorithm 2 — `fit_hmm_with_restarts` (K-Means seeded × 50 restarts + label sort); Algorithm 3 — `compute_forecast_trails` (XGBoost forecast precompute, run by the scheduler). |
 
 All four files use the same template style (Tailwind CDN + Mermaid CDN,
 teal colour scheme matching the original `use_case_diagram.html`), so
@@ -35,7 +35,7 @@ branch (2026-05-11):
 | Authentication | Login/Register/Logout pages, Authenticated User actor | **No auth.** Public read-only dashboard. |
 | Models | RandomForest, XGBoost, ARIMAX, SARIMAX | **XGBoost only**, two variants per (tag, horizon): `base` and `csa`. |
 | Hyperparameter optimisation | Bayesian | **Crow Search Algorithm (CSA)**. Archived: Bayesian. |
-| Prediction count | "56 documents written to Firestore each day" | **Zero predictions written by scheduler.** 56 offline artefact sets live in `prediction/saved_models/`; the dashboard performs **live inference** at request time. |
+| Prediction count | "56 documents written to Firestore each day" | **Scheduler writes ~1.4k forecast point docs per run** (window_days=365 × max_horizon=7) plus one `forecast_meta/Daily` summary. 56 offline artefact sets live in `prediction/saved_models/`; the **scheduler** (not the dashboard) runs `prediction/inference.py::compute_forecast_trails` as its final phase. |
 | HMM at serve time | Daily refit + Viterbi | **Frozen params + online forward filter** (`hmm_models/Daily` doc). Refits only happen offline (`markov/cpo_hmm_states.py`) and are republished via `scheduler/migrate_hmm_to_firestore.py`. |
 | Scheduler modes | Single daily mode | Three modes: `initial` (bulk CSV load), `daily` (incremental), `rebuild-hmm` (republish params). |
 | Sentiment model | "FinBERT (ProsusAI)" | `yiyanghkust/finbert-tone` (3-class: Neutral/Positive/Negative), sentence-level, 0.3/0.7 title/content weighted. |
@@ -74,11 +74,13 @@ Spot-checked against current source:
 | `update_hmm_states`, `_forward_filter`, `_hmm_from_params`, `_build_hmm_features` | `scheduler/hmm_updater.py:157,135,112,79` |
 | `read_hmm_params`, `write_hmm_params`, `write_news_articles`, `write_sentiment_aggregates`, `write_hmm_states_batch`, `write_price[s_batch]` | `scheduler/firestore_writer.py` |
 | `fit_hmm_with_restarts`, `_fit_single`, `forward_filter` | `markov/cpo_hmm_states.py:268,_,287` |
-| `dashboard`, `news`, `about`, `forecasts_api` | `website/web/views.py:19,212,295,179` |
-| `load_winners`, `load_model`, `build_inference_frame`, `compute_forecast_trails` | `website/web/predictor.py:61,77,176,239` |
+| `dashboard`, `news`, `about`, `forecasts_api` | `website/web/views.py` |
+| `load_winners`, `load_model`, `build_inference_frame`, `compute_forecast_trails` | `prediction/inference.py` (relocated from `website/web/predictor.py` during the precompute-forecasts migration) |
+| `precompute_and_write`, `_flatten_trails`, `_delete_legacy_doc` | `scheduler/precompute_forecasts.py` |
+| `_step_precompute` | `scheduler/main.py` (try/except wrapper, langkah 5) |
 | `compute_winners`, tag → config mapping (C1/C2/C3/C4) | `prediction/compute_winners.py:33-43` |
 | Ablation scripts C1–C4, SCRIPT_TAGs `cpo_only / cpo_hmm / cpo_sentiment / full` | `prediction/horizon_forecast_C{1,2,3,4}_*.py` |
-| Firestore collections (`daily_prices`, `news_articles`, `sentiment_aggregates`, `hmm_states`, `hmm_models`) | `scheduler/firestore_writer.py` + `website/web/views.py` + `website/web/predictor.py` |
+| Firestore collections (`daily_prices`, `news_articles`, `sentiment_aggregates`, `hmm_states`, `hmm_models`, `forecasts`, `forecast_meta`) | `scheduler/firestore_writer.py` + `website/web/views.py` |
 
 ## Verification Checklist
 
@@ -88,7 +90,7 @@ Spot-checked against current source:
 - [x] No "Auth User" actor anywhere.
 - [x] No SARIMAX / RF / ARIMAX / Bayesian references.
 - [x] No Login / Register pages.
-- [x] Prediction reality: 56 offline artefact sets + live inference (not 56 Firestore writes).
+- [x] Prediction reality: 56 offline artefact sets + scheduler-side precompute writing ~1.4k forecast docs + 1 forecast_meta/Daily doc per run (not 56 daily Firestore writes; not website-side live inference).
 - [x] Models = XGBoost only across all four ablation configs.
 - [x] HTML template matches existing diagram style (Tailwind + Mermaid CDN, teal palette).
 - [ ] Mermaid renders without errors — **manual verification required**: open each HTML in browser.

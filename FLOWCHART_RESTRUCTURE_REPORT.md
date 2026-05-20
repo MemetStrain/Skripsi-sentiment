@@ -58,8 +58,8 @@ Entry points and decision points extracted from production code (read-only):
 |------|----:|----------------|------------------------|
 | `scheduler/sentiment_runner.py` | 185 | `run_sentiment_on_articles`, `compute_sentiment_aggregates` | empty articles, empty title (degenerate Neutral), batch exception |
 | `scheduler/hmm_updater.py` | 250 | `update_hmm_states(db, write_existing=False)` | params=None (error+return), <50 prices, <30 feat rows, date in existing_dates AND not write_existing |
-| `website/web/views.py` | 297 | `dashboard, news, about, forecasts_api` | Firebase init ValueError, param int parse → 400, winners.json missing (metrics N/A), FileNotFoundError → 503, Exception → 500 |
-| `website/web/predictor.py` | 347 | `compute_forecast_trails, build_inference_frame, load_model, load_winners` | winners.json missing (FileNotFoundError), model artifact missing, no winner for h, NaN in X (skip), feature_cols mismatch (ValueError) |
+| `website/web/views.py` | (post-migration) | `dashboard, news, about, forecasts_api` | Firebase init ValueError, param int parse + clamp, `forecast_meta/Daily` missing → 503 (metrics N/A), `forecasts` collection empty → 503, Exception → 500 |
+| `prediction/inference.py` | (relocated from `website/web/predictor.py` during the precompute-forecasts migration) | `compute_forecast_trails, build_inference_frame, load_model, load_winners` | `winners.json` missing (FileNotFoundError), model artifact missing, no winner for h, NaN in X (skip), feature_cols mismatch (ValueError) — same error paths, now invoked from `scheduler/precompute_forecasts.py` |
 
 ### Phase 3–8 — File Creation
 
