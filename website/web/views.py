@@ -145,9 +145,9 @@ def dashboard(request):
                 continue
             sentiment_list.append({
                 'date':            d.get('date'),
-                'positive_prob':   round(float(d.get('positive_prob', 0)), 4),
-                'negative_prob':   round(float(d.get('negative_prob', 0)), 4),
-                'neutral_prob':    round(float(d.get('neutral_prob',  0)), 4),
+                'positive_prob':   round(float(d.get('positive_prob', 0)), 4)*100,
+                'negative_prob':   round(float(d.get('negative_prob', 0)), 4)*100,
+                'neutral_prob':    round(float(d.get('neutral_prob',  0)), 4)*100,
                 'sentiment_score': round(float(d.get('sentiment_score', 0)), 4),
             })
     except Exception:
