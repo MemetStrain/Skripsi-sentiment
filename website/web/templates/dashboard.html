@@ -88,48 +88,49 @@
             <div id="winners-summary" class="space-y-1.5 text-xs">
                 <!-- Populated from winners_data on render -->
             </div>
+        </div>
 
-            <!-- Feature set per configuration -->
-            <div class="mt-4 pt-3 border-t border-slate-100">
-                <p class="text-xs font-semibold text-slate-600 mb-2">Feature set per config</p>
-                <table class="w-full text-[11px] text-slate-600">
-                    <thead>
-                        <tr class="text-slate-400 border-b border-slate-100">
-                            <th class="text-left font-medium py-1">Config</th>
-                            <th class="text-center font-medium py-1 tip" data-tip="CPO closing price (lagged). Base feature in every configuration.">Price</th>
-                            <th class="text-center font-medium py-1 tip" data-tip="HMM market regime state: Bullish / Neutral / Bearish.">HMM</th>
-                            <th class="text-center font-medium py-1 tip" data-tip="FinBERT aggregated news sentiment.">News</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-1 font-semibold text-slate-700">C1</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                            <td class="text-center text-slate-300">&ndash;</td>
-                            <td class="text-center text-slate-300">&ndash;</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-1 font-semibold text-slate-700">C2</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                            <td class="text-center text-slate-300">&ndash;</td>
-                        </tr>
-                        <tr class="border-b border-slate-50">
-                            <td class="py-1 font-semibold text-slate-700">C3</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                            <td class="text-center text-slate-300">&ndash;</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                        </tr>
-                        <tr>
-                            <td class="py-1 font-semibold text-slate-700">C4</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                            <td class="text-center text-teal-600">&#10003;</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
-            </div>
+        <!-- Feature Set per Configuration -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-5">
+            <h3 class="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wide">Feature Set</h3>
+            <p class="text-xs text-slate-500 mb-3">Which inputs each configuration (C1&ndash;C4) feeds into its model.</p>
+            <table class="w-full text-[11px] text-slate-600">
+                <thead>
+                    <tr class="text-slate-400 border-b border-slate-100">
+                        <th class="text-left font-medium py-1">Config</th>
+                        <th class="text-center font-medium py-1 tip" data-tip="CPO closing price (lagged). Base feature in every configuration.">Price</th>
+                        <th class="text-center font-medium py-1 tip" data-tip="HMM market regime state: Bullish / Neutral / Bearish.">HMM</th>
+                        <th class="text-center font-medium py-1 tip" data-tip="FinBERT aggregated news sentiment.">News</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-slate-50">
+                        <td class="py-1 font-semibold text-slate-700">C1</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                        <td class="text-center text-slate-300">&ndash;</td>
+                        <td class="text-center text-slate-300">&ndash;</td>
+                    </tr>
+                    <tr class="border-b border-slate-50">
+                        <td class="py-1 font-semibold text-slate-700">C2</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                        <td class="text-center text-slate-300">&ndash;</td>
+                    </tr>
+                    <tr class="border-b border-slate-50">
+                        <td class="py-1 font-semibold text-slate-700">C3</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                        <td class="text-center text-slate-300">&ndash;</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td class="py-1 font-semibold text-slate-700">C4</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                        <td class="text-center text-teal-600">&#10003;</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
         </div>
 
     </div><!-- /Sidebar -->
@@ -548,14 +549,14 @@
                     tooltip: {
                         backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#f8fafc',
                         bodyColor: '#f8fafc', borderColor: '#334155', borderWidth: 1, padding: 10,
-                        callbacks: { label: c => c.parsed.y == null ? null : `${c.dataset.label}: ${c.parsed.y.toFixed(4)}` },
+                        callbacks: { label: c => c.parsed.y == null ? null : `${c.dataset.label}: ${c.parsed.y.toFixed(2)}%` },
                     },
                 },
                 scales: {
                     x: { grid: { display: false },
                          ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 }, color: '#64748b' } },
-                    y: { min: 0, max: 1, grid: { color: '#f1f5f9' },
-                         ticks: { callback: v => v.toFixed(2), stepSize: 0.2, font: { size: 11 }, color: '#64748b' } },
+                    y: { min: 0, max: 100, grid: { color: '#f1f5f9' },
+                         ticks: { callback: v => v + '%', stepSize: 20, font: { size: 11 }, color: '#64748b' } },
                 },
             },
         });
