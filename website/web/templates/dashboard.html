@@ -53,7 +53,7 @@
     </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
     <!-- Sidebar -->
     <div class="lg:col-span-1 space-y-4">
@@ -133,6 +133,24 @@
             <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
         </div>
 
+        <!-- Model Metrics Summary (winning CSA at h=1) -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+            <p class="text-xs text-slate-500 mb-1">Best Model (h=1)</p>
+            <h4 class="text-sm font-bold text-slate-800 leading-tight">{{ metrics.best_model }}</h4>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+            <p class="text-xs text-slate-500 mb-1">MAPE</p>
+            <h4 class="text-xl font-bold text-slate-800">{{ metrics.mape }}%</h4>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+            <p class="text-xs text-slate-500 mb-1">R² (price)</p>
+            <h4 class="text-xl font-bold text-slate-800">{{ metrics.r2 }}</h4>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
+            <p class="text-xs text-slate-500 mb-1">Directional Acc.</p>
+            <h4 class="text-xl font-bold text-slate-800">{{ metrics.accuracy }}%</h4>
+        </div>
+
     </div><!-- /Sidebar -->
 
     <!-- Main Content -->
@@ -191,26 +209,6 @@
         </div>
 
     </div><!-- /Main Content -->
-
-    <!-- Right Sidebar — Model Metrics (winning CSA at h=1) -->
-    <div class="lg:col-span-1 space-y-4">
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-            <p class="text-xs text-slate-500 mb-1">Best Model (h=1)</p>
-            <h4 class="text-sm font-bold text-slate-800 leading-tight">{{ metrics.best_model }}</h4>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-            <p class="text-xs text-slate-500 mb-1">MAPE</p>
-            <h4 class="text-xl font-bold text-slate-800">{{ metrics.mape }}%</h4>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-            <p class="text-xs text-slate-500 mb-1">R² (price)</p>
-            <h4 class="text-xl font-bold text-slate-800">{{ metrics.r2 }}</h4>
-        </div>
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-            <p class="text-xs text-slate-500 mb-1">Directional Acc.</p>
-            <h4 class="text-xl font-bold text-slate-800">{{ metrics.accuracy }}%</h4>
-        </div>
-    </div><!-- /Right Sidebar -->
 </div>
 {% endblock %}
 
