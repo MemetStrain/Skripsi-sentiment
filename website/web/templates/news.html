@@ -2,9 +2,37 @@
 
 {% block content %}
 <!-- Page Header -->
-<div class="mb-8">
+<div class="mb-6">
     <h1 class="text-2xl font-bold text-slate-800">CPO News &amp; Sentiment Analysis</h1>
     <p class="text-slate-500 mt-1">Latest news with FinBERT sentiment classification</p>
+    <p class="text-xs text-slate-400 mt-2">
+        Source: news is extracted from the MPOB PrestasiSawit portal
+        (<a href="https://prestasisawit.mpob.gov.my" target="_blank" rel="noopener" class="text-primary hover:underline">prestasisawit.mpob.gov.my</a>).
+        {% if coverage_start and coverage_end %}Coverage: <strong>{{ coverage_start }}</strong> &ndash; <strong>{{ coverage_end }}</strong> ({{ sentiment_counts.total }} articles).{% endif %}
+    </p>
+</div>
+
+<!-- Explanation (moved to top) -->
+<div class="mb-8 bg-slate-50 rounded-lg border border-slate-200 p-6">
+    <h5 class="text-base font-bold text-slate-800 mb-3">About Sentiment Analysis</h5>
+    <p class="text-slate-600 mb-4 text-sm leading-relaxed">
+        <strong>FinBERT</strong> is a pre-trained NLP model specifically designed for financial sentiment analysis.
+        It analyzes news articles and classifies them into:
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div>
+            <strong class="text-green-700">Positive</strong>
+            <span class="text-slate-500"> &mdash; Optimistic outlook, price increases, favorable market conditions</span>
+        </div>
+        <div>
+            <strong class="text-red-700">Negative</strong>
+            <span class="text-slate-500"> &mdash; Pessimistic outlook, price drops, unfavorable market conditions</span>
+        </div>
+        <div>
+            <strong class="text-slate-700">Neutral</strong>
+            <span class="text-slate-500"> &mdash; Balanced or factual information without clear sentiment direction</span>
+        </div>
+    </div>
 </div>
 
 <!-- Sentiment Statistics -->
@@ -210,28 +238,5 @@
     </p>
 </div>
 {% endif %}
-
-<!-- Info Card -->
-<div class="mt-10 bg-slate-50 rounded-lg border border-slate-200 p-6">
-    <h5 class="text-base font-bold text-slate-800 mb-3">About Sentiment Analysis</h5>
-    <p class="text-slate-600 mb-4 text-sm leading-relaxed">
-        <strong>FinBERT</strong> is a pre-trained NLP model specifically designed for financial sentiment analysis.
-        It analyzes news articles and classifies them into:
-    </p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-        <div>
-            <strong class="text-green-700">Positive</strong>
-            <span class="text-slate-500"> &mdash; Optimistic outlook, price increases, favorable market conditions</span>
-        </div>
-        <div>
-            <strong class="text-red-700">Negative</strong>
-            <span class="text-slate-500"> &mdash; Pessimistic outlook, price drops, unfavorable market conditions</span>
-        </div>
-        <div>
-            <strong class="text-slate-700">Neutral</strong>
-            <span class="text-slate-500"> &mdash; Balanced or factual information without clear sentiment direction</span>
-        </div>
-    </div>
-</div>
 
 {% endblock %}

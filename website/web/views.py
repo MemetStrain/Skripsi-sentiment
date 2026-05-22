@@ -296,8 +296,23 @@ def news(request):
     news_list = []
     sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0, 'total': 0}
 
+    # Dataset coverage range (earliest → latest article date), over ALL
+    # articles regardless of the sentiment filter. Dates are ISO "YYYY-MM-DD"
+    # strings, so lexicographic min/max is correct.
+    coverage_start: str | None = None
+    coverage_end: str | None = None
+
     for doc in news_docs:
         d = doc.to_dict()
+
+        # Track full-dataset coverage range before the sentiment-filter skip.
+        _adate = d.get('date', '')
+        if _adate:
+            if coverage_start is None or _adate < coverage_start:
+                coverage_start = _adate
+            if coverage_end is None or _adate > coverage_end:
+                coverage_end = _adate
+
         label = d.get('sentiment_label', 'Neutral')
 
         # Count totals before filtering
@@ -358,6 +373,8 @@ def news(request):
         'sentiment_counts': sentiment_counts,
         'current_filter': sentiment_filter,
         'pagination': pagination,
+        'coverage_start': coverage_start,
+        'coverage_end': coverage_end,
         'page_title': 'CPO News & Sentiment',
     })
 

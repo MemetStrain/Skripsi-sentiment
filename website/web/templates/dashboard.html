@@ -156,26 +156,55 @@
     <!-- Main Content -->
     <div class="lg:col-span-3 space-y-5">
 
+        <!-- Key Insights (auto-generated, client-side; no model re-run) -->
+        <details id="key-insights" open class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <summary class="flex items-center justify-between cursor-pointer select-none list-none">
+                <h3 class="text-base font-bold text-slate-800">Key Insights</h3>
+                <span class="text-xs text-slate-400">click to collapse</span>
+            </summary>
+            <p class="text-xs text-slate-400 mt-1 mb-4">Auto-generated from the data on this page. Computed in-browser — no model is re-run.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Price Movement</h4>
+                    <ul id="ki-price" class="space-y-1.5 text-xs text-slate-600"></ul>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Sentiment Trend</h4>
+                    <ul id="ki-sentiment" class="space-y-1.5 text-xs text-slate-600"></ul>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Model Comparison</h4>
+                    <ul id="ki-comparison" class="space-y-1.5 text-xs text-slate-600"></ul>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Model Metrics</h4>
+                    <ul id="ki-metrics" class="space-y-1.5 text-xs text-slate-600"></ul>
+                </div>
+            </div>
+        </details>
+
         <!-- Price Chart with Rolling Forecast Trails -->
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
             <div class="flex items-start justify-between mb-4">
                 <div>
-                    <h3 class="text-base font-bold text-slate-800">Price History &amp; Rolling Forecasts</h3>
-                    <p class="text-xs text-slate-400 mt-0.5">Each horizon's CSA model produces a rolling forecast trail across the visible window.</p>
+                    <h3 class="text-base font-bold text-slate-800">Price History &amp; Direct Multi Step Horizon Forecast</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Each model produces a forecast value from their respective horizons that trail across the visible window.</p>
                 </div>
                 <div id="forecasts-status" class="text-xs text-slate-400">Loading forecasts…</div>
+            </div>
+            <!-- Horizon model toggle (moved to top) -->
+            <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-slate-500">
+                <span class="text-slate-400">Horizon models (click to toggle):</span>
+                <span id="horizon-legend" class="flex flex-wrap gap-2"></span>
             </div>
             <div class="relative h-[420px] w-full">
                 <canvas id="priceChart"></canvas>
             </div>
-            <!-- State + horizon legend -->
+            <!-- State legend -->
             <div class="flex flex-wrap gap-4 mt-3 text-xs text-slate-500">
                 <span class="tip flex items-center gap-1" data-tip="State where the market condition is going up."><span class="w-3 h-3 rounded-sm bg-green-200 inline-block"></span> Bullish</span>
                 <span class="tip flex items-center gap-1" data-tip="State where the market condition is going down."><span class="w-3 h-3 rounded-sm bg-red-200 inline-block"></span> Bearish</span>
                 <span class="tip flex items-center gap-1" data-tip="State where there is no significant movement in the market."><span class="w-3 h-3 rounded-sm bg-slate-200 inline-block"></span> Neutral</span>
-                <span class="text-slate-300">|</span>
-                <span class="text-slate-400">Horizons (click to toggle):</span>
-                <span id="horizon-legend" class="flex flex-wrap gap-2"></span>
             </div>
         </div>
 
@@ -223,6 +252,13 @@
     };
     const TAGS = ['cpo_only', 'cpo_hmm', 'cpo_sentiment', 'full'];
     const TAG_LABEL = {cpo_only: 'C1', cpo_hmm: 'C2', cpo_sentiment: 'C3', full: 'C4'};
+
+    // Ordinal label for a horizon number: 1→"1st", 2→"2nd", 3→"3rd", 4→"4th", …
+    function ordinalHorizon(h) {
+        const s = ['th', 'st', 'nd', 'rd'];
+        const v = h % 100;
+        return h + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
 
     // -----------------------------------------------------------------------
     // Server-rendered context
@@ -348,7 +384,7 @@
                 if (idx !== -1) data[idx] = p.predicted_price;
             }
             priceChart.data.datasets.push({
-                label: `+${t.horizon}d (${t.config})`,
+                label: `${ordinalHorizon(t.horizon)} Horizon Model (${t.config})`,
                 data,
                 borderColor: color,
                 backgroundColor: color + '14',
@@ -374,7 +410,7 @@
                         class="horizon-toggle tip flex items-center gap-1 px-1.5 py-0.5 rounded border transition ${on ? 'border-slate-200 text-slate-600' : 'border-transparent text-slate-300 line-through'}"
                         data-tip="Model that predicts the ${t.horizon}-day-ahead horizon. Click to ${on ? 'hide' : 'show'} this trail.">
                     <span class="inline-block w-5 h-0 border-t-2 border-dashed" style="border-color:${on ? color : '#cbd5e1'}"></span>
-                    <span>+${t.horizon}d (${t.config})</span>
+                    <span>${ordinalHorizon(t.horizon)} Horizon Model (${t.config})</span>
                 </button>`;
         }).join('');
         el.querySelectorAll('.horizon-toggle').forEach(btn => {
@@ -411,6 +447,173 @@
         el.innerHTML = rows.join('');
     }
 
+    // -----------------------------------------------------------------------
+    // Key Insights — client-side only. Reads chartData, sentimentData globals
+    // and the /api/forecasts response (may be null on failure). No backend.
+    // -----------------------------------------------------------------------
+    const KI_STATE_LABEL = { 0: 'Bearish', 1: 'Bullish', 2: 'Neutral' };
+    const KI_TAG_OF_CONFIG = { C1: 'cpo_only', C2: 'cpo_hmm', C3: 'cpo_sentiment', C4: 'full' };
+
+    function kiMean(a) { return a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN; }
+    function kiStd(a)  { const m = kiMean(a); return a.length > 1 ? Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / (a.length - 1)) : NaN; }
+    function kiPearson(x, y) {
+        const n = Math.min(x.length, y.length);
+        if (n < 3) return NaN;
+        const mx = kiMean(x.slice(0, n)), my = kiMean(y.slice(0, n));
+        let num = 0, dx = 0, dy = 0;
+        for (let i = 0; i < n; i++) { const a = x[i] - mx, b = y[i] - my; num += a * b; dx += a * a; dy += b * b; }
+        const den = Math.sqrt(dx * dy);
+        return den === 0 ? NaN : num / den;
+    }
+    function kiFmt(v, suffix = '', d = 2) { return Number.isFinite(v) ? v.toFixed(d) + suffix : 'n/a'; }
+    function kiSigned(v, d = 2) { return Number.isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(d) + '%' : 'n/a'; }
+    // One <li>. tone ∈ {'', 'good', 'warn', 'bad'} sets the value color.
+    function kiLi(label, value, note = '', tone = '') {
+        const toneCls = { good: 'text-green-600', warn: 'text-amber-600', bad: 'text-red-600' }[tone] || 'text-slate-800';
+        const noteHtml = note ? `<span class="block text-[11px] text-slate-400 leading-snug">${note}</span>` : '';
+        return `<li><span class="text-slate-500">${label}:</span> <span class="font-semibold ${toneCls}">${value}</span>${noteHtml}</li>`;
+    }
+    function kiNote(text) { return `<li class="text-slate-400">${text}</li>`; }
+
+    function renderKeyInsights(forecasts) {
+        // ---- PRICE (chartData) ----------------------------------------------
+        const cd = chartData.filter(d => d.actual != null);
+        const elPrice = document.getElementById('ki-price');
+        if (cd.length < 2) { if (elPrice) elPrice.innerHTML = kiNote('Not enough price data.'); }
+        else {
+            const last = cd[cd.length - 1];
+            const cur = last.actual;
+            // A1 regime run-length
+            let dur = 0; const st = last.state;
+            for (let i = cd.length - 1; i >= 0 && cd[i].state === st; i--) dur++;
+            const regime = KI_STATE_LABEL[st] ?? 'Unknown';
+            const regimeTone = st === 1 ? 'good' : (st === 0 ? 'bad' : '');
+            // A2 trailing returns + 90d daily log-return volatility
+            const ret = k => { const i = cd.length - 1 - k; return i >= 0 ? (cur / cd[i].actual - 1) * 100 : NaN; };
+            const lr = []; for (let i = Math.max(1, cd.length - 90); i < cd.length; i++) lr.push(Math.log(cd[i].actual / cd[i - 1].actual));
+            const vol = kiStd(lr) * 100;
+            // A3 position in 90d range
+            const w = cd.slice(-90).map(d => d.actual);
+            const lo = Math.min(...w), hi = Math.max(...w);
+            const pos = hi > lo ? (cur - lo) / (hi - lo) * 100 : NaN;
+
+            const rows = [];
+            rows.push(kiLi('Current regime', `${regime} · ${dur}d`, 'Latest HMM state run-length.', regimeTone));
+            rows.push(kiLi('Trailing return', `${kiSigned(ret(7))} / ${kiSigned(ret(30))} / ${kiSigned(ret(90))}`, '7d / 30d / 90d.', ret(30) >= 0 ? 'good' : 'bad'));
+            rows.push(kiLi('Volatility (90d)', kiFmt(vol, '%'), 'Std. of daily log-returns.'));
+            rows.push(kiLi('Range position', kiFmt(pos, '%'), 'Where current price sits in the 90d high–low band.'));
+
+            // A4 forecast-implied move (needs trails)
+            const trails = (forecasts && forecasts.trails) || [];
+            const winners = (forecasts && forecasts.winners) || {};
+            const metrics = forecasts && forecasts.metrics;
+            const implied = h => {
+                const t = trails.find(t => t.horizon === h);
+                if (!t || !t.points || !t.points.length) return null;
+                const p = t.points[t.points.length - 1].predicted_price;
+                return { cfg: t.config, move: (p / cur - 1) * 100 };
+            };
+            const da = h => { try { return metrics[winners[String(h)]][String(h)].CSA.da; } catch (e) { return NaN; } };
+            const i1 = implied(1), i7 = implied(7);
+            if (i1) rows.push(kiLi('Implied move h=1', `${kiSigned(i1.move)} (${i1.cfg})`, `Model projection vs today. DA ${kiFmt(da(1), '%')} — read with caution.`, i1.move >= 0 ? 'good' : 'bad'));
+            if (i7) rows.push(kiLi('Implied move h=7', `${kiSigned(i7.move)} (${i7.cfg})`, `DA ${kiFmt(da(7), '%')}. Longer horizon = larger error.`, 'warn'));
+            elPrice.innerHTML = rows.join('');
+        }
+
+        // ---- SENTIMENT (sentimentData + chartData) --------------------------
+        const elSent = document.getElementById('ki-sentiment');
+        const sd = sentimentData
+            .filter(d => d.positive_prob != null && d.negative_prob != null)
+            .slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+        if (sd.length < 3) { if (elSent) elSent.innerHTML = kiNote('Not enough sentiment data.'); }
+        else {
+            const net = sd.map(d => d.positive_prob - d.negative_prob);
+            const latest = net[net.length - 1];
+            const n7 = kiMean(net.slice(-7)), n30 = kiMean(net.slice(-30));
+            const n90 = net.slice(-90), mu = kiMean(n90), sg = kiStd(n90);
+            const z = sg > 0 ? (latest - mu) / sg : NaN;
+            // B3 correlation: Sentiment_t vs Next-Day LogReturn
+            const pIdx = {}; cd.forEach((d, i) => { pIdx[d.date] = i; });
+            const sx = [], sy = [];
+            for (const s of sd) {
+                const i = pIdx[s.date];
+                if (i != null && i + 1 < cd.length) { sx.push(s.positive_prob - s.negative_prob); sy.push(Math.log(cd[i + 1].actual / cd[i].actual)); }
+            }
+            const r = kiPearson(sx, sy);
+            // B4 divergence vs regime
+            const lastCd = cd[cd.length - 1];
+            const regime = KI_STATE_LABEL[lastCd ? lastCd.state : 2];
+            const sign = latest > 0.02 ? 'positive' : (latest < -0.02 ? 'negative' : 'flat');
+            const diverges = (regime === 'Bullish' && sign === 'negative') || (regime === 'Bearish' && sign === 'positive');
+
+            const rows = [];
+            rows.push(kiLi('Net sentiment', kiFmt(latest, '', 3), `${latest >= n7 ? 'Rising' : 'Falling'} vs 7d (${kiFmt(n7, '', 3)}), 30d (${kiFmt(n30, '', 3)}).`, latest >= 0 ? 'good' : 'bad'));
+            rows.push(kiLi('Sentiment z-score (90d)', kiFmt(z, 'σ'), Math.abs(z) > 1.5 ? 'Unusually ' + (z > 0 ? 'positive' : 'negative') + ' day.' : 'Within normal range.', Math.abs(z) > 1.5 ? 'warn' : ''));
+            rows.push(kiLi('Corr → next-day return', `r = ${kiFmt(r, '', 3)} (n=${sy.length})`, Math.abs(r) < 0.2 ? 'Weak/negligible — consistent with the thesis limitation.' : 'Moderate; not causal.', Math.abs(r) < 0.2 ? 'warn' : ''));
+            rows.push(kiLi('Sentiment vs regime', diverges ? 'Divergence' : 'Aligned', diverges ? `Price regime ${regime} but sentiment ${sign} — watch.` : `Both point ${sign === 'flat' ? 'neutral' : sign}.`, diverges ? 'warn' : 'good'));
+            elSent.innerHTML = rows.join('');
+        }
+
+        // ---- MODEL COMPARISON & METRICS (needs forecasts.metrics) -----------
+        const elCmp = document.getElementById('ki-comparison');
+        const elMet = document.getElementById('ki-metrics');
+        const metrics = forecasts && forecasts.metrics;
+        const winners = (forecasts && forecasts.winners) || {};
+        const configs = (forecasts && forecasts.configs) || {};
+        const m = (tag, h, v) => { try { return metrics[tag][String(h)][v]; } catch (e) { return null; } };
+
+        if (!metrics) {
+            if (elCmp) elCmp.innerHTML = kiNote('Metrics unavailable (forecasts API not loaded).');
+            if (elMet) elMet.innerHTML = kiNote('Metrics unavailable (forecasts API not loaded).');
+            return;
+        }
+
+        // C1 winner vs C1 baseline (CSA MAPE)
+        const deltas = [];
+        for (let h = 1; h <= 7; h++) {
+            const wt = winners[String(h)], wm = m(wt, h, 'CSA'), c1 = m('cpo_only', h, 'CSA');
+            if (wm && c1) deltas.push(c1.mape - wm.mape);
+        }
+        const avgGain = kiMean(deltas);
+        // C2 feature pattern: config → horizons
+        const byCfg = {};
+        for (let h = 1; h <= 7; h++) { const c = configs[String(h)]; if (c) (byCfg[c] = byCfg[c] || []).push(h); }
+        const pattern = Object.entries(byCfg).map(([c, hs]) => `${c}: h${hs.join(',')}`).join(' · ');
+        // C3 CSA vs BASE gain (winner tag)
+        const csaDeltas = [];
+        for (let h = 1; h <= 7; h++) { const wt = winners[String(h)], b = m(wt, h, 'BASE'), c = m(wt, h, 'CSA'); if (b && c) csaDeltas.push(b.mape - c.mape); }
+        const csaGain = kiMean(csaDeltas);
+        // C4 winner margin at h=1
+        const at = h => ['cpo_only', 'cpo_hmm', 'cpo_sentiment', 'full'].map(t => { const x = m(t, h, 'CSA'); return x ? { t, mape: x.mape } : null; }).filter(Boolean).sort((a, b) => a.mape - b.mape);
+        const a1 = at(1); const margin = a1.length >= 2 ? a1[1].mape - a1[0].mape : NaN;
+
+        const cmp = [];
+        cmp.push(kiLi('Best vs C1 (avg)', kiSigned(-avgGain) + ' MAPE', `Winner beats price-only baseline by ${kiFmt(avgGain)} pts avg.`, avgGain > 0 ? 'good' : 'warn'));
+        cmp.push(kiLi('Feature pattern', pattern || 'n/a', 'Winning config per horizon group.'));
+        cmp.push(kiLi('CSA tuning gain', kiFmt(csaGain) + ' pts', Math.abs(csaGain) < 0.02 ? 'Negligible vs BASE.' : 'MAPE reduction from CSA search.', Math.abs(csaGain) < 0.02 ? 'warn' : 'good'));
+        cmp.push(kiLi('Winner margin h=1', kiFmt(margin) + ' pts', margin < 0.05 ? 'Within noise — winner is not decisively better.' : 'Gap to 2nd-best config.', margin < 0.05 ? 'warn' : ''));
+        elCmp.innerHTML = cmp.join('');
+
+        // D1 honest skill check (winner @ h=1)
+        const w1 = winners['1'], sk = m(w1, 1, 'CSA');
+        // D2 error growth h1→h7
+        const w7 = winners['7'], s7 = m(w7, 7, 'CSA');
+        const growth = (sk && s7) ? s7.mape / sk.mape : NaN;
+        // D3 DA vs 50%
+        let above = 0, maxDA = -Infinity, maxH = null;
+        for (let h = 1; h <= 7; h++) { const x = m(winners[String(h)], h, 'CSA'); if (x) { if (x.da > 50) above++; if (x.da > maxDA) { maxDA = x.da; maxH = h; } } }
+
+        const met = [];
+        if (sk) {
+            met.push(kiLi('Skill check (h=1)', `R²(price) ${kiFmt(sk.r2_price)} · DA ${kiFmt(sk.da, '%')}`,
+                `Log-return R² = ${kiFmt(sk.r2_logreturn)}. High price R² reflects autocorrelation, not directional skill.`,
+                (sk.da < 55 || sk.r2_logreturn <= 0) ? 'warn' : 'good'));
+        }
+        met.push(kiLi('Error growth', kiFmt(growth, '×'), `MAPE h=1 (${kiFmt(sk ? sk.mape : NaN)}%) → h=7 (${kiFmt(s7 ? s7.mape : NaN)}%). Trust short horizons.`, 'warn'));
+        met.push(kiLi('DA > 50%', `${above}/7 horizons`, `Best DA ${kiFmt(maxDA, '%')} at h=${maxH ?? '—'}. Naive comparison (no PT test here).`, above >= 4 ? 'good' : 'warn'));
+        elMet.innerHTML = met.join('');
+    }
+
     async function loadForecasts() {
         const status = document.getElementById('forecasts-status');
         try {
@@ -424,17 +627,20 @@
             renderHorizonLegend(data);
             renderWinnersSummary(data);
             plotTrails(data);
+            renderKeyInsights(data);
             status.textContent = `Forecasts updated · ${(data.trails || []).length} horizons`;
             status.className = 'text-xs text-slate-400';
         } catch (e) {
             status.textContent = `Forecast unavailable: ${e.message}`;
             status.className = 'text-xs text-red-500';
             renderWinnersSummary({});  // fallback to server-rendered winnersData
+            renderKeyInsights(null);   // still fill Price & Sentiment from globals
         }
     }
 
     // Render the static winners summary immediately (server-side data) so the
     // sidebar isn't blank during the API round-trip.
+    renderKeyInsights(null);  // Price & Sentiment populate now; model sections fill after /api/forecasts
     renderWinnersSummary({});
 
     loadForecasts();
