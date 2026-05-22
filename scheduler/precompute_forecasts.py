@@ -143,6 +143,7 @@ def precompute_and_write(db) -> int:
         'metrics':            payload.get('metrics', {}),
         'tag_to_config':      payload.get('tag_to_config', {}),
         'horizons':           payload.get('horizons', []),
+        'forward_fan':        payload.get('forward_fan', []),
     })
 
     _delete_legacy_doc(db)

@@ -328,11 +328,58 @@ def compute_forecast_trails(
             'points':  points,
         })
 
+    # ---- Direct multi-step forward fan ----------------------------------
+    # Unlike the rolling trails (which all converge on T+1), the fan has a
+    # single forecast origin: the last actual anchor T. For each horizon h it
+    # predicts T+h with that horizon's winning CSA model, giving one point per
+    # horizon spread across T+1..T+max_horizon. These are exactly the points
+    # the convergence cap (`target_idx > last_idx + 1`) skips. The frontend
+    # draws them as one connected line joined to the actual close at T.
+    forward_fan = []  # list[dict], one entry per horizon
+    anchor_row   = df.iloc[[last_idx]]
+    anchor_close = float(anchor_row['Close'].iloc[0])
+    anchor_date  = dates_sorted[last_idx]
+
+    # Next `max_horizon` trading days after T — the fan's predicted dates.
+    future_days = []
+    _fd = anchor_date
+    for _ in range(max_horizon):
+        _fd = _next_trading_day_after(_fd)
+        future_days.append(_fd)
+
+    for h in range(1, max_horizon + 1):
+        tag = winners.get(h)
+        if not tag:
+            continue
+        try:
+            model, scaler, feature_cols = load_model(tag, h, variant='csa')
+            X = select_feature_matrix(anchor_row, feature_cols)
+        except Exception as e:  # missing model or feature mismatch
+            logger.warning(f'Forward fan h={h} skipped: {e}')
+            continue
+        if np.isnan(X).any():
+            continue
+        if scaler is not None:
+            X = scaler.transform(X)
+        log_ret    = float(model.predict(X)[0])
+        pred_price = float(anchor_close * np.exp(np.clip(log_ret, -10, 10)))
+        forward_fan.append({
+            'horizon':         h,
+            'tag':             tag,
+            'config':          configs.get(h, ''),
+            'anchor_date':     anchor_date.strftime('%Y-%m-%d'),
+            'anchor_price':    round(anchor_close, 2),
+            'predicted_date':  future_days[h - 1].strftime('%Y-%m-%d'),
+            'predicted_price': round(pred_price, 2),
+            'log_return':      round(log_ret, 6),
+        })
+
     return {
         'horizons':     list(range(1, max_horizon + 1)),
         'winners':      {str(h): t for h, t in winners.items()},
         'configs':      {str(h): c for h, c in configs.items()},
         'trails':       trails,
+        'forward_fan':  forward_fan,
         'metrics':      winners_payload.get('metrics', {}),
         'tag_to_config': winners_payload.get('tag_to_config', {}),
         'generated_at': datetime.utcnow().isoformat() + 'Z',

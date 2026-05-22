@@ -271,6 +271,7 @@ def forecasts_api(request):
             'winners':       winners,
             'configs':       configs,
             'trails':        trails,
+            'forward_fan':   meta_payload.get('forward_fan', []),
             'metrics':       meta_payload.get('metrics', {}),
             'tag_to_config': meta_payload.get('tag_to_config', {}),
             'generated_at':  meta_raw.get('generated_at', ''),

@@ -197,6 +197,14 @@
                 <span class="text-slate-400">Horizon models (click to toggle):</span>
                 <span id="horizon-legend" class="flex flex-wrap gap-2"></span>
             </div>
+            <!-- Experimental: direct multi-step forward fan -->
+            <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+                <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" id="fan-mode-toggle" class="accent-primary">
+                    <span class="text-slate-600 font-medium">Experimental: direct multi-step forward fan</span>
+                </label>
+                <span class="text-slate-400">— one connected forecast from the last actual day (T → T+1…T+7). Horizon toggles then affect historical trails only.</span>
+            </div>
             <div class="relative h-[420px] w-full">
                 <canvas id="priceChart"></canvas>
             </div>
@@ -330,7 +338,10 @@
                         label: (c) => {
                             const v = c.parsed.y;
                             if (v == null) return null;
-                            return `${c.dataset.label}: MYR ${v.toLocaleString('id-ID')}`;
+                            const ds = c.dataset;
+                            const name = (ds._isFan && ds.pointLabels && ds.pointLabels[c.dataIndex])
+                                ? ds.pointLabels[c.dataIndex] : ds.label;
+                            return `${name}: MYR ${v.toLocaleString('id-ID')}`;
                         },
                     },
                 },
@@ -349,22 +360,51 @@
     // Rolling forecast overlay — fetch /api/forecasts/ and add per-horizon datasets
     // -----------------------------------------------------------------------
     let lastForecasts = null;
+    let fanMode = false;  // experimental forward-fan mode (off by default)
     const visibleHorizons = new Set([1, 2, 3, 4, 5, 6, 7]);
+
+    // Date of the last actual close — the fan's single forecast origin (T).
+    function getLastActualDate() {
+        for (let i = chartData.length - 1; i >= 0; i--) {
+            if (chartData[i].actual != null) return chartData[i].date;
+        }
+        return labels[labels.length - 1];
+    }
+
+    // Wire the experimental fan-mode toggle (re-render the chart on change).
+    (function () {
+        const t = document.getElementById('fan-mode-toggle');
+        if (t) t.addEventListener('change', () => {
+            fanMode = t.checked;
+            if (lastForecasts) plotTrails(lastForecasts);
+        });
+    })();
 
     function plotTrails(forecasts) {
         const allTrails = forecasts.trails || [];
-        const trails = allTrails.filter(t => visibleHorizons.has(t.horizon));
-        if (!allTrails.length) return;
+        const fanRaw = forecasts.forward_fan || [];
+        if (!allTrails.length && !(fanMode && fanRaw.length)) return;
 
-        // Build the union of dates across all trails + actuals so x-axis covers
-        // the future projection points from the longer horizons.
+        // In fan mode, clip trails to predicted_date <= T so horizon toggles
+        // affect only the historical region; the future is owned by the fan.
+        const lastActualDate = getLastActualDate();
+        const keep = p => !fanMode || p.predicted_date <= lastActualDate;
+
+        const visTrails = allTrails
+            .filter(t => visibleHorizons.has(t.horizon))
+            .map(t => ({ ...t, points: t.points.filter(keep) }));
+
+        const fan = (fanMode && fanRaw.length)
+            ? fanRaw.slice().sort((a, b) => (a.predicted_date < b.predicted_date ? -1 : 1))
+            : [];
+
+        // Union of all x dates: actuals + visible trail points + fan dates.
         const dateSet = new Set(labels);
-        for (const t of trails) {
-            for (const p of t.points) dateSet.add(p.predicted_date);
-        }
+        for (const t of visTrails) for (const p of t.points) dateSet.add(p.predicted_date);
+        for (const p of fan) dateSet.add(p.predicted_date);
         const extLabels = [...dateSet].sort();
 
-        // Re-anchor the actual close dataset onto the extended labels.
+        // Re-anchor the actual close onto the extended labels.
         const closeData = new Array(extLabels.length).fill(null);
         labels.forEach((d, i) => {
             const idx = extLabels.indexOf(d);
@@ -373,10 +413,11 @@
         priceChart.data.labels = extLabels;
         priceChart.data.datasets[0].data = closeData;
 
-        // Drop any prior trail datasets, keep dataset[0] (close).
+        // Drop any prior trail/fan datasets, keep dataset[0] (close).
         priceChart.data.datasets.length = 1;
 
-        for (const t of trails) {
+        // Per-horizon trail datasets (dashed) — toggleable, historical-only in fan mode.
+        for (const t of visTrails) {
             const color = HORIZON_COLORS[t.horizon] || '#64748b';
             const data  = new Array(extLabels.length).fill(null);
             for (const p of t.points) {
@@ -394,6 +435,38 @@
                 pointBackgroundColor: color,
             });
         }
+
+        // Forward fan: one solid connected line joined to the actual at T,
+        // always shown (independent of horizon toggles), per-point tooltips.
+        if (fan.length) {
+            const data = new Array(extLabels.length).fill(null);
+            const pointLabels = new Array(extLabels.length).fill(null);
+            const aIdx = extLabels.indexOf(fan[0].anchor_date);
+            if (aIdx !== -1) {
+                data[aIdx] = fan[0].anchor_price;          // connect to the actual close at T
+                pointLabels[aIdx] = 'Actual close (anchor)';
+            }
+            for (const p of fan) {
+                const idx = extLabels.indexOf(p.predicted_date);
+                if (idx !== -1) {
+                    data[idx] = p.predicted_price;
+                    pointLabels[idx] = `${ordinalHorizon(p.horizon)} Horizon Model (${p.config})`;
+                }
+            }
+            priceChart.data.datasets.push({
+                label: 'Forward Fan (direct multi-step)',
+                _isFan: true,
+                pointLabels,
+                data,
+                borderColor: '#0f766e',                     // primary teal — distinct from horizon colours
+                backgroundColor: 'rgba(15,118,110,0.08)',
+                borderWidth: 2.4, fill: false,
+                tension: 0.2, spanGaps: true,
+                pointRadius: 3, pointHoverRadius: 5,
+                pointBackgroundColor: '#0f766e',
+            });
+        }
+
         priceChart.update();
     }
 

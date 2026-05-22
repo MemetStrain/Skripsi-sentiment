@@ -263,6 +263,7 @@ def write_forecast_meta(db, meta: Dict) -> None:
             'metrics':            meta.get('metrics', {}),
             'tag_to_config':      meta.get('tag_to_config', {}),
             'horizons':           meta.get('horizons', []),
+            'forward_fan':        meta.get('forward_fan', []),
         }),
     })
     logger.info(f'Wrote forecast meta doc: forecast_meta/{frequency}')
