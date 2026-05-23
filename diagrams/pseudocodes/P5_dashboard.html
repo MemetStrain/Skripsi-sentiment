@@ -131,7 +131,7 @@
     latest_date = (price_list[-1].date) <span class="kw">IF</span> price_list <span class="kw">ELSE</span> "N/A"
 
     <span class="cmt">// (5) winners + metrics dari forecast_meta/Daily — D9 (Firestore, bukan filesystem)</span>
-    metrics = { mape: 0, r2: 0, accuracy: 0, best_model: "N/A" }
+    metrics = { mape: 0, smape: 0, accuracy: 0, best_model: "N/A" }
     winners_payload = {}
     <span class="kw">TRY</span>
         meta_doc = db.collection("forecast_meta").document("Daily").get()
