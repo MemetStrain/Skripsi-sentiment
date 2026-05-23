@@ -299,20 +299,25 @@ def calculate_metrics(y_true_lr, y_pred_lr, close_anchor):
 # =============================================================================
 
 def csa_objective_sklearn(model_type, X_train, y_train, cv_folds):
+    """CSA fitness = mean CV RMSE on the log-return target.
+
+    RMSE aligns with XGBoost's squared-error training loss and is
+    scale-stable near zero (unlike MAPE on log returns, which blows up
+    when the target crosses zero).
+    """
     def objective(params):
         tscv = TimeSeriesSplit(n_splits=cv_folds)
-        scores = []
         model = create_sklearn_model(model_type, params)
+        scores = []
         for train_idx, val_idx in tscv.split(X_train):
             try:
                 model.fit(X_train[train_idx], y_train[train_idx])
                 y_pred = model.predict(X_train[val_idx])
                 y_true = y_train[val_idx]
-                mape = np.mean(np.abs((y_true - y_pred) / (np.abs(y_true) + 1e-9))) * 100
-                scores.append(mape)
+                scores.append(float(np.sqrt(np.mean((y_true - y_pred) ** 2))))
             except Exception:
                 scores.append(np.inf)
-        return np.mean(scores)
+        return float(np.mean(scores))
     return objective
 
 
