@@ -88,7 +88,6 @@ def main():
 
         cmd = [
             sys.executable, os.path.join(HERE, script),
-            '--interval', args.interval,
             '--horizons', ','.join(map(str, hs)),
             '--csa-population', str(args.csa_population),
             '--csa-iterations', str(args.csa_iterations),

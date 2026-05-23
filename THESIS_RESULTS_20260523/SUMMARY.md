@@ -55,7 +55,15 @@ Source: `tabel_4.10_base_testing.csv`
 
 Source: `tabel_4.11_csa_winners_testing.csv`
 
-_(empty)_
+|   Horizon | Config   | Ablation      | Optimization   |   MAPE |   sMAPE |     RMSE |   Directional_Accuracy |   n_samples |
+|----------:|:---------|:--------------|:---------------|-------:|--------:|---------:|-----------------------:|------------:|
+|         1 | C3       | cpo_sentiment | CSA            | 1.2281 |  1.2257 |  69.1165 |                52.6923 |         263 |
+|         2 | C3       | cpo_sentiment | CSA            | 1.7492 |  1.7453 |  96.7518 |                50.5792 |         263 |
+|         3 | C3       | cpo_sentiment | CSA            | 2.1571 |  2.1515 | 118.595  |                51.711  |         263 |
+|         4 | C4       | full          | CSA            | 2.4894 |  2.4819 | 134.196  |                51.3308 |         263 |
+|         5 | C4       | full          | CSA            | 2.8059 |  2.7941 | 152.145  |                51.145  |         263 |
+|         6 | C2       | cpo_hmm       | CSA            | 2.972  |  2.9569 | 163.446  |                51.6484 |         275 |
+|         7 | C2       | cpo_hmm       | CSA            | 3.2049 |  3.1858 | 175.849  |                51.6364 |         275 |
 
 ## Tabel 4.12 — BASE pairwise Diebold-Mariano (HLN-corrected)
 
@@ -110,7 +118,15 @@ Source: `tabel_4.12_dm_base_pairwise.csv`. `better_model = tie` when p >= 0.05; 
 
 Source: `tabel_4.13_dm_csa_vs_base_winners.csv`. Per winner cell, tests whether CSA-tuned hyperparams beat the BASE defaults.
 
-_(empty)_
+|   Horizon | Winner_Config   |   n |   DM_star |   p_value | significant_at_0.05   | better_model   |
+|----------:|:----------------|----:|----------:|----------:|:----------------------|:---------------|
+|         1 | C3              | 263 |   -4.0125 |    0.0001 | True                  | CSA            |
+|         2 | C3              | 263 |   -3.0623 |    0.0024 | True                  | CSA            |
+|         3 | C3              | 263 |   -1.9496 |    0.0523 | False                 | tie            |
+|         4 | C4              | 263 |   -1.1131 |    0.2667 | False                 | tie            |
+|         5 | C4              | 263 |   -2.0415 |    0.0422 | True                  | CSA            |
+|         6 | C2              | 275 |   -2.4008 |    0.017  | True                  | CSA            |
+|         7 | C2              | 275 |   -3.7521 |    0.0002 | True                  | CSA            |
 
 ## H4 sufficiency — C4 BASE vs naive random walk
 

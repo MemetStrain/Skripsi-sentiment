@@ -43,12 +43,12 @@
     "Volatility_x_RSI_lag1"
   ],
   "params": {
-    "n_estimators": 1500,
+    "n_estimators": 50,
     "max_depth": 3,
     "learning_rate": 0.01,
-    "subsample": 0.6,
-    "colsample_bytree": 0.6698255064898191,
+    "subsample": 0.6058972025180736,
+    "colsample_bytree": 0.6483793418682054,
     "min_child_weight": 8
   },
-  "saved_at": "2026-05-23T14:16:10.575706"
+  "saved_at": "2026-05-23T19:46:58.076951"
 }

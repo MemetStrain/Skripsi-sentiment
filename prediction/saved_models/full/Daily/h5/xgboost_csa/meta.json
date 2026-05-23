@@ -55,12 +55,12 @@
     "Sentiment_x_Return_lag1"
   ],
   "params": {
-    "n_estimators": 54,
-    "max_depth": 7,
+    "n_estimators": 50,
+    "max_depth": 3,
     "learning_rate": 0.01,
-    "subsample": 0.7200554745038317,
-    "colsample_bytree": 0.9068340811958135,
-    "min_child_weight": 6
+    "subsample": 0.6187347310857573,
+    "colsample_bytree": 0.7769093624533278,
+    "min_child_weight": 10
   },
-  "saved_at": "2026-05-23T14:31:05.214346"
+  "saved_at": "2026-05-23T19:22:40.715247"
 }
