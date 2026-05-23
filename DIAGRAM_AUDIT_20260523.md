@@ -137,5 +137,20 @@ Tidak ada perubahan styling/CSS/layout. Hanya konten.
 - [x] FASE 0 — Inventaris (20 diagram + 1 prompt doc)
 - [x] FASE 1/2 — Cross-check elemen-per-elemen + FASE 2 checklist
 - [x] FASE 3 — Tabel diskrepansi (laporan ini)
-- [ ] FASE 4 — Koreksi 2 file (akan dikerjakan setelah commit laporan)
-- [ ] FASE 5 — Re-verify post-correction
+- [x] FASE 4 — Koreksi 2 file selesai:
+  - `cce4b91` `docs(diagram): align pseudocode.html with current code`
+  - `ff26b29` `docs(diagram): align P5_dashboard pseudocode with current code`
+- [x] FASE 5 — Re-verify post-correction: grep menyeluruh pola R²/MAPE-CSA/
+  BASE-tuned/multi-model/init_params=initial_states/lowest base MAPE pada
+  seluruh 20 file diagram aktif → **0 hit**. Semua diagram konsisten
+  dengan kode di branch `fix/critical-major-cleanup`.
+
+## 6. Kriteria penerimaan (final)
+
+- [x] Inventory lengkap (20 file diagram + 1 prompt doc historical)
+- [x] Tabel diskrepansi per file
+- [x] Semua item FASE 2 diperiksa
+- [x] Tidak ada referensi R² / BASE-tuned / MAPE-CSA / Viterbi (aktif) /
+      multi-model dropdown / CSA-semua-konfig tersisa di diagram aktif
+- [x] Styling/visual tidak berubah; hanya konten (1 narasi text, 1 dict key)
+- [x] Tidak ada file kode Python yang tersentuh
