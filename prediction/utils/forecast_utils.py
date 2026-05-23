@@ -36,14 +36,11 @@ MODELS_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 HORIZONS = [1, 2, 3, 4, 5, 6, 7]
 
-BASE_PARAMS = {
-    'xgboost': {
-        'n_estimators': 2000, 'max_depth': 6, 'learning_rate': 0.001,
-        'subsample': 0.9, 'colsample_bytree': 0.9, 'min_child_weight': 1,
-        'early_stopping_rounds': 50,
-        'random_state': RANDOM_STATE, 'verbose': True,
-    },
-}
+# True XGBoost library defaults. `create_sklearn_model("xgboost", {})`
+# still injects random_state=42 for reproducibility, but no other
+# hyperparameter is set by us in the BASE path (so "BASE" actually means
+# what it says). CSA continues to tune its own param set on top.
+BASE_PARAMS: dict = {'xgboost': {}}
 
 CSA_PARAM_SPACES = {
     'xgboost': [
