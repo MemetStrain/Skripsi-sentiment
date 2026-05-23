@@ -37,15 +37,16 @@ _PREDICTION_DIR = os.path.dirname(_THIS_DIR)
 _PROJECT_ROOT = os.path.dirname(_PREDICTION_DIR)
 OUTPUT_DIR = os.path.join(_THIS_DIR, "output")
 
+_OUTPUTS_ROOT = os.path.join(_PREDICTION_DIR, "output_horizons")
 CONFIGS: Dict[str, str] = {
-    "C1_cpo_only":      os.path.join(_PREDICTION_DIR, "output_horizons_cpo_only"),
-    "C2_cpo_hmm":       os.path.join(_PREDICTION_DIR, "output_horizons_cpo_hmm"),
-    "C3_cpo_sentiment": os.path.join(_PREDICTION_DIR, "output_horizons_cpo_sentiment"),
-    "C4_full":          os.path.join(_PREDICTION_DIR, "output_horizons"),
+    "C1_cpo_only":      os.path.join(_OUTPUTS_ROOT, "cpo_only"),
+    "C2_cpo_hmm":       os.path.join(_OUTPUTS_ROOT, "cpo_hmm"),
+    "C3_cpo_sentiment": os.path.join(_OUTPUTS_ROOT, "cpo_sentiment"),
+    "C4_full":          os.path.join(_OUTPUTS_ROOT, "full"),
 }
-SPLITS = ("testing", "validation")
+SPLITS = ("testing",)
 INTERVAL = "Daily"
-METRICS: List[str] = ["MAPE", "sMAPE", "RMSE", "Directional_Accuracy", "R2_Price", "R2_LogReturn"]
+METRICS: List[str] = ["MAPE", "sMAPE", "RMSE", "Directional_Accuracy"]
 KEY_COLS: List[str] = ["Horizon", "Model", "Optimization"]
 OPT_ORDER = {"CSA": 0, "BASE": 1, "NAIVE": 2}
 

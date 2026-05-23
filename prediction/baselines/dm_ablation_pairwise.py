@@ -43,16 +43,21 @@ if _PREDICTION_DIR not in sys.path:
 from naive_baseline import diebold_mariano_test  # noqa: E402
 
 
+# Each ablation script writes to prediction/output_horizons/{tag}/Daily/...
+# (consolidated layout — was previously four sibling output_horizons_* dirs).
+_OUTPUTS_ROOT = os.path.join(_PREDICTION_DIR, "output_horizons")
 ABLATIONS: Dict[str, str] = {
-    "C1_cpo_only":      os.path.join(_PREDICTION_DIR, "output_horizons_cpo_only"),
-    "C2_cpo_hmm":       os.path.join(_PREDICTION_DIR, "output_horizons_cpo_hmm"),
-    "C3_cpo_sentiment": os.path.join(_PREDICTION_DIR, "output_horizons_cpo_sentiment"),
-    "C4_full":          os.path.join(_PREDICTION_DIR, "output_horizons"),
+    "C1_cpo_only":      os.path.join(_OUTPUTS_ROOT, "cpo_only"),
+    "C2_cpo_hmm":       os.path.join(_OUTPUTS_ROOT, "cpo_hmm"),
+    "C3_cpo_sentiment": os.path.join(_OUTPUTS_ROOT, "cpo_sentiment"),
+    "C4_full":          os.path.join(_OUTPUTS_ROOT, "full"),
 }
 
 VARIANTS: Tuple[str, ...] = ("base", "csa")
 HORIZONS: Tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
-SPLITS: Tuple[str, ...] = ("testing", "validation")
+# Pipeline produces CV + testing splits only; "validation" was an older naming
+# from the pre-cutoff train/test/val layout and no longer applies.
+SPLITS: Tuple[str, ...] = ("testing",)
 INTERVAL = "Daily"
 OUTPUT_DIR = os.path.join(_THIS_DIR, "output")
 

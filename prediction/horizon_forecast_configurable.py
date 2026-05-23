@@ -46,6 +46,7 @@ from xgboost import XGBRegressor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.forecast_utils import (
     PROJECT_ROOT,
+    BASE_PARAMS,
     calculate_metrics,
     save_model_artifacts,
     csa_objective_sklearn,
@@ -56,11 +57,6 @@ from feature_engineering import build_unified_features
 warnings.filterwarnings('ignore')
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (14, 8)
-
-
-def _xgb_mape_metric(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """MAPE with epsilon guard — avoids inf when log-return target is near zero."""
-    return float(np.mean(np.abs((y_true - y_pred) / (np.abs(y_true) + 1e-9))) * 100)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -95,19 +91,10 @@ VAL_CUTOFF: str = '2026-01-01'  # data before this = CV; data from this onward =
 CV_FOLDS:   int = 5             # TimeSeriesSplit folds on pre-2026 data
 
 # ── XGBoost parameters ────────────────────────────────────────────────────────
-# Set to {} to use XGBoost library defaults.
-XGB_PARAMS: dict = {
-    'n_estimators':          20000,
-    'max_depth':             9,
-    'learning_rate':         0.01,
-    'subsample':             0.6715220780746508,
-    'colsample_bytree':      0.6,
-    'min_child_weight':      8,
-    'reg_alpha':             0.1,
-    'reg_lambda':            0.5,
-    'early_stopping_rounds': 5,
-    'eval_metric':           _xgb_mape_metric,
-}
+# BASE params resolved from the single source of truth in forecast_utils.
+# After FASE 2.3 this is the library default ({}); CSA still tunes its own
+# hyperparameter set independently.
+XGB_PARAMS: dict = dict(BASE_PARAMS['xgboost'])
 
 # ── CSA (Crow Search Algorithm) hyperparameter optimisation ──────────────────
 USE_CSA:        bool = True  # set False or pass --no-csa to skip
@@ -452,9 +439,8 @@ def run_horizon(horizon: int, merged: pd.DataFrame,
         'n_test':         int(len(data['X_test'])),
         'n_cv_folds':     CV_FOLDS,
         'test_cutoff':    str(val_cutoff.date()),
-        'xgb_params_base': {k: (v.__name__ if callable(v) else v) for k, v in XGB_PARAMS.items()},
-        'xgb_params_csa':  ({k: (v.__name__ if callable(v) else v) for k, v in csa_best_params.items()}
-                            if csa_best_params else None),
+        'xgb_params_base': dict(XGB_PARAMS),
+        'xgb_params_csa':  (dict(csa_best_params) if csa_best_params else None),
         'config': {
             'USE_HMM': USE_HMM, 'USE_SENTIMENT': USE_SENTIMENT,
             'USE_CPO_VARS': USE_CPO_VARS,
