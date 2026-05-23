@@ -43,6 +43,7 @@ if HERE not in sys.path:
 from utils.forecast_utils import (  # noqa: E402
     VAL_CUTOFF, RANDOM_STATE,
     CSA_PARAM_SPACES, BASE_PARAMS,
+    calculate_metrics,
     create_sklearn_model, csa_objective_sklearn,
 )
 from crow_search_optimizer import CrowSearchOptimizer  # noqa: E402
@@ -73,30 +74,12 @@ def split_at(df: pd.DataFrame, cutoff: pd.Timestamp
 
 
 # ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
-
-def _da(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    mask = (y_true != 0)
-    if mask.sum() == 0:
-        return float('nan')
-    return float(np.mean(np.sign(y_true[mask]) == np.sign(y_pred[mask])) * 100)
-
-
-def _mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.mean(np.abs((y_true - y_pred) / (np.abs(y_true) + 1e-9))) * 100)
-
-
-def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-
-
-# ---------------------------------------------------------------------------
 # One CSA run + final fit
 # ---------------------------------------------------------------------------
 
 def run_one(X_pre: np.ndarray, y_pre: np.ndarray,
             X_test: np.ndarray, y_test: np.ndarray,
+            close_test: np.ndarray,
             seed: int, population: int, iterations: int, cv_folds: int
             ) -> Dict:
     """Fit RobustScaler on pre-test, run CSA with `seed`, refit on full pre-test
@@ -131,15 +114,17 @@ def run_one(X_pre: np.ndarray, y_pre: np.ndarray,
     model.fit(Xp, y_pre, verbose=False)
     y_hat = model.predict(Xt)
 
+    metrics = calculate_metrics(y_test, y_hat, close_test)
+
     return {
         'seed':           seed,
         'cv_best_score':  float(result.best_score),
         'cv_iterations':  int(result.total_iterations),
         'cv_evals':       int(result.total_evaluations),
         'elapsed_sec':    round(elapsed, 1),
-        'test_da':        _da(y_test, y_hat),
-        'test_mape':      _mape(y_test, y_hat),
-        'test_rmse':      _rmse(y_test, y_hat),
+        'test_da':        metrics['Directional_Accuracy'],
+        'test_mape':      metrics['MAPE'],
+        'test_rmse':      metrics['RMSE'],
         **{f'param_{k}': v for k, v in result.best_params.items()},
     }
 
@@ -201,8 +186,9 @@ def run_one_pair(tag: str, horizon: int, args) -> Dict:
         y_pre  = pre['Target'].values
         X_test = test[feature_cols].values
         y_test = test['Target'].values
+        close_test = test['Close'].values
 
-        res = run_one(X_pre, y_pre, X_test, y_test,
+        res = run_one(X_pre, y_pre, X_test, y_test, close_test,
                       seed=seed, population=args.population,
                       iterations=args.iterations, cv_folds=args.cv_folds)
         res['label']  = label

@@ -16,7 +16,6 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import RobustScaler
 from xgboost import XGBRegressor
@@ -234,60 +233,72 @@ def create_sklearn_model(model_type: str, params: Optional[Dict] = None):
     return XGBRegressor(**filtered, verbosity=1, random_state=RANDOM_STATE)
 
 
-def calculate_metrics(y_true_lr, y_pred_lr, close_anchor):
-    """
-    Compute all metrics in original price space by inverting log return predictions.
+def calculate_metrics(lr_true, lr_pred, close_origin):
+    """Canonical forecasting metrics on price (inverted from log-return).
 
-    Parameters
-    ----------
-    y_true_lr    : np.ndarray — actual h-step log returns (test targets)
-    y_pred_lr    : np.ndarray — predicted h-step log returns
-    close_anchor : np.ndarray — Close price at each prediction row (Close_t)
+    Single source of truth — every horizon_forecast_C{1..4}, the
+    configurable runner, the CSA stability check and naive_evaluator
+    must call this function rather than redefining their own MAPE / DA
+    helpers.
 
-    Inverse transform:
-        price_actual[i]    = close_anchor[i] * exp(y_true_lr[i])
-        price_predicted[i] = close_anchor[i] * exp(y_pred_lr[i])
+    R^2 is intentionally omitted (council 6d decision): R2_Price is
+    inflated by the per-row anchor, and the "model beats benchmark"
+    evidence comes from H4's DM test versus naive random walk.
+
+    Directional accuracy excludes rows with actual zero change
+    (sign(lr_true) == 0), so naive RW with lr_pred=0 doesn't get a free
+    50% on a degenerate denominator.
     """
-    mask = ~np.isnan(y_pred_lr)
+    lr_true      = np.asarray(lr_true, dtype=float)
+    lr_pred      = np.asarray(lr_pred, dtype=float)
+    close_origin = np.asarray(close_origin, dtype=float)
+    n = len(lr_true)
+    if not (len(lr_pred) == len(close_origin) == n):
+        raise ValueError("length mismatch in calculate_metrics inputs")
+    if n == 0:
+        raise ValueError("empty input arrays")
+
+    mask = ~np.isnan(lr_pred)
     if mask.sum() < 2:
         return {
-            'MAPE': np.inf, 'sMAPE': np.inf,
-            'RMSE': np.inf,
-            'Directional_Accuracy': 0.0,
-            'R2_Price': -np.inf, 'R2_LogReturn': -np.inf,
+            'MAPE': float('nan'), 'sMAPE': float('nan'),
+            'RMSE': float('nan'), 'Directional_Accuracy': float('nan'),
+            'n_samples': int(mask.sum()),
         }
 
-    lr_true    = y_true_lr[mask]
-    lr_pred    = y_pred_lr[mask]
-    lr_clipped = np.clip(lr_pred, -10, 10)          # guard exp() overflow on predictions
-    anchor     = close_anchor[mask]
+    lr_true_m = lr_true[mask]
+    lr_pred_m = lr_pred[mask]
+    anchor    = close_origin[mask]
 
-    # Clip lr_true for metric computation only — real data is unlikely to overflow
-    # but guard defensively. CSV Actual_Price uses raw unclipped values for honest reporting.
-    lr_true_clipped = np.clip(lr_true, -10, 10)
-    price_actual    = anchor * np.exp(lr_true_clipped)
-    price_predicted = anchor * np.exp(lr_clipped)
+    # Clip log-returns for exp() stability only — actual reported prices in
+    # the prediction CSVs use the unclipped values for honest reporting.
+    lr_true_clip = np.clip(lr_true_m, -10, 10)
+    lr_pred_clip = np.clip(lr_pred_m, -10, 10)
+    price_actual = anchor * np.exp(lr_true_clip)
+    price_pred   = anchor * np.exp(lr_pred_clip)
 
-    mape = np.mean(np.abs((price_actual - price_predicted)
-                          / (np.abs(price_actual) + 1e-8))) * 100
-    smape = np.mean(200 * np.abs(price_actual - price_predicted)
-                    / (np.abs(price_actual) + np.abs(price_predicted) + 1e-8))
+    nz = np.abs(price_actual) > 1e-9
+    mape = (float(np.mean(np.abs((price_actual[nz] - price_pred[nz])
+                                 / price_actual[nz])) * 100.0)
+            if nz.any() else float('nan'))
 
-    rmse     = np.sqrt(mean_squared_error(price_actual, price_predicted))
-    r2_price = r2_score(price_actual, price_predicted)
-    r2_lr    = r2_score(lr_true, lr_pred)
+    denom = np.maximum((np.abs(price_actual) + np.abs(price_pred)) / 2.0, 1e-9)
+    smape = float(np.mean(np.abs(price_actual - price_pred) / denom) * 100.0)
 
-    # Directional accuracy uses unclipped lr_pred — intentional.
-    # Clipping only guards exp() stability and should not affect sign detection.
-    dir_acc = np.mean((lr_true > 0) == (lr_pred > 0)) * 100 if len(lr_true) > 1 else 0.0
+    rmse = float(np.sqrt(np.mean((price_actual - price_pred) ** 2)))
+
+    # DA in log-return space; exclude actual zero-change rows (council 6d).
+    dir_mask = lr_true_m != 0.0
+    da = (float(np.mean(np.sign(lr_true_m[dir_mask])
+                        == np.sign(lr_pred_m[dir_mask])) * 100.0)
+          if dir_mask.any() else float('nan'))
 
     return {
-        'MAPE':                 round(mape,     4),
-        'sMAPE':                round(smape,    4),
-        'RMSE':                 round(rmse,     4),
-        'Directional_Accuracy': round(dir_acc,  4),
-        'R2_Price':             round(r2_price, 4),
-        'R2_LogReturn':         round(r2_lr,    4),
+        'MAPE':                 round(mape, 4),
+        'sMAPE':                round(smape, 4),
+        'RMSE':                 round(rmse, 4),
+        'Directional_Accuracy': round(da, 4),
+        'n_samples':            int(mask.sum()),
     }
 
 
