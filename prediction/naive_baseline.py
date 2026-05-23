@@ -5,10 +5,9 @@ Provides the two baseline pieces still used by the H4 evaluation pipeline:
 
 - :func:`predict_historical_mean` - constant-price prediction used by
   ``baselines/naive_evaluator.py`` when converting to log-return space.
-- :func:`diebold_mariano_test` - canonical DM test (Diebold & Mariano
-  1995) used by ``baselines/dm_comparison.py`` and
-  ``baselines/dm_ablation_pairwise.py``. FASE 2.1 adds the
-  Harvey-Leybourne-Newbold (1997) small-sample correction on top.
+- :func:`diebold_mariano_test` - DM test with the Harvey, Leybourne &
+  Newbold (1997) small-sample correction; used by
+  ``baselines/dm_comparison.py`` and ``baselines/dm_ablation_pairwise.py``.
 
 Older helpers (``predict_random_walk``, ``predict_seasonal_naive``,
 ``compute_naive_metrics``, ``run_naive_baselines``) were removed in the
@@ -62,15 +61,24 @@ def diebold_mariano_test(
     h: int = 1,
     loss: str = "squared",
 ) -> Tuple[float, float]:
-    """Diebold-Mariano test for equal predictive accuracy.
+    """DM test with Harvey-Leybourne-Newbold (1997) small-sample correction.
 
-    Tests H0: ``E[loss(a) - loss(b)] = 0`` against the two-sided
-    alternative. A negative DM statistic with a low p-value indicates
-    model A has lower loss than model B.
+    Returns ``(HLN-corrected DM*, two-sided p-value from t_{n-1})``.
 
-    Reference: Diebold, F. X., & Mariano, R. S. (1995). Comparing
-    predictive accuracy. *Journal of Business & Economic Statistics*,
-    13(3), 253-263.
+    A negative DM* with a low p-value indicates model A has lower loss
+    (better accuracy) than model B. The HLN multiplier shrinks the raw
+    DM statistic and the test uses a t_{n-1} reference distribution
+    rather than the standard normal, both of which make the test
+    noticeably more conservative for small n and h > 1.
+
+    References
+    ----------
+    - Diebold, F. X., & Mariano, R. S. (1995). Comparing predictive
+      accuracy. *Journal of Business & Economic Statistics*, 13(3),
+      253-263.
+    - Harvey, D., Leybourne, S., & Newbold, P. (1997). Testing the
+      equality of prediction mean squared errors. *International
+      Journal of Forecasting*, 13(2), 281-291.
     """
     e_a = np.asarray(errors_model_a, dtype=float)
     e_b = np.asarray(errors_model_b, dtype=float)
@@ -91,11 +99,14 @@ def diebold_mariano_test(
     if lrv <= 0:
         return float("nan"), float("nan")
 
-    dm_stat = d_mean / np.sqrt(lrv / n)
+    dm = d_mean / np.sqrt(lrv / n)
+    # HLN small-sample correction factor.
+    hln = np.sqrt((n + 1 - 2 * h + h * (h - 1) / n) / n)
+    dm_star = dm * hln
 
     from scipy import stats
-    p_value = 2.0 * (1.0 - stats.norm.cdf(abs(dm_stat)))
-    return float(dm_stat), float(p_value)
+    p_value = 2.0 * (1.0 - stats.t.cdf(abs(dm_star), df=n - 1))
+    return float(dm_star), float(p_value)
 
 
 # =============================================================================
