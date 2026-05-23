@@ -342,7 +342,7 @@
         (dipanggil dari <code>scheduler/precompute_forecasts.py::precompute_and_write</code>
         sebagai langkah 5 <code>run_daily_update</code> / <code>run_initial_load</code>).
         Untuk setiap horizon h ∈ {1..7}, model XGBoost pemenang (lowest base
-        MAPE per horizon) dipakai untuk memprediksi log-return, lalu
+        RMSE per horizon) dipakai untuk memprediksi log-return, lalu
         dieksponensiasi menjadi harga prediksi. Hasil ditulis ke koleksi
         <code>forecasts</code> (per-titik, scalar fields) + dokumen
         <code>forecast_meta/Daily</code> (winners + metrics dibundel ke
