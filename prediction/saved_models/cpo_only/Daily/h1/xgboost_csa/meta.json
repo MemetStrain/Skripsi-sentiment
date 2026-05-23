@@ -28,12 +28,12 @@
     "Bollinger_Band_Width_lag1"
   ],
   "params": {
-    "n_estimators": 50,
+    "n_estimators": 662,
     "max_depth": 3,
-    "learning_rate": 0.010000570948466774,
-    "subsample": 0.9511405447859553,
-    "colsample_bytree": 0.6253701307751718,
-    "min_child_weight": 3
+    "learning_rate": 0.01,
+    "subsample": 0.6538210057678961,
+    "colsample_bytree": 0.742010988945479,
+    "min_child_weight": 9
   },
-  "saved_at": "2026-05-18T20:57:24.707025"
+  "saved_at": "2026-05-23T13:46:51.381240"
 }

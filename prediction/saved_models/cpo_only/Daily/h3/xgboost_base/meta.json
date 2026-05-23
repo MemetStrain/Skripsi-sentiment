@@ -27,16 +27,6 @@
     "MACD_Signal_lag1",
     "Bollinger_Band_Width_lag1"
   ],
-  "params": {
-    "n_estimators": 2000,
-    "max_depth": 6,
-    "learning_rate": 0.001,
-    "subsample": 0.9,
-    "colsample_bytree": 0.9,
-    "min_child_weight": 1,
-    "early_stopping_rounds": 50,
-    "random_state": 42,
-    "verbose": true
-  },
-  "saved_at": "2026-05-18T21:17:01.272019"
+  "params": {},
+  "saved_at": "2026-05-23T13:59:32.953446"
 }
