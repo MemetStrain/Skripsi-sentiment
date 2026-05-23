@@ -156,32 +156,54 @@
     <!-- Main Content -->
     <div class="lg:col-span-3 space-y-5">
 
-        <!-- Key Insights (auto-generated, client-side; no model re-run) -->
-        <details id="key-insights" open class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <summary class="flex items-center justify-between cursor-pointer select-none list-none">
-                <h3 class="text-base font-bold text-slate-800">Key Insights</h3>
-                <span class="text-xs text-slate-400">click to collapse</span>
-            </summary>
-            <p class="text-xs text-slate-400 mt-1 mb-4">Auto-generated from the data on this page. Computed in-browser — no model is re-run.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                <div>
-                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Price Movement</h4>
-                    <ul id="ki-price" class="space-y-1.5 text-xs text-slate-600"></ul>
+        <!-- Key Insights: always-visible hero strip + collapsible details (client-side) -->
+        <div id="key-insights" class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
+            <h3 class="text-base font-bold text-slate-800 mb-1">Key Insights</h3>
+            <p class="text-xs text-slate-400 mb-4">The one thing to read from each chart. Computed in-browser — no model is re-run.</p>
+
+            <!-- Hero strip: one key takeaway per chart -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div class="bg-slate-50 rounded-lg border border-slate-100 p-4">
+                    <div class="text-xs text-slate-500 mb-2">Market regime · price chart</div>
+                    <div id="ki-hero-price"></div>
                 </div>
-                <div>
-                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Sentiment Trend</h4>
-                    <ul id="ki-sentiment" class="space-y-1.5 text-xs text-slate-600"></ul>
+                <div class="bg-slate-50 rounded-lg border border-slate-100 p-4">
+                    <div class="text-xs text-slate-500 mb-2">News sentiment · sentiment chart</div>
+                    <div id="ki-hero-sentiment"></div>
                 </div>
-                <div>
-                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Model Comparison</h4>
-                    <ul id="ki-comparison" class="space-y-1.5 text-xs text-slate-600"></ul>
+                <div class="bg-slate-50 rounded-lg border border-slate-100 p-4">
+                    <div class="text-xs text-slate-500 mb-2">Feature comparison · model table</div>
+                    <div id="ki-hero-comparison"></div>
                 </div>
-                <div>
-                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Model Metrics</h4>
-                    <ul id="ki-metrics" class="space-y-1.5 text-xs text-slate-600"></ul>
+                <div class="bg-slate-50 rounded-lg border border-slate-100 p-4">
+                    <div class="text-xs text-slate-500 mb-2">Forecast reliability · metrics</div>
+                    <div id="ki-hero-metrics"></div>
                 </div>
             </div>
-        </details>
+
+            <!-- Collapsible full breakdown (the previous per-category lists) -->
+            <details class="mt-5 border-t border-slate-100 pt-3">
+                <summary class="text-xs font-semibold text-slate-500 cursor-pointer select-none">Details — full per-category breakdown</summary>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mt-4">
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Price Movement</h4>
+                        <ul id="ki-price" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Sentiment Trend</h4>
+                        <ul id="ki-sentiment" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Model Comparison</h4>
+                        <ul id="ki-comparison" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Model Metrics</h4>
+                        <ul id="ki-metrics" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    </div>
+                </div>
+            </details>
+        </div>
 
         <!-- Price Chart with Rolling Forecast Trails -->
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
@@ -687,6 +709,127 @@
         elMet.innerHTML = met.join('');
     }
 
+    // -----------------------------------------------------------------------
+    // Key Insights HERO — one headline per chart. Client-side only; reuses
+    // kiMean / kiStd / kiFmt. Price & Sentiment come from globals; Comparison &
+    // Metrics need the /api/forecasts response (null → "pending").
+    // -----------------------------------------------------------------------
+    function renderKeyInsightsHero(forecasts) {
+        // ---- Regime tile -------------------------------------------------
+        const cd = chartData.filter(d => d.actual != null);
+        const elP = document.getElementById('ki-hero-price');
+        if (elP && cd.length) {
+            const st = cd[cd.length - 1].state;
+            let dur = 0;
+            for (let i = cd.length - 1; i >= 0 && cd[i].state === st; i--) dur++;
+            const label = { 0: 'Bearish', 1: 'Bullish', 2: 'Neutral' }[st] ?? 'Unknown';
+            const tone  = st === 1 ? 'text-green-600' : (st === 0 ? 'text-red-600' : 'text-amber-600');
+            const chip  = (name, on, onCls) => `<span class="px-2 py-0.5 rounded ${on ? onCls : 'bg-slate-100 text-slate-400'}">${name}</span>`;
+            const note  = st === 1 ? 'Upward regime in recent sessions.'
+                        : st === 0 ? 'Downward regime in recent sessions.'
+                        : 'No clear up or down trend right now.';
+            elP.innerHTML = `
+                <div class="text-xl font-bold ${tone} mb-3">${label} <span class="text-sm font-normal text-slate-400">· ${dur} days</span></div>
+                <div class="flex gap-1.5 text-[11px] mb-2">
+                    ${chip('Bearish', st === 0, 'bg-red-100 text-red-700 font-semibold')}
+                    ${chip('Neutral', st === 2, 'bg-amber-100 text-amber-700 font-semibold')}
+                    ${chip('Bullish', st === 1, 'bg-green-100 text-green-700 font-semibold')}
+                </div>
+                <div class="text-[11px] text-slate-400 leading-snug">${note}</div>`;
+        } else if (elP) {
+            elP.innerHTML = `<div class="text-sm text-slate-400">Not enough price data.</div>`;
+        }
+
+        // ---- Sentiment tile (sign + z-score — scale-robust) --------------
+        const elS = document.getElementById('ki-hero-sentiment');
+        const sd = sentimentData
+            .filter(d => d.positive_prob != null && d.negative_prob != null)
+            .slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+        if (elS && sd.length >= 3) {
+            const net    = sd.map(d => d.positive_prob - d.negative_prob);
+            const latest = net[net.length - 1];
+            const n7     = kiMean(net.slice(-7));
+            const n90    = net.slice(-90), mu = kiMean(n90), sg = kiStd(n90);
+            const z      = sg > 0 ? (latest - mu) / sg : 0;
+            const rising = latest >= n7;
+            const sign   = latest > 0 ? 'Positive' : (latest < 0 ? 'Negative' : 'Neutral');
+            const tone   = latest > 0 ? 'text-green-600' : (latest < 0 ? 'text-red-600' : 'text-slate-600');
+            const dotCls = latest > 0 ? 'bg-green-500' : (latest < 0 ? 'bg-red-500' : 'bg-slate-400');
+            const pos    = Math.max(8, Math.min(92, 50 + Math.max(-2, Math.min(2, z)) / 2 * 40));
+            elS.innerHTML = `
+                <div class="text-xl font-bold ${tone} mb-3">${sign}, ${rising ? 'rising' : 'falling'} <span class="text-sm">${rising ? '▲' : '▼'}</span></div>
+                <div class="relative h-1.5 bg-slate-100 rounded-full mb-1">
+                    <span class="absolute left-1/2 -top-1 w-px h-3.5 bg-slate-300"></span>
+                    <span class="absolute -top-1 w-3 h-3 rounded-full ${dotCls}" style="left:${pos}%; transform:translateX(-50%)"></span>
+                </div>
+                <div class="flex justify-between text-[11px] text-slate-400 mb-2"><span>negative</span><span>positive</span></div>
+                <div class="text-[11px] text-slate-400 leading-snug">Trending ${rising ? 'up' : 'down'} versus the past week.</div>`;
+        } else if (elS) {
+            elS.innerHTML = `<div class="text-sm text-slate-400">Not enough sentiment data.</div>`;
+        }
+
+        // ---- Comparison + Metrics tiles (need forecasts.metrics) ---------
+        const elC = document.getElementById('ki-hero-comparison');
+        const elM = document.getElementById('ki-hero-metrics');
+        const metrics = forecasts && forecasts.metrics;
+        const winners = (forecasts && forecasts.winners) || {};
+        const m = (tag, h, v) => { try { return metrics[tag][String(h)][v]; } catch (e) { return null; } };
+
+        if (!metrics) {
+            if (elC) elC.innerHTML = `<div class="text-sm text-slate-400">Metrics pending…</div>`;
+            if (elM) elM.innerHTML = `<div class="text-sm text-slate-400">Metrics pending…</div>`;
+            return;
+        }
+
+        // Comparison: 4 configs' h=1 CSA MAPE — "nearly tied" vs "C# leads".
+        const TAGS4 = [['cpo_only', 'C1'], ['cpo_hmm', 'C2'], ['cpo_sentiment', 'C3'], ['full', 'C4']];
+        const mapes = TAGS4.map(([tag, cfg]) => { const x = m(tag, 1, 'CSA'); return { cfg, mape: x ? x.mape : null }; }).filter(d => d.mape != null);
+        if (elC && mapes.length) {
+            const sorted = mapes.slice().sort((a, b) => a.mape - b.mape);
+            const best   = sorted[0];
+            const margin = sorted.length >= 2 ? sorted[1].mape - best.mape : NaN;
+            const tied   = !(margin >= 0.05);   // within ~0.05 MAPE points = noise
+            const lo = Math.min(...mapes.map(d => d.mape)), hi = Math.max(...mapes.map(d => d.mape));
+            const barH = mp => (hi - lo < 1e-6) ? 24 : Math.round(18 + (hi - mp) / (hi - lo) * 12);
+            const bars = mapes.map(d => {
+                const win = d.cfg === best.cfg;
+                return `<div class="flex-1 flex flex-col items-center gap-0.5">
+                    <span class="w-full rounded-t" style="height:${barH(d.mape)}px; background:${win ? '#0f766e' : '#cbd5e1'}"></span>
+                    <span class="text-[10px] ${win ? 'text-primary font-semibold' : 'text-slate-400'}">${d.cfg}</span></div>`;
+            }).join('');
+            elC.innerHTML = `
+                <div class="text-xl font-bold text-slate-800 mb-3">${tied ? 'Nearly tied' : best.cfg + ' leads'}</div>
+                <div class="flex items-end gap-2.5 h-9 mb-2">${bars}</div>
+                <div class="text-[11px] text-slate-400 leading-snug">${tied
+                    ? `Margin ≈ ${kiFmt(margin)} pts MAPE — adding sentiment/HMM barely changes accuracy.`
+                    : `${best.cfg} beats the rest by ${kiFmt(margin)} pts MAPE.`}</div>`;
+        }
+
+        // Metrics: winner DA at h=1 and h=7 against the 50% chance line.
+        const s1 = m(winners['1'], 1, 'CSA');
+        const s7 = m(winners['7'], 7, 'CSA');
+        if (elM && s1) {
+            const da1 = s1.da, da7 = s7 ? s7.da : NaN;
+            const tone = da1 < 55 ? 'text-amber-600' : 'text-green-600';
+            const head = da1 < 55 ? 'Near coin-flip at 1 day' : `${kiFmt(da1, '%')} at 1 day`;
+            const posOf = da => Math.max(2, Math.min(98, (da - 40) / 30 * 100));
+            const ref50 = (50 - 40) / 30 * 100;
+            elM.innerHTML = `
+                <div class="text-xl font-bold ${tone} mb-3">${head}</div>
+                <div class="relative h-2 bg-slate-100 rounded-full mb-1.5">
+                    <span class="absolute -top-1 w-px h-4 bg-slate-300" style="left:${ref50}%"></span>
+                    <span class="absolute -top-0.5 w-2.5 h-2.5 rounded-full bg-amber-500" style="left:${posOf(da1)}%; transform:translateX(-50%)"></span>
+                    ${Number.isFinite(da7) ? `<span class="absolute -top-0.5 w-2.5 h-2.5 rounded-full bg-green-500" style="left:${posOf(da7)}%; transform:translateX(-50%)"></span>` : ''}
+                </div>
+                <div class="flex gap-3 text-[11px] text-slate-400 mb-2">
+                    <span><span class="inline-block w-2 h-2 rounded-full bg-amber-500 align-middle mr-1"></span>1 day ${kiFmt(da1, '%')}</span>
+                    ${Number.isFinite(da7) ? `<span><span class="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mr-1"></span>7 day ${kiFmt(da7, '%')}</span>` : ''}
+                    <span>| 50% = chance</span>
+                </div>
+                <div class="text-[11px] text-slate-400 leading-snug">Direction barely beats chance short-term; high price R² is autocorrelation.</div>`;
+        }
+    }
+
     async function loadForecasts() {
         const status = document.getElementById('forecasts-status');
         try {
@@ -701,6 +844,7 @@
             renderWinnersSummary(data);
             plotTrails(data);
             renderKeyInsights(data);
+            renderKeyInsightsHero(data);
             status.textContent = `Forecasts updated · ${(data.trails || []).length} horizons`;
             status.className = 'text-xs text-slate-400';
         } catch (e) {
@@ -708,12 +852,14 @@
             status.className = 'text-xs text-red-500';
             renderWinnersSummary({});  // fallback to server-rendered winnersData
             renderKeyInsights(null);   // still fill Price & Sentiment from globals
+            renderKeyInsightsHero(null);
         }
     }
 
     // Render the static winners summary immediately (server-side data) so the
     // sidebar isn't blank during the API round-trip.
     renderKeyInsights(null);  // Price & Sentiment populate now; model sections fill after /api/forecasts
+    renderKeyInsightsHero(null);
     renderWinnersSummary({});
 
     loadForecasts();
