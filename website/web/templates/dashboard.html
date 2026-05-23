@@ -143,8 +143,8 @@
             <h4 class="text-xl font-bold text-slate-800">{{ metrics.mape }}%</h4>
         </div>
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
-            <p class="text-xs text-slate-500 mb-1">R² (price)</p>
-            <h4 class="text-xl font-bold text-slate-800">{{ metrics.r2 }}</h4>
+            <p class="text-xs text-slate-500 mb-1">sMAPE</p>
+            <h4 class="text-xl font-bold text-slate-800">{{ metrics.smape }}%</h4>
         </div>
         <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4">
             <p class="text-xs text-slate-500 mb-1">Directional Acc.</p>
@@ -258,8 +258,8 @@
                     <label class="text-xs text-slate-500">Metric:</label>
                     <select id="metric-select" class="text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-primary">
                         <option value="mape" selected>MAPE (%)</option>
+                        <option value="smape">sMAPE (%)</option>
                         <option value="rmse">RMSE</option>
-                        <option value="r2_price">R² (price)</option>
                         <option value="da">Directional Acc. (%)</option>
                     </select>
                 </div>
@@ -700,12 +700,12 @@
 
         const met = [];
         if (sk) {
-            met.push(kiLi('Skill check (h=1)', `R²(price) ${kiFmt(sk.r2_price)} · DA ${kiFmt(sk.da, '%')}`,
-                `Log-return R² = ${kiFmt(sk.r2_logreturn)}. High price R² reflects autocorrelation, not directional skill.`,
-                (sk.da < 55 || sk.r2_logreturn <= 0) ? 'warn' : 'good'));
+            met.push(kiLi('Skill check (h=1)', `MAPE ${kiFmt(sk.mape, '%')} · DA ${kiFmt(sk.da, '%')}`,
+                `sMAPE ${kiFmt(sk.smape, '%')}. Directional accuracy is the honest skill signal — price-error metrics are dominated by the per-row anchor.`,
+                sk.da < 55 ? 'warn' : 'good'));
         }
         met.push(kiLi('Error growth', kiFmt(growth, '×'), `MAPE h=1 (${kiFmt(sk ? sk.mape : NaN)}%) → h=7 (${kiFmt(s7 ? s7.mape : NaN)}%). Trust short horizons.`, 'warn'));
-        met.push(kiLi('DA > 50%', `${above}/7 horizons`, `Best DA ${kiFmt(maxDA, '%')} at h=${maxH ?? '—'}. Naive comparison (no PT test here).`, above >= 4 ? 'good' : 'warn'));
+        met.push(kiLi('DA > 50%', `${above}/7 horizons`, `Best DA ${kiFmt(maxDA, '%')} at h=${maxH ?? '—'}. Naive comparison only (no Pesaran-Timmermann test wired up).`, above >= 4 ? 'good' : 'warn'));
         elMet.innerHTML = met.join('');
     }
 
@@ -826,7 +826,7 @@
                     ${Number.isFinite(da7) ? `<span><span class="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mr-1"></span>7 day ${kiFmt(da7, '%')}</span>` : ''}
                     <span>| 50% = chance</span>
                 </div>
-                <div class="text-[11px] text-slate-400 leading-snug">Direction barely beats chance short-term; high price R² is autocorrelation.</div>`;
+                <div class="text-[11px] text-slate-400 leading-snug">Direction barely beats chance short-term; price-error metrics are dominated by the per-row anchor.</div>`;
         }
     }
 

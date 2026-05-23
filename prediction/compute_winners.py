@@ -71,8 +71,6 @@ def _read_metrics(tag: str, horizon: int) -> Optional[Dict[str, Dict[str, float]
                 'smape':   _to_float(row.get('sMAPE')),
                 'rmse':    _to_float(row.get('RMSE')),
                 'da':      _to_float(row.get('Directional_Accuracy')),
-                'r2_price':     _to_float(row.get('R2_Price')),
-                'r2_logreturn': _to_float(row.get('R2_LogReturn')),
             }
     return out or None
 

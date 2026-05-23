@@ -14,7 +14,7 @@ Output (committable):
 
 Schema (wide):
     Horizon, Model, Optimization, then for every metric in
-    {MAPE, sMAPE, RMSE, Directional_Accuracy, R2_Price, R2_LogReturn}
+    {MAPE, sMAPE, RMSE, Directional_Accuracy}
     one column per config:
         <metric>_C1_cpo_only, <metric>_C2_cpo_hmm,
         <metric>_C3_cpo_sentiment, <metric>_C4_full

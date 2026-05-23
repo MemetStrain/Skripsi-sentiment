@@ -9,7 +9,7 @@ Follows the exact same pipeline as horizon_forecast_C4_full.py:
   - Target  : h-step log return  = log(Close[t+h] / Close[t])
   - Scaler  : RobustScaler fitted on training set only
   - Splits  : train / test (ratio-based) / validation (date cutoff, 2026+)
-  - Metrics : MAPE, sMAPE, RMSE, Directional_Accuracy, R2_Price, R2_LogReturn
+  - Metrics : MAPE, sMAPE, RMSE, Directional_Accuracy
 
 Outputs per horizon  (output_horizons_{OUTPUT_TAG}/Daily/horizon_{h}/):
   training_predictions_Daily_h{n}.csv   — actual + predicted log-return & price
@@ -364,13 +364,13 @@ def run_horizon(horizon: int, merged: pd.DataFrame,
     elapsed = time.time() - t0
     print(f"\n  xgboost BASE  [{elapsed:.1f}s]")
     m = cv_metrics
-    print(f"    CV    MAPE={m['MAPE']:.2f}%  RMSE={m['RMSE']:.2f}  "
-          f"R²(price)={m['R2_Price']:.4f}  R²(lr)={m['R2_LogReturn']:.4f}  "
+    print(f"    CV    MAPE={m['MAPE']:.2f}%  sMAPE={m['sMAPE']:.2f}%  "
+          f"RMSE={m['RMSE']:.2f}  "
           f"DirAcc={m['Directional_Accuracy']:.2f}%  (avg {CV_FOLDS} folds)")
     if test_metrics:
         m = test_metrics
-        print(f"    TEST  MAPE={m['MAPE']:.2f}%  RMSE={m['RMSE']:.2f}  "
-              f"R²(price)={m['R2_Price']:.4f}  R²(lr)={m['R2_LogReturn']:.4f}  "
+        print(f"    TEST  MAPE={m['MAPE']:.2f}%  sMAPE={m['sMAPE']:.2f}%  "
+              f"RMSE={m['RMSE']:.2f}  "
               f"DirAcc={m['Directional_Accuracy']:.2f}%")
 
     # ── CSA optimisation ──────────────────────────────────────────────────────
@@ -396,8 +396,8 @@ def run_horizon(horizon: int, merged: pd.DataFrame,
                             if len(data['y_test']) else {})
         if csa_test_metrics:
             mc = csa_test_metrics
-            print(f"    TEST  MAPE={mc['MAPE']:.2f}%  RMSE={mc['RMSE']:.2f}  "
-                  f"R²(price)={mc['R2_Price']:.4f}  R²(lr)={mc['R2_LogReturn']:.4f}  "
+            print(f"    TEST  MAPE={mc['MAPE']:.2f}%  sMAPE={mc['sMAPE']:.2f}%  "
+                  f"RMSE={mc['RMSE']:.2f}  "
                   f"DirAcc={mc['Directional_Accuracy']:.2f}%  [{time.time()-t0:.1f}s]")
 
     # ── Outputs ───────────────────────────────────────────────────────────────
@@ -582,7 +582,7 @@ def generate_summary(all_metrics: dict[int, dict], output_dir: Path):
         label = 'cv' if split_tag == 'cv' else 'testing'
         df.to_csv(output_dir / f'horizon_summary_Daily_{label}.csv', index=False)
 
-        for metric in ['RMSE', 'MAPE', 'R2_Price']:
+        for metric in ['RMSE', 'MAPE', 'Directional_Accuracy']:
             fig, ax = plt.subplots(figsize=(12, 6))
             ax.plot(df['Horizon'], df[metric], marker='o', color='#2E86AB', linewidth=1.5)
             ax.set_title(f'Daily — {metric} Across Horizons ({label.title()})',
@@ -592,7 +592,7 @@ def generate_summary(all_metrics: dict[int, dict], output_dir: Path):
             ax.set_xticks(sorted(df['Horizon'].unique()))
             ax.grid(True, alpha=0.3)
             fig.tight_layout()
-            fname = f'{metric.lower().replace("2_", "2")}_across_horizons_Daily_{label}.png'
+            fname = f'{metric.lower()}_across_horizons_Daily_{label}.png'
             fig.savefig(output_dir / fname, dpi=300, bbox_inches='tight')
             plt.close(fig)
 

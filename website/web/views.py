@@ -104,7 +104,7 @@ def dashboard(request):
     # Vercel. The metrics summary badge for h=1 is rendered server-side here;
     # the 4×7 table and the chart overlay are fetched/built client-side from
     # `winners_data` and /api/forecasts/.
-    metrics = {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'}
+    metrics = {'mape': 0, 'smape': 0, 'accuracy': 0, 'best_model': 'N/A'}
     winners_payload = {}
     try:
         meta_doc = db.collection('forecast_meta').document('Daily').get()
@@ -122,7 +122,7 @@ def dashboard(request):
                 if h1_metrics:
                     metrics = {
                         'mape':       round(h1_metrics.get('mape', 0), 2),
-                        'r2':         round(h1_metrics.get('r2_price', 0), 4),
+                        'smape':      round(h1_metrics.get('smape', 0), 2),
                         'accuracy':   round(h1_metrics.get('da', 0), 2),
                         'best_model': f"XGBoost CSA ({winners_payload.get('configs_by_horizon', {}).get('1', '?')})",
                     }

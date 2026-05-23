@@ -28,8 +28,7 @@ Design notes
   coin-flip threshold rather than 0%.
 
 Schema written to horizon_summary_*.csv:
-    Horizon, Model, Optimization, MAPE, sMAPE, RMSE,
-    Directional_Accuracy, R2_Price, R2_LogReturn
+    Horizon, Model, Optimization, MAPE, sMAPE, RMSE, Directional_Accuracy
 """
 
 from __future__ import annotations
@@ -216,7 +215,7 @@ def evaluate_all_naive_baselines(
     -------
     dict mapping split -> DataFrame with columns
         ['Horizon', 'Model', 'Optimization', 'MAPE', 'sMAPE', 'RMSE',
-         'Directional_Accuracy', 'R2_Price', 'R2_LogReturn'].
+         'Directional_Accuracy'].
         Empty DataFrame for splits where no per-horizon CSVs were found.
     """
     if not os.path.isdir(variant_dir):
@@ -276,7 +275,7 @@ def evaluate_all_naive_baselines(
 
     # Normalize into schema DataFrames
     columns = ["Horizon", "Model", "Optimization", "MAPE", "sMAPE", "RMSE",
-               "Directional_Accuracy", "R2_Price", "R2_LogReturn"]
+               "Directional_Accuracy"]
     out: Dict[str, pd.DataFrame] = {}
     for split, rows in results.items():
         if not rows:

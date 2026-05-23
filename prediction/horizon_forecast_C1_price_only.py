@@ -248,13 +248,13 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
         all_params[key] = base_params
         importance_models[key] = model_final
 
-        print(f"    BASE  - CV  MAPE: {cv_avg['MAPE']:.2f}%  RMSE: {cv_avg['RMSE']:.2f}  "
-              f"R²(price): {cv_avg['R2_Price']:.4f}  R²(lr): {cv_avg['R2_LogReturn']:.4f}  "
+        print(f"    BASE  - CV  MAPE: {cv_avg['MAPE']:.2f}%  sMAPE: {cv_avg['sMAPE']:.2f}%  "
+              f"RMSE: {cv_avg['RMSE']:.2f}  "
               f"DirAcc: {cv_avg['Directional_Accuracy']:.2f}%  ({time.time()-t0:.1f}s)")
         if test_metrics:
             m = test_metrics
-            print(f"          TEST MAPE: {m['MAPE']:.2f}%  RMSE: {m['RMSE']:.2f}  "
-                  f"R²(price): {m['R2_Price']:.4f}  R²(lr): {m['R2_LogReturn']:.4f}  "
+            print(f"          TEST MAPE: {m['MAPE']:.2f}%  sMAPE: {m['sMAPE']:.2f}%  "
+                  f"RMSE: {m['RMSE']:.2f}  "
                   f"DirAcc: {m['Directional_Accuracy']:.2f}%")
 
         # ------------------------------------------------------------------ CSA
@@ -315,12 +315,13 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
                                'csa_iterations': csa_result.total_iterations}
             importance_models[key] = model_csa_final
 
-            print(f"    CSA   - CV  MAPE: {cv_csa_avg['MAPE']:.2f}%  RMSE: {cv_csa_avg['RMSE']:.2f}  "
-                  f"R²(price): {cv_csa_avg['R2_Price']:.4f}  ({time.time()-t0:.1f}s)")
+            print(f"    CSA   - CV  MAPE: {cv_csa_avg['MAPE']:.2f}%  sMAPE: {cv_csa_avg['sMAPE']:.2f}%  "
+                  f"RMSE: {cv_csa_avg['RMSE']:.2f}  "
+                  f"DirAcc: {cv_csa_avg['Directional_Accuracy']:.2f}%  ({time.time()-t0:.1f}s)")
             if csa_test_metrics:
                 m = csa_test_metrics
-                print(f"          TEST MAPE: {m['MAPE']:.2f}%  RMSE: {m['RMSE']:.2f}  "
-                      f"R²(price): {m['R2_Price']:.4f}  R²(lr): {m['R2_LogReturn']:.4f}  "
+                print(f"          TEST MAPE: {m['MAPE']:.2f}%  sMAPE: {m['sMAPE']:.2f}%  "
+                      f"RMSE: {m['RMSE']:.2f}  "
                       f"DirAcc: {m['Directional_Accuracy']:.2f}%")
 
     # ---------------------------------------------------------------------- Save
@@ -396,9 +397,9 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
             [{'Model': k.rsplit('_', 1)[0], 'Optimization': k.rsplit('_', 1)[1].upper(), **v}
              for k, v in test_results.items()])
         opt_palette = {'BASE': '#5DA5DA', 'CSA': '#FAA43A'}
-        fig, axes = plt.subplots(2, 3, figsize=(20, 12))
+        fig, axes = plt.subplots(2, 2, figsize=(16, 11))
         for ax, metric in zip(axes.flatten(),
-                              ['MAPE', 'sMAPE', 'RMSE', 'Directional_Accuracy', 'R2_Price', 'R2_LogReturn']):
+                              ['MAPE', 'sMAPE', 'RMSE', 'Directional_Accuracy']):
             pivot = test_results_df.pivot(index='Model', columns='Optimization', values=metric)
             pivot.plot(kind='bar', ax=ax,
                        color=[opt_palette.get(c, '#999') for c in pivot.columns], edgecolor='white')
@@ -448,15 +449,15 @@ def _horizon_summary_plots(summary_df: pd.DataFrame, interval: str,
 
     fig, ax = plt.subplots(figsize=(14, 7))
     for (model, opt), grp in summary_df.groupby(['Model', 'Optimization']):
-        ax.plot(grp['Horizon'], grp['R2_Price'], marker='o',
+        ax.plot(grp['Horizon'], grp['Directional_Accuracy'], marker='o',
                 linestyle='--' if opt == 'BASE' else '-',
                 label=f'{model} ({opt})', linewidth=1.5)
-    ax.set_title(f'{interval} - R² (Price Space) Across Horizons (C1, {tag.title()})',
+    ax.set_title(f'{interval} - Directional Accuracy Across Horizons (C1, {tag.title()})',
                  fontsize=14, fontweight='bold')
-    ax.set_xlabel('Forecast Horizon'); ax.set_ylabel('R² (Price Space)')
+    ax.set_xlabel('Forecast Horizon'); ax.set_ylabel('Directional Accuracy (%)')
     ax.set_xticks(horizons); ax.legend(loc='best', fontsize=8, ncol=2); ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig(os.path.join(interval_dir, f'r2_across_horizons_{interval}_{tag}.png'),
+    fig.savefig(os.path.join(interval_dir, f'da_across_horizons_{interval}_{tag}.png'),
                 dpi=300, bbox_inches='tight')
     plt.close(fig)
 
@@ -477,8 +478,7 @@ def generate_horizon_summary(interval: str,
                 rows.append({'Horizon': h, 'Model': row['Model'],
                               'Optimization': row['Optimization'],
                               'MAPE': row['MAPE'], 'sMAPE': row['sMAPE'], 'RMSE': row['RMSE'],
-                              'Directional_Accuracy': row['Directional_Accuracy'],
-                              'R2_Price': row['R2_Price'], 'R2_LogReturn': row['R2_LogReturn']})
+                              'Directional_Accuracy': row['Directional_Accuracy']})
         return pd.DataFrame(rows)
 
     cv_summary = _build_summary(all_cv_results)

@@ -52,8 +52,7 @@ from baselines.dm_comparison import compare_best_vs_naive, _select_best_parametr
 
 SCHEMA_COLUMNS = [
     "Horizon", "Model", "Optimization",
-    "MAPE", "sMAPE", "RMSE",
-    "Directional_Accuracy", "R2_Price", "R2_LogReturn",
+    "MAPE", "sMAPE", "RMSE", "Directional_Accuracy",
 ]
 PARAMETRIC_MODELS = ("xgboost",)
 PARAMETRIC_OPTS = ("BASE", "CSA")
