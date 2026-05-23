@@ -145,7 +145,7 @@ def _load_split_predictions_csv(
     Load a split's predictions CSV for one horizon.
 
     Returns None if the file is missing (the validation split is empty when
-    there is no post-2026 data).
+    there is no post-cutoff data).
     """
     path = os.path.join(
         variant_dir, interval, f"horizon_{horizon}",

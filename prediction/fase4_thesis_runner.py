@@ -5,7 +5,7 @@ Pipeline:
      train the ablation's BASE XGBoost model on pre-cutoff data, predict the
      post-cutoff test window. BASE = true library defaults (FASE 2.3), so the
      run is fast.
-  2. Pick the winning ablation per horizon by min BASE MAPE on test.
+  2. Pick the winning ablation per horizon by min BASE RMSE on test.
   3. CSA pass: for each winning (tag, horizon), re-train with CSA-tuned
      hyperparameters. We only spend the CSA budget on cells we'll actually
      report in Tabel 4.11 (the user's scoped plan: ~7 x 4 minutes instead of
@@ -54,6 +54,7 @@ import horizon_forecast_C2_price_hmm as c2mod    # noqa: E402
 import horizon_forecast_C3_price_sentiment as c3mod  # noqa: E402
 import horizon_forecast_C4_full as c4mod         # noqa: E402
 from naive_baseline import diebold_mariano_test  # noqa: E402
+from utils.forecast_utils import VAL_CUTOFF      # noqa: E402
 
 warnings.filterwarnings("ignore")
 
@@ -146,14 +147,18 @@ def build_table_4_10_base(out_dir: Path) -> pd.DataFrame:
     return df
 
 
-def pick_winners_by_base_mape(table_410: pd.DataFrame) -> Dict[int, str]:
-    """Best tag per horizon by minimum BASE MAPE on the test set."""
+def pick_winners_by_base_rmse(table_410: pd.DataFrame) -> Dict[int, str]:
+    """Best tag per horizon by minimum BASE RMSE on the test set.
+
+    User decision 2026-05-23 (was MAPE). RMSE matches CSA's training-loss
+    objective (squared error on log-return) and is less anchor-inflated.
+    """
     winners: Dict[int, str] = {}
     for h in HORIZONS:
-        sub = table_410[table_410["Horizon"] == h].dropna(subset=["MAPE"])
+        sub = table_410[table_410["Horizon"] == h].dropna(subset=["RMSE"])
         if sub.empty:
             continue
-        best = sub.sort_values("MAPE").iloc[0]
+        best = sub.sort_values("RMSE").iloc[0]
         winners[h] = best["Ablation"]
     return winners
 
@@ -385,7 +390,7 @@ def write_summary(out_dir: Path,
       "BASE on each winner.")
     P("")
 
-    P("## Winners by horizon (min BASE MAPE)")
+    P("## Winners by horizon (min BASE RMSE)")
     P("")
     P("| Horizon | Winner config | Winner tag |")
     P("|---|---|---|")
@@ -466,7 +471,7 @@ def write_summary(out_dir: Path,
       "eval_metric)")
     P("- CSA objective: mean CV RMSE on the log-return target (FASE 2.2)")
     P("- DM: Harvey-Leybourne-Newbold corrected, two-sided p from t_{n-1}")
-    P("- VAL_CUTOFF: 2026-01-01 (Date<cutoff = CV; Date>=cutoff = test)")
+    P(f"- VAL_CUTOFF: {VAL_CUTOFF.date()} (Date<cutoff = CV; Date>=cutoff = test)")
     P("")
 
     (out_dir / "SUMMARY.md").write_text("\n".join(lines), encoding="utf-8")
@@ -544,7 +549,7 @@ def main() -> int:
 
     print("\n[Step 2] Aggregate BASE -> Tabel 4.10; pick winners")
     t410 = build_table_4_10_base(out_dir)
-    winners = pick_winners_by_base_mape(t410)
+    winners = pick_winners_by_base_rmse(t410)
     print(f"  Winners by horizon: {winners}")
 
     if not args.skip_csa_pass:

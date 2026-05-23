@@ -91,7 +91,7 @@ RANDOM_SEED = 42
 # decoded for all dates via online forward filter (no Viterbi smoothing).
 # This eliminates lookahead bias in HMM features used by downstream price
 # prediction models — must match VAL_CUTOFF in prediction/utils/forecast_utils.
-FIT_CUTOFF = pd.Timestamp("2026-01-01")
+FIT_CUTOFF = pd.Timestamp("2025-01-01")
 
 # Output
 OUTPUT_DIR = "output"

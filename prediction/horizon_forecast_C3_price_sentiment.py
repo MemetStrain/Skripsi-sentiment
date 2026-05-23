@@ -397,7 +397,7 @@ def run_single_horizon(interval: str, horizon: int, merged_df: pd.DataFrame,
             ax.plot(data['dates_test'], data['close_test'] * np.exp(safe),
                     label=name.replace('_', ' ').title(),
                     color=colors.get(name, '#999'), linewidth=1.1, linestyle=ls, alpha=0.8)
-        ax.set_title(f'{interval} Forecast (Testing 2026+) - Horizon {horizon} (C3: price + sentiment)',
+        ax.set_title(f'{interval} Forecast (Test ≥ {VAL_CUTOFF.date()}) - Horizon {horizon} (C3: price + sentiment)',
                      fontsize=14, fontweight='bold')
         ax.set_xlabel('Date'); ax.set_ylabel('CPO Price (MYR/tonne)')
         ax.legend(loc='best', fontsize=8, ncol=2); ax.grid(True, alpha=0.3)

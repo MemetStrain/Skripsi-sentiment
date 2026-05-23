@@ -107,11 +107,14 @@ def compute() -> dict:
     winners: Dict[int, str] = {}
     configs: Dict[int, str] = {}
     for h in HORIZONS:
+        # Winner = min BASE RMSE per horizon (user decision 2026-05-23; was
+        # min MAPE). RMSE is the same loss CSA optimises on log-return, and is
+        # less anchor-inflated than MAPE on price space.
         candidates = []
         for tag in TAGS:
             base = metrics.get(tag, {}).get(h, {}).get('BASE')
-            if base and base.get('mape') is not None:
-                candidates.append((tag, base['mape']))
+            if base and base.get('rmse') is not None:
+                candidates.append((tag, base['rmse']))
         if not candidates:
             logger.warning(f'No candidates for horizon {h}; skipping winner pick.')
             continue

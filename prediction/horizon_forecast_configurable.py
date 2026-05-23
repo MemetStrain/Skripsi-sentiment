@@ -8,7 +8,7 @@ parameters, and which horizons to run.
 Follows the exact same pipeline as horizon_forecast_C4_full.py:
   - Target  : h-step log return  = log(Close[t+h] / Close[t])
   - Scaler  : RobustScaler fitted on training set only
-  - Splits  : train / test (ratio-based) / validation (date cutoff, 2026+)
+  - Splits  : train / test (ratio-based) / validation (date cutoff, post-cutoff)
   - Metrics : MAPE, sMAPE, RMSE, Directional_Accuracy
 
 Outputs per horizon  (output_horizons_{OUTPUT_TAG}/Daily/horizon_{h}/):
@@ -87,8 +87,8 @@ ABLATION: str = (
 )
 
 # ── Split config ─────────────────────────────────────────────────────────────
-VAL_CUTOFF: str = '2026-01-01'  # data before this = CV; data from this onward = test
-CV_FOLDS:   int = 5             # TimeSeriesSplit folds on pre-2026 data
+VAL_CUTOFF: str = '2025-01-01'  # data before this = CV; data from this onward = test
+CV_FOLDS:   int = 5             # TimeSeriesSplit folds on pre-cutoff data
 
 # ── XGBoost parameters ────────────────────────────────────────────────────────
 # BASE params resolved from the single source of truth in forecast_utils.
@@ -464,7 +464,7 @@ def run_horizon(horizon: int, merged: pd.DataFrame,
         )
 
     if len(data['dates_test']):
-        _plot_overlay(data, y_pred_test, 'Testing (2026+)', out_dir, horizon, split='test')
+        _plot_overlay(data, y_pred_test, f'Testing (≥ {val_cutoff.date()})', out_dir, horizon, split='test')
 
     print(f"  Saved → {out_dir}")
     return {'cv': cv_metrics, 'test': test_metrics, 'test_csa': csa_test_metrics}
@@ -472,7 +472,7 @@ def run_horizon(horizon: int, merged: pd.DataFrame,
 
 def _build_combined_predictions(data: dict, cv_pred_rows: list, y_pred_test,
                                  out_dir: Path, horizon: int):
-    """Combined predictions CSV: walk-forward CV rows (pre-2026) + test rows (2026+)."""
+    """Combined predictions CSV: walk-forward CV rows (pre-cutoff) + test rows (post-cutoff)."""
     rows = list(cv_pred_rows)
     if len(data['dates_test']):
         for i in range(len(data['dates_test'])):

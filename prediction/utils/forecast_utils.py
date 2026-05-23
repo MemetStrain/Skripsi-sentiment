@@ -53,8 +53,12 @@ CSA_PARAM_SPACES = {
 }
 
 
-# Hard cutoff: data before this date = train+test; from this date onwards = validation
-VAL_CUTOFF = pd.Timestamp('2026-01-01')
+# Hard cutoff: data before this date = train+CV (pre-test); from this date
+# onwards = final test holdout. Set to 2025-01-01 (was 2026-01-01) so the
+# holdout window covers ~16 months (Jan 2025 - Apr 2026 ≈ 315-340 rows),
+# giving the DM HLN tests enough statistical power vs. the ~70-row window
+# the original cutoff produced.
+VAL_CUTOFF = pd.Timestamp('2025-01-01')
 
 
 # Raw same-day OHLCV columns from the CPO file. These should be dropped at load
