@@ -167,7 +167,7 @@ def dashboard(request):
 def _empty_dashboard_ctx():
     return {
         'chart_data':     json.dumps([]),
-        'metrics':        {'mape': 0, 'r2': 0, 'accuracy': 0, 'best_model': 'N/A'},
+        'metrics':        {'mape': 0, 'smape': 0, 'accuracy': 0, 'best_model': 'N/A'},
         'winners_data':   json.dumps({}),
         'sentiment_data': json.dumps([]),
         'stats':          {'current_price': 0, 'avg_price': 0, 'max_price': 0, 'min_price': 0, 'total_days': 0},
