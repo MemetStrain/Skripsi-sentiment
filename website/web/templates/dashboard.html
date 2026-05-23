@@ -656,6 +656,10 @@
         const winners = (forecasts && forecasts.winners) || {};
         const configs = (forecasts && forecasts.configs) || {};
         const m = (tag, h, v) => { try { return metrics[tag][String(h)][v]; } catch (e) { return null; } };
+        // CSA is only trained for the winning (tag, h); fall back to BASE for
+        // the other 3 configs at any given horizon so cross-config comparisons
+        // still produce 4 bars instead of 1.
+        const mb = (tag, h) => m(tag, h, 'CSA') || m(tag, h, 'BASE');
 
         if (!metrics) {
             if (elCmp) elCmp.innerHTML = kiNote('Metrics unavailable (forecasts API not loaded).');
@@ -663,10 +667,10 @@
             return;
         }
 
-        // C1 winner vs C1 baseline (CSA MAPE)
+        // C1 winner vs C1 baseline (best-available MAPE)
         const deltas = [];
         for (let h = 1; h <= 7; h++) {
-            const wt = winners[String(h)], wm = m(wt, h, 'CSA'), c1 = m('cpo_only', h, 'CSA');
+            const wt = winners[String(h)], wm = mb(wt, h), c1 = mb('cpo_only', h);
             if (wm && c1) deltas.push(c1.mape - wm.mape);
         }
         const avgGain = kiMean(deltas);
@@ -674,12 +678,12 @@
         const byCfg = {};
         for (let h = 1; h <= 7; h++) { const c = configs[String(h)]; if (c) (byCfg[c] = byCfg[c] || []).push(h); }
         const pattern = Object.entries(byCfg).map(([c, hs]) => `${c}: h${hs.join(',')}`).join(' · ');
-        // C3 CSA vs BASE gain (winner tag)
+        // C3 CSA vs BASE gain (winner tag — both variants exist for winners)
         const csaDeltas = [];
         for (let h = 1; h <= 7; h++) { const wt = winners[String(h)], b = m(wt, h, 'BASE'), c = m(wt, h, 'CSA'); if (b && c) csaDeltas.push(b.mape - c.mape); }
         const csaGain = kiMean(csaDeltas);
-        // C4 winner margin at h=1
-        const at = h => ['cpo_only', 'cpo_hmm', 'cpo_sentiment', 'full'].map(t => { const x = m(t, h, 'CSA'); return x ? { t, mape: x.mape } : null; }).filter(Boolean).sort((a, b) => a.mape - b.mape);
+        // C4 winner margin at h=1 (best-available metric per config)
+        const at = h => ['cpo_only', 'cpo_hmm', 'cpo_sentiment', 'full'].map(t => { const x = mb(t, h); return x ? { t, mape: x.mape } : null; }).filter(Boolean).sort((a, b) => a.mape - b.mape);
         const a1 = at(1); const margin = a1.length >= 2 ? a1[1].mape - a1[0].mape : NaN;
 
         const cmp = [];
@@ -689,14 +693,14 @@
         cmp.push(kiLi('Winner margin h=1', kiFmt(margin) + ' pts', margin < 0.05 ? 'Within noise — winner is not decisively better.' : 'Gap to 2nd-best config.', margin < 0.05 ? 'warn' : ''));
         elCmp.innerHTML = cmp.join('');
 
-        // D1 honest skill check (winner @ h=1)
-        const w1 = winners['1'], sk = m(w1, 1, 'CSA');
+        // D1 honest skill check (winner @ h=1) — prefer CSA, fall back to BASE
+        const w1 = winners['1'], sk = mb(w1, 1);
         // D2 error growth h1→h7
-        const w7 = winners['7'], s7 = m(w7, 7, 'CSA');
+        const w7 = winners['7'], s7 = mb(w7, 7);
         const growth = (sk && s7) ? s7.mape / sk.mape : NaN;
         // D3 DA vs 50%
         let above = 0, maxDA = -Infinity, maxH = null;
-        for (let h = 1; h <= 7; h++) { const x = m(winners[String(h)], h, 'CSA'); if (x) { if (x.da > 50) above++; if (x.da > maxDA) { maxDA = x.da; maxH = h; } } }
+        for (let h = 1; h <= 7; h++) { const x = mb(winners[String(h)], h); if (x) { if (x.da > 50) above++; if (x.da > maxDA) { maxDA = x.da; maxH = h; } } }
 
         const met = [];
         if (sk) {
@@ -774,6 +778,11 @@
         const metrics = forecasts && forecasts.metrics;
         const winners = (forecasts && forecasts.winners) || {};
         const m = (tag, h, v) => { try { return metrics[tag][String(h)][v]; } catch (e) { return null; } };
+        // Prefer CSA where it exists (winners), otherwise fall back to BASE.
+        // After the staged training (CSA only on winners), the 3 non-winning
+        // configs per horizon only have BASE metrics — without the fallback the
+        // bar chart would render just the winner.
+        const mb = (tag, h) => m(tag, h, 'CSA') || m(tag, h, 'BASE');
 
         if (!metrics) {
             if (elC) elC.innerHTML = `<div class="text-sm text-slate-400">Metrics pending…</div>`;
@@ -781,9 +790,14 @@
             return;
         }
 
-        // Comparison: 4 configs' h=1 CSA MAPE — "nearly tied" vs "C# leads".
+        // Comparison: 4 configs' h=1 best-available MAPE — "nearly tied" vs "C# leads".
         const TAGS4 = [['cpo_only', 'C1'], ['cpo_hmm', 'C2'], ['cpo_sentiment', 'C3'], ['full', 'C4']];
-        const mapes = TAGS4.map(([tag, cfg]) => { const x = m(tag, 1, 'CSA'); return { cfg, mape: x ? x.mape : null }; }).filter(d => d.mape != null);
+        const winner_tag1 = winners['1'];
+        const mapes = TAGS4.map(([tag, cfg]) => {
+            const x = mb(tag, 1);
+            const variant = (m(tag, 1, 'CSA') ? 'CSA' : 'BASE');
+            return { cfg, tag, mape: x ? x.mape : null, variant };
+        }).filter(d => d.mape != null);
         if (elC && mapes.length) {
             const sorted = mapes.slice().sort((a, b) => a.mape - b.mape);
             const best   = sorted[0];
@@ -793,21 +807,24 @@
             const barH = mp => (hi - lo < 1e-6) ? 24 : Math.round(18 + (hi - mp) / (hi - lo) * 12);
             const bars = mapes.map(d => {
                 const win = d.cfg === best.cfg;
-                return `<div class="flex-1 flex flex-col items-center gap-0.5">
+                return `<div class="flex-1 flex flex-col items-center gap-0.5" title="${d.cfg} · ${d.variant} · MAPE ${kiFmt(d.mape, '%')}">
                     <span class="w-full rounded-t" style="height:${barH(d.mape)}px; background:${win ? '#0f766e' : '#cbd5e1'}"></span>
                     <span class="text-[10px] ${win ? 'text-primary font-semibold' : 'text-slate-400'}">${d.cfg}</span></div>`;
             }).join('');
+            const mixed = mapes.some(d => d.variant === 'CSA') && mapes.some(d => d.variant === 'BASE');
             elC.innerHTML = `
                 <div class="text-xl font-bold text-slate-800 mb-3">${tied ? 'Nearly tied' : best.cfg + ' leads'}</div>
                 <div class="flex items-end gap-2.5 h-9 mb-2">${bars}</div>
                 <div class="text-[11px] text-slate-400 leading-snug">${tied
                     ? `Margin ≈ ${kiFmt(margin)} pts MAPE — adding sentiment/HMM barely changes accuracy.`
-                    : `${best.cfg} beats the rest by ${kiFmt(margin)} pts MAPE.`}</div>`;
+                    : `${best.cfg} beats the rest by ${kiFmt(margin)} pts MAPE.`}${mixed
+                    ? ` Bars use CSA where tuned (winner) · BASE for the rest.`
+                    : ''}</div>`;
         }
 
         // Metrics: winner DA at h=1 and h=7 against the 50% chance line.
-        const s1 = m(winners['1'], 1, 'CSA');
-        const s7 = m(winners['7'], 7, 'CSA');
+        const s1 = mb(winners['1'], 1);
+        const s7 = mb(winners['7'], 7);
         if (elM && s1) {
             const da1 = s1.da, da7 = s7 ? s7.da : NaN;
             const tone = da1 < 55 ? 'text-amber-600' : 'text-green-600';
