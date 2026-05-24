@@ -38,3 +38,7 @@ Thumbs.db
 .claude/
 
 .vercel
+
+# Diagrams & drawio exports (local docs, not pushed)
+diagrams/
+drawio_xml_charts/
