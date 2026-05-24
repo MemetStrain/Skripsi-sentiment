@@ -35,7 +35,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _PREDICTION_DIR = _REPO_ROOT / "prediction"
 sys.path.insert(0, str(_PREDICTION_DIR))
 
-from naive_baseline import diebold_mariano_test  # noqa: E402
+from naive_baseline import diebold_mariano_test, pesaran_timmermann_test  # noqa: E402
+from baselines.multiple_comparison import holm_bonferroni  # noqa: E402
 from utils.forecast_utils import (  # noqa: E402
     BASE_PARAMS,
     VAL_CUTOFF,
@@ -76,6 +77,44 @@ def test_dm_more_conservative_at_higher_horizon():
 def test_dm_rejects_mismatched_lengths():
     with pytest.raises(ValueError):
         diebold_mariano_test(np.zeros(10), np.zeros(9))
+
+
+# ---------------------------------------------------------------------------
+# 1b. Pesaran-Timmermann (PT 1992) and Holm-Bonferroni tests
+# ---------------------------------------------------------------------------
+
+def test_pt_perfect_predictor_significant():
+    rng = np.random.default_rng(0)
+    yt = rng.normal(0, 1, 300)
+    stat, p, n = pesaran_timmermann_test(yt, yt.copy())
+    assert stat > 5 and p < 0.001 and n == 300
+
+
+def test_pt_random_predictor_not_significant():
+    rng = np.random.default_rng(1)
+    yt = rng.normal(0, 1, 300); yp = rng.normal(0, 1, 300)
+    _, p, _ = pesaran_timmermann_test(yt, yp)
+    assert p > 0.05
+
+
+def test_pt_degenerate_all_one_direction_nan():
+    rng = np.random.default_rng(2)
+    yt = rng.normal(0, 1, 100)
+    stat, p, _ = pesaran_timmermann_test(yt, np.ones(100))
+    assert np.isnan(stat) and np.isnan(p)
+
+
+def test_holm_monotone_and_family_size():
+    adj, rej = holm_bonferroni([0.001, 0.013, 0.021, 0.04, 0.6])
+    assert abs(adj[0] - 0.005) < 1e-9
+    assert np.all(np.diff(adj) >= -1e-12)
+    assert rej[0] and not rej[1]
+
+
+def test_holm_ignores_nan():
+    adj, rej = holm_bonferroni([0.001, np.nan, 0.6])
+    assert np.isnan(adj[1]) and not rej[1]
+    assert abs(adj[0] - 0.002) < 1e-9
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,11 @@ Implements Task 4 of the H4 integration:
      Diebold-Mariano test via `naive_baseline.diebold_mariano_test`.
   3. Emit a CSV with columns:
         horizon, best_model, naive_model, dm_stat, p_value,
-        significant_at_0.05, better_model
+        significant_at_0.05, better_model, p_value_holm,
+        significant_holm_at_0.05
+
+Holm-Bonferroni FWER correction is applied across the 7 horizons within
+one split (the family). NaN p-values are excluded from the family.
 
 No refit of any parametric model is required: predictions are read from the
 already-saved `{split}_predictions_Daily_h{h}.csv` files produced by
@@ -30,8 +34,11 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PREDICTION_DIR = os.path.dirname(_THIS_DIR)
 if _PREDICTION_DIR not in sys.path:
     sys.path.insert(0, _PREDICTION_DIR)
+if _THIS_DIR not in sys.path:
+    sys.path.insert(0, _THIS_DIR)
 
 from naive_baseline import diebold_mariano_test  # noqa: E402
+from multiple_comparison import holm_bonferroni  # noqa: E402
 
 
 PARAMETRIC_MODELS: Tuple[str, ...] = ("xgboost",)
@@ -148,7 +155,8 @@ def compare_best_vs_naive(
     -------
     pd.DataFrame with columns
         ['horizon', 'best_model', 'naive_model', 'dm_stat', 'p_value',
-         'significant_at_0.05', 'better_model'].
+         'significant_at_0.05', 'better_model', 'p_value_holm',
+         'significant_holm_at_0.05'].
     """
     summary_path = _summary_path(variant_dir, interval, split)
     if not os.path.exists(summary_path):
@@ -219,10 +227,15 @@ def compare_best_vs_naive(
         })
 
     cols = ["horizon", "best_model", "naive_model", "dm_stat", "p_value",
-            "significant_at_0.05", "better_model"]
+            "significant_at_0.05", "better_model",
+            "p_value_holm", "significant_holm_at_0.05"]
     if not rows:
         return pd.DataFrame(columns=cols)
-    return pd.DataFrame(rows)[cols].sort_values("horizon").reset_index(drop=True)
+    df = pd.DataFrame(rows).sort_values("horizon").reset_index(drop=True)
+    adj, rej = holm_bonferroni(df["p_value"].to_numpy(), alpha=0.05)
+    df["p_value_holm"] = np.round(adj, 6)
+    df["significant_holm_at_0.05"] = rej
+    return df[cols]
 
 
 # =============================================================================

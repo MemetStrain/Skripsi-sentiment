@@ -18,7 +18,11 @@ Outputs:
 
 Schema:
     horizon, split, variant, model_a, model_b, n, dm_stat, p_value,
-    significant_at_0.05, winner
+    significant_at_0.05, winner, p_value_holm, significant_holm_at_0.05
+
+Holm-Bonferroni FWER correction is applied per (split, variant): every
+(pair x horizon) test inside one variant of one split forms the family.
+NaN p-values (degenerate DM fits) are excluded from the family.
 
 Usage:
     python prediction/baselines/dm_ablation_pairwise.py
@@ -39,8 +43,11 @@ _PREDICTION_DIR = os.path.dirname(_THIS_DIR)
 _PROJECT_ROOT = os.path.dirname(_PREDICTION_DIR)
 if _PREDICTION_DIR not in sys.path:
     sys.path.insert(0, _PREDICTION_DIR)
+if _THIS_DIR not in sys.path:
+    sys.path.insert(0, _THIS_DIR)
 
 from naive_baseline import diebold_mariano_test  # noqa: E402
+from multiple_comparison import holm_bonferroni  # noqa: E402
 
 
 # Each ablation script writes to prediction/output_horizons/{tag}/Daily/...
@@ -144,8 +151,18 @@ def run_split(split: str) -> pd.DataFrame:
                     "winner": winner,
                 })
     cols = ["horizon", "split", "variant", "model_a", "model_b", "n",
-            "dm_stat", "p_value", "significant_at_0.05", "winner"]
-    return pd.DataFrame(rows, columns=cols)
+            "dm_stat", "p_value", "significant_at_0.05", "winner",
+            "p_value_holm", "significant_holm_at_0.05"]
+    out_df = pd.DataFrame(rows, columns=cols)
+    out_df["p_value_holm"] = np.nan
+    out_df["significant_holm_at_0.05"] = False
+    if not out_df.empty:
+        for variant in out_df["variant"].unique():
+            sel = out_df["variant"] == variant
+            adj, rej = holm_bonferroni(out_df.loc[sel, "p_value"].to_numpy(), alpha=0.05)
+            out_df.loc[sel, "p_value_holm"] = np.round(adj, 6)
+            out_df.loc[sel, "significant_holm_at_0.05"] = rej
+    return out_df
 
 
 def main() -> int:

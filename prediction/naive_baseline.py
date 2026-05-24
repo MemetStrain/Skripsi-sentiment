@@ -8,6 +8,9 @@ Provides the two baseline pieces still used by the H4 evaluation pipeline:
 - :func:`diebold_mariano_test` - DM test with the Harvey, Leybourne &
   Newbold (1997) small-sample correction; used by
   ``baselines/dm_comparison.py`` and ``baselines/dm_ablation_pairwise.py``.
+- :func:`pesaran_timmermann_test` - Pesaran-Timmermann (1992) directional
+  / market-timing test; used by ``baselines/pt_directional.py`` to
+  evaluate sign-prediction skill of each ablation configuration.
 
 Older helpers (``predict_random_walk``, ``predict_seasonal_naive``,
 ``compute_naive_metrics``, ``run_naive_baselines``) were removed in the
@@ -107,6 +110,75 @@ def diebold_mariano_test(
     from scipy import stats
     p_value = 2.0 * (1.0 - stats.t.cdf(abs(dm_star), df=n - 1))
     return float(dm_star), float(p_value)
+
+
+# =============================================================================
+# Pesaran-Timmermann (1992) directional / market-timing test
+# =============================================================================
+
+def pesaran_timmermann_test(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    drop_zero_actual: bool = True,
+) -> Tuple[float, float, int]:
+    """Pesaran-Timmermann (1992) directional / market-timing test.
+
+    H0: arah prediksi independen dari arah aktual (tidak ada directional skill).
+    H1 (one-sided): hit rate melebihi rate yang diharapkan di bawah independensi.
+
+    Parameters
+    ----------
+    y_true, y_pred : np.ndarray
+        Deret log-return aktual dan prediksi (ruang yang sama dgn DM test).
+    drop_zero_actual : bool
+        Buang baris di mana perubahan aktual == 0 (tidak ada arah benar),
+        meniru exclusion Directional_Accuracy di calculate_metrics.
+
+    Returns
+    -------
+    (PT_stat, p_value_one_sided, n_used) ; (nan, nan, n) bila degenerate.
+
+    References
+    ----------
+    - Pesaran, M. H., & Timmermann, A. (1992). A simple nonparametric test
+      of predictive performance. *Journal of Business & Economic
+      Statistics*, 10(4), 461-465.
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    if y_true.shape != y_pred.shape:
+        raise ValueError(f"shape mismatch: {y_true.shape} vs {y_pred.shape}")
+
+    mask = ~(np.isnan(y_true) | np.isnan(y_pred))
+    if drop_zero_actual:
+        mask &= (y_true != 0.0)
+    y_true, y_pred = y_true[mask], y_pred[mask]
+    n = int(y_true.size)
+    if n < 2:
+        return float("nan"), float("nan"), n
+
+    z = (y_true > 0).astype(float)   # indikator aktual naik
+    x = (y_pred > 0).astype(float)   # indikator prediksi naik
+
+    p_hat = float(np.mean(z == x))   # hit rate
+    py = float(np.mean(z))           # P(aktual naik)
+    px = float(np.mean(x))           # P(prediksi naik)
+    p_star = py * px + (1 - py) * (1 - px)   # hit rate di bawah independensi
+
+    var_phat = p_star * (1 - p_star) / n
+    var_pstar = (
+        ((2 * py - 1) ** 2) * px * (1 - px) / n
+        + ((2 * px - 1) ** 2) * py * (1 - py) / n
+        + 4 * py * px * (1 - py) * (1 - px) / (n ** 2)
+    )
+    denom_var = var_phat - var_pstar
+    if denom_var <= 0 or np.isnan(denom_var):
+        return float("nan"), float("nan"), n
+
+    pt_stat = (p_hat - p_star) / np.sqrt(denom_var)  # ~ N(0,1) asimtotik
+    from scipy.stats import norm
+    p_value = float(1.0 - norm.cdf(pt_stat))         # one-sided (skill = hit > chance)
+    return float(pt_stat), p_value, n
 
 
 # =============================================================================

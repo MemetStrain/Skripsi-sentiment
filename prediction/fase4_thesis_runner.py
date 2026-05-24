@@ -15,6 +15,7 @@ Pipeline:
        - tabel_4.11_csa_winners_testing.csv        (CSA, 7 winning rows)
        - tabel_4.12_dm_base_pairwise.csv           (BASE DM HLN across C1-C4)
        - tabel_4.13_dm_csa_vs_base_winners.csv     (CSA vs BASE on each winner)
+       - pt_directional_Daily_testing.csv          (PT 1992 per ablation x horizon)
        - h4_sufficiency_C4_vs_naive_rw.csv         (DM HLN of C4 BASE vs naive)
        - h2_feature_importance_C1_h1_top5.csv
        - h2_acf_close_lag1_5.csv (+ acf_pacf_log_return_Daily.png copied)
@@ -54,6 +55,7 @@ import horizon_forecast_C2_price_hmm as c2mod    # noqa: E402
 import horizon_forecast_C3_price_sentiment as c3mod  # noqa: E402
 import horizon_forecast_C4_full as c4mod         # noqa: E402
 from naive_baseline import diebold_mariano_test  # noqa: E402
+from baselines import pt_directional as pt_module  # noqa: E402
 from utils.forecast_utils import VAL_CUTOFF      # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -255,6 +257,22 @@ def build_table_4_13_dm_csa_vs_base(winners: Dict[int, str], out_dir: Path
     return df
 
 
+def build_pt_directional(out_dir: Path) -> Path | None:
+    """Run Pesaran-Timmermann across C1-C4 x horizons; copy CSV into bundle.
+
+    H3 framing: HMM-bearing configs (C2, C4) should show PT-significant
+    directional skill on more horizons than price-only (C1). PT is per-
+    config (not a between-config delta test) — see Bab 1.4.8 / 2.5.3.2.
+    """
+    pt_module.run()
+    src = Path(pt_module.OUTPUT_DIR) / f"pt_directional_{pt_module.INTERVAL}_testing.csv"
+    if not src.exists():
+        return None
+    dst = out_dir / src.name
+    shutil.copy2(src, dst)
+    return dst
+
+
 def build_h4_sufficiency(out_dir: Path) -> pd.DataFrame:
     """H4 sufficiency — C4 BASE vs naive RW per horizon (council 6d honest skill signal)."""
     rows: List[dict] = []
@@ -370,6 +388,7 @@ def write_summary(out_dir: Path,
                   t410: pd.DataFrame, t411: pd.DataFrame,
                   t412: pd.DataFrame, t413: pd.DataFrame,
                   h4: pd.DataFrame, h2_imp: pd.DataFrame, h2_acf: pd.DataFrame,
+                  pt: pd.DataFrame,
                   winners: Dict[int, str], csa_config: dict) -> None:
     today = date.today().isoformat()
     lines: List[str] = []
@@ -432,6 +451,16 @@ def write_summary(out_dir: Path,
       "tests whether CSA-tuned hyperparams beat the BASE defaults.")
     P("")
     P(_md_table(t413))
+    P("")
+
+    P("## H3 — Pesaran-Timmermann directional skill per ablation")
+    P("")
+    P("Source: `pt_directional_Daily_testing.csv`. PT(1992) is per-config "
+      "(H0: arah prediksi independen dari arah aktual); H3 is supported "
+      "when HMM-bearing configs (C2, C4) are PT-significant on more "
+      "horizons than C1.")
+    P("")
+    P(_md_table(pt))
     P("")
 
     P("## H4 sufficiency — C4 BASE vs naive random walk")
@@ -565,12 +594,14 @@ def main() -> int:
     t411 = build_table_4_11_csa(winners, out_dir)
     t412 = build_table_4_12_dm_base_pairwise(out_dir)
     t413 = build_table_4_13_dm_csa_vs_base(winners, out_dir)
+    pt_csv = build_pt_directional(out_dir)
+    pt_df = pd.read_csv(pt_csv) if pt_csv is not None else pd.DataFrame()
     h4   = build_h4_sufficiency(out_dir)
     h2_i = build_h2_feature_importance(out_dir)
     h2_a = build_h2_acf(out_dir)
     build_figure_4_3(t410, t411, out_dir)
     write_winners_payload(winners, out_dir, t410, t411)
-    write_summary(out_dir, t410, t411, t412, t413, h4, h2_i, h2_a,
+    write_summary(out_dir, t410, t411, t412, t413, h4, h2_i, h2_a, pt_df,
                   winners,
                   {"population_size": args.csa_population,
                    "max_iterations": args.csa_iterations,
