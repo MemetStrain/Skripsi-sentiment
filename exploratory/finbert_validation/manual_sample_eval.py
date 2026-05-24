@@ -14,8 +14,8 @@ written by news/finbert_sentiment_analysis_flexible.py during the
 initial FinBERT pass).
 
 Usage:
-    python news/validation/manual_sample_eval.py --generate
-    python news/validation/manual_sample_eval.py --evaluate
+    python exploratory/finbert_validation/manual_sample_eval.py --generate
+    python exploratory/finbert_validation/manual_sample_eval.py --evaluate
 """
 
 from __future__ import annotations
@@ -248,7 +248,7 @@ def generate_sample(
     print("  3. Fill in the 'manual_label' column with: positive, negative, or neutral")
     print("  4. Use your own judgment based on financial sentiment toward CPO market")
     print(f"  5. Save the file as: {LABELED_FILENAME} (in same folder)")
-    print("  6. Re-run: python news/validation/finbert_validation_suite.py --manual-only")
+    print("  6. Re-run: python exploratory/finbert_validation/finbert_validation_suite.py --manual-only")
     print()
     print("ESTIMATED TIME: ~1 hour for 50 articles")
     print("=" * 65)

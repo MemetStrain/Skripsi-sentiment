@@ -8,14 +8,14 @@ Composes the three FinBERT validation phases into a single CLI:
   --all              : Run 2a + 2b + 2c-i (sample generation), then 2c-ii
                        only if manual_sample_LABELED.csv exists.
 
-Final output: news/validation/output/finbert_validation_summary.csv
-(thesis Bab 4 — Tabel 4.Y).
+Final output: exploratory/finbert_validation/output/finbert_validation_summary.csv
+(EKSPLORATORI — tidak dirujuk di tesis; validitas sentimen diasumsikan, Bab 1.4).
 
 Usage examples:
-    python news/validation/finbert_validation_suite.py --all
-    python news/validation/finbert_validation_suite.py --benchmark-only
-    python news/validation/finbert_validation_suite.py --correlation-only
-    python news/validation/finbert_validation_suite.py --manual-only
+    python exploratory/finbert_validation/finbert_validation_suite.py --all
+    python exploratory/finbert_validation/finbert_validation_suite.py --benchmark-only
+    python exploratory/finbert_validation/finbert_validation_suite.py --correlation-only
+    python exploratory/finbert_validation/finbert_validation_suite.py --manual-only
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ LIMITATION_NOTE = (
 
 
 def _import_modules():
-    """Local import so the orchestrator can be run directly via ``python news/validation/finbert_validation_suite.py``."""
+    """Local import so the orchestrator can be run directly via ``python exploratory/finbert_validation/finbert_validation_suite.py``."""
     if _HERE not in sys.path:
         sys.path.insert(0, _HERE)
     import financial_phrasebank_eval as phrasebank

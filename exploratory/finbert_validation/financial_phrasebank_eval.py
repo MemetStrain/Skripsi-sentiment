@@ -1,8 +1,8 @@
 """
 financial_phrasebank_eval.py — Phase 2a of the FinBERT validation suite.
 
-Loads the Financial PhraseBank `sentences_50agree` subset, runs the same
-FinBERT model used in production (ProsusAI/finbert), and reports per-class
+Loads the Financial PhraseBank `sentences_50agree` subset, runs the
+production FinBERT model (yiyanghkust/finbert-tone), and reports per-class
 precision / recall / F1 plus a confusion matrix. Falls back to a small
 bundled synthetic test set if the dataset download fails (e.g. no
 internet).
@@ -11,7 +11,7 @@ This module does NOT modify any production code — it imports from
 transformers directly and runs offline analysis only.
 
 Usage:
-    python news/validation/financial_phrasebank_eval.py
+    python exploratory/finbert_validation/financial_phrasebank_eval.py
 """
 
 from __future__ import annotations

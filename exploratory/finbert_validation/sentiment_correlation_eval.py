@@ -9,7 +9,7 @@ Reads existing artifacts (no FinBERT re-runs):
   - cpo/output/cpo_variables_Daily.csv
 
 Usage:
-    python news/validation/sentiment_correlation_eval.py
+    python exploratory/finbert_validation/sentiment_correlation_eval.py
 """
 
 from __future__ import annotations

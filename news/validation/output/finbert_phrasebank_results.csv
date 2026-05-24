@@ -1,6 +1,0 @@
-class,precision,recall,f1,support,mode,interpretation
-negative,0.7942,0.6838,0.7349,604,PHRASEBANK,
-neutral,0.7884,0.9187,0.8486,2879,PHRASEBANK,
-positive,0.8064,0.5745,0.671,1363,PHRASEBANK,
-macro_avg,0.7963,0.7257,0.7515,4846,PHRASEBANK,"FinBERT achieves macro-F1 = 0.7515 on Financial PhraseBank, demonstrating in-domain validity for financial sentiment classification. Application to MPOB articles assumes domain transfer holds."
-weighted_avg,0.7942,0.7926,0.7844,4846,PHRASEBANK,
