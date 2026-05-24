@@ -8,13 +8,13 @@ Pipeline:
   2. Pick the winning ablation per horizon by min BASE RMSE on test.
   3. CSA pass: for each winning (tag, horizon), re-train with CSA-tuned
      hyperparameters. We only spend the CSA budget on cells we'll actually
-     report in Tabel 4.11 (the user's scoped plan: ~7 x 4 minutes instead of
+     report in Tabel 4.7 (the user's scoped plan: ~7 x 4 minutes instead of
      ~28 x 4 minutes).
   4. Build deliverables under THESIS_RESULTS_<YYYYMMDD>/:
-       - tabel_4.10_base_testing.csv               (BASE, 4 x 7 grid)
-       - tabel_4.11_csa_winners_testing.csv        (CSA, 7 winning rows)
-       - tabel_4.12_dm_base_pairwise.csv           (BASE DM HLN across C1-C4)
-       - tabel_4.13_dm_csa_vs_base_winners.csv     (CSA vs BASE on each winner)
+       - tabel_4.6_base_testing.csv               (BASE, 4 x 7 grid)
+       - tabel_4.7_csa_winners_testing.csv        (CSA, 7 winning rows)
+       - tabel_4.8_dm_base_pairwise.csv           (BASE DM HLN across C1-C4)
+       - tabel_4.9_dm_csa_vs_base_winners.csv     (CSA vs BASE on each winner)
        - pt_directional_Daily_testing.csv          (PT 1992 per ablation x horizon)
        - h4_sufficiency_C4_vs_naive_rw.csv         (DM HLN of C4 BASE vs naive)
        - h2_feature_importance_C1_h1_top5.csv
@@ -26,7 +26,7 @@ Pipeline:
 Run::
 
     PYTHONIOENCODING=utf-8 website/venv/Scripts/python.exe \
-        prediction/fase4_thesis_runner.py --csa-population 10 --csa-iterations 10
+        prediction/fase4_thesis_runner.py --csa-population 50 --csa-iterations 50
 """
 
 from __future__ import annotations
@@ -62,6 +62,14 @@ warnings.filterwarnings("ignore")
 
 REPO_ROOT = _HERE.parent
 HORIZONS = list(range(1, 8))
+
+# --- CSA search budget -------------------------------------------------------
+# 50/50 dipilih konsisten dgn train_winners_csa.py dan berada dlm rentang
+# praktik metaheuristik utk tuning XGBoost berbasis CV (mis. populasi 50;
+# lih. Askarzadeh, 2016 — pilihan parameter bersifat problem-dependent /
+# No Free Lunch). Nilai TIDAK boleh berbeda antara FASE 4 dan klaim Bab 3.
+DEFAULT_CSA_POPULATION = 50
+DEFAULT_CSA_ITERATIONS = 50
 
 # Tag -> (ablation human label, module exposing load + run helpers)
 TAG_MODULES: Dict[str, Tuple[str, object]] = {
@@ -133,8 +141,8 @@ def _read_metric_row(tag: str, h: int, opt: str) -> dict | None:
     return row
 
 
-def build_table_4_10_base(out_dir: Path) -> pd.DataFrame:
-    """Tabel 4.10 — BASE testing metrics for the 4x7 grid."""
+def build_table_4_6_base(out_dir: Path) -> pd.DataFrame:
+    """Tabel 4.6 — BASE testing metrics for the 4x7 grid."""
     rows: List[dict] = []
     for tag in TAG_MODULES:
         for h in HORIZONS:
@@ -145,11 +153,11 @@ def build_table_4_10_base(out_dir: Path) -> pd.DataFrame:
                              "MAPE", "sMAPE", "RMSE",
                              "Directional_Accuracy", "n_samples"]]
     df = df.sort_values(["Horizon", "Config"]).reset_index(drop=True)
-    df.to_csv(out_dir / "tabel_4.10_base_testing.csv", index=False)
+    df.to_csv(out_dir / "tabel_4.6_base_testing.csv", index=False)
     return df
 
 
-def pick_winners_by_base_rmse(table_410: pd.DataFrame) -> Dict[int, str]:
+def pick_winners_by_base_rmse(table_46: pd.DataFrame) -> Dict[int, str]:
     """Best tag per horizon by minimum BASE RMSE on the test set.
 
     User decision 2026-05-23 (was MAPE). RMSE matches CSA's training-loss
@@ -157,7 +165,7 @@ def pick_winners_by_base_rmse(table_410: pd.DataFrame) -> Dict[int, str]:
     """
     winners: Dict[int, str] = {}
     for h in HORIZONS:
-        sub = table_410[table_410["Horizon"] == h].dropna(subset=["RMSE"])
+        sub = table_46[table_46["Horizon"] == h].dropna(subset=["RMSE"])
         if sub.empty:
             continue
         best = sub.sort_values("RMSE").iloc[0]
@@ -165,8 +173,8 @@ def pick_winners_by_base_rmse(table_410: pd.DataFrame) -> Dict[int, str]:
     return winners
 
 
-def build_table_4_11_csa(winners: Dict[int, str], out_dir: Path) -> pd.DataFrame:
-    """Tabel 4.11 — CSA testing metrics for the winning ablation per horizon."""
+def build_table_4_7_csa(winners: Dict[int, str], out_dir: Path) -> pd.DataFrame:
+    """Tabel 4.7 — CSA testing metrics for the winning ablation per horizon."""
     rows: List[dict] = []
     for h, tag in sorted(winners.items()):
         r = _read_metric_row(tag, h, "CSA")
@@ -177,7 +185,7 @@ def build_table_4_11_csa(winners: Dict[int, str], out_dir: Path) -> pd.DataFrame
     df = pd.DataFrame(rows)[["Horizon", "Config", "Ablation", "Optimization",
                              "MAPE", "sMAPE", "RMSE",
                              "Directional_Accuracy", "n_samples"]]
-    df.to_csv(out_dir / "tabel_4.11_csa_winners_testing.csv", index=False)
+    df.to_csv(out_dir / "tabel_4.7_csa_winners_testing.csv", index=False)
     return df
 
 
@@ -199,8 +207,8 @@ def _load_errors_logreturn(tag: str, h: int, opt: str) -> tuple[np.ndarray, np.n
     return err, y_pred[mask]
 
 
-def build_table_4_12_dm_base_pairwise(out_dir: Path) -> pd.DataFrame:
-    """Tabel 4.12 — BASE pairwise DM HLN across C1-C4 per horizon."""
+def build_table_4_8_dm_base_pairwise(out_dir: Path) -> pd.DataFrame:
+    """Tabel 4.8 — BASE pairwise DM HLN across C1-C4 per horizon."""
     import itertools
     pairs = list(itertools.combinations(TAG_MODULES.keys(), 2))
     rows: List[dict] = []
@@ -225,13 +233,13 @@ def build_table_4_12_dm_base_pairwise(out_dir: Path) -> pd.DataFrame:
                                          TAG_TO_CONFIG[tag_b]),
             })
     df = pd.DataFrame(rows)
-    df.to_csv(out_dir / "tabel_4.12_dm_base_pairwise.csv", index=False)
+    df.to_csv(out_dir / "tabel_4.8_dm_base_pairwise.csv", index=False)
     return df
 
 
-def build_table_4_13_dm_csa_vs_base(winners: Dict[int, str], out_dir: Path
+def build_table_4_9_dm_csa_vs_base(winners: Dict[int, str], out_dir: Path
                                      ) -> pd.DataFrame:
-    """Tabel 4.13 — for each winner (tag, horizon), DM HLN of CSA vs BASE.
+    """Tabel 4.9 — for each winner (tag, horizon), DM HLN of CSA vs BASE.
 
     Tests whether CSA actually improved over BASE for the winning ablation.
     """
@@ -253,7 +261,7 @@ def build_table_4_13_dm_csa_vs_base(winners: Dict[int, str], out_dir: Path
             "better_model": _verdict(dm, p, "CSA", "BASE"),
         })
     df = pd.DataFrame(rows)
-    df.to_csv(out_dir / "tabel_4.13_dm_csa_vs_base_winners.csv", index=False)
+    df.to_csv(out_dir / "tabel_4.9_dm_csa_vs_base_winners.csv", index=False)
     return df
 
 
@@ -349,7 +357,7 @@ def build_h2_acf(out_dir: Path) -> pd.DataFrame:
 
 # ----- Gambar 4.3 -----------------------------------------------------------
 
-def build_figure_4_3(table_410: pd.DataFrame, table_411: pd.DataFrame,
+def build_figure_4_3(table_46: pd.DataFrame, table_47: pd.DataFrame,
                      out_dir: Path) -> None:
     """Two-panel figure: MAPE and DA across horizons, BASE all four + CSA winner."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
@@ -358,14 +366,14 @@ def build_figure_4_3(table_410: pd.DataFrame, table_411: pd.DataFrame,
 
     for metric, ax in zip(["MAPE", "Directional_Accuracy"], axes):
         # BASE lines per config
-        for cfg, sub in table_410.groupby("Config"):
+        for cfg, sub in table_46.groupby("Config"):
             ax.plot(sub["Horizon"], sub[metric],
                     marker="o", linestyle="--", linewidth=1.4,
                     color=palette.get(cfg, "#999"),
                     label=f"{cfg} BASE")
         # CSA winner overlay
-        if not table_411.empty:
-            ax.plot(table_411["Horizon"], table_411[metric],
+        if not table_47.empty:
+            ax.plot(table_47["Horizon"], table_47[metric],
                     marker="s", linestyle="-", linewidth=2.0,
                     color="black", label="CSA winner")
         ax.set_xlabel("Forecast Horizon (days)")
@@ -385,8 +393,8 @@ def build_figure_4_3(table_410: pd.DataFrame, table_411: pd.DataFrame,
 # ----- SUMMARY.md -----------------------------------------------------------
 
 def write_summary(out_dir: Path,
-                  t410: pd.DataFrame, t411: pd.DataFrame,
-                  t412: pd.DataFrame, t413: pd.DataFrame,
+                  t46: pd.DataFrame, t47: pd.DataFrame,
+                  t48: pd.DataFrame, t49: pd.DataFrame,
                   h4: pd.DataFrame, h2_imp: pd.DataFrame, h2_acf: pd.DataFrame,
                   pt: pd.DataFrame,
                   winners: Dict[int, str], csa_config: dict) -> None:
@@ -405,7 +413,7 @@ def write_summary(out_dir: Path,
     P("CSA was run only on the 7 winning (Config, Horizon) cells picked by "
       "minimum BASE MAPE — the user's scoped plan in lieu of the full "
       "4 x 7 CSA grid. Pairwise DM tests therefore use BASE for fairness "
-      "(Tabel 4.12); Tabel 4.13 confirms whether CSA actually improved over "
+      "(Tabel 4.8); Tabel 4.9 confirms whether CSA actually improved over "
       "BASE on each winner.")
     P("")
 
@@ -423,34 +431,34 @@ def write_summary(out_dir: Path,
             return "_(empty)_"
         return df.to_markdown(index=False)
 
-    P("## Tabel 4.10 — BASE testing metrics (4 x 7 grid)")
+    P("## Tabel 4.6 — BASE testing metrics (4 x 7 grid)")
     P("")
-    P("Source: `tabel_4.10_base_testing.csv`")
+    P("Source: `tabel_4.6_base_testing.csv`")
     P("")
-    P(_md_table(t410))
-    P("")
-
-    P("## Tabel 4.11 — CSA testing metrics (winners only)")
-    P("")
-    P("Source: `tabel_4.11_csa_winners_testing.csv`")
-    P("")
-    P(_md_table(t411))
+    P(_md_table(t46))
     P("")
 
-    P("## Tabel 4.12 — BASE pairwise Diebold-Mariano (HLN-corrected)")
+    P("## Tabel 4.7 — CSA testing metrics (winners only)")
     P("")
-    P("Source: `tabel_4.12_dm_base_pairwise.csv`. `better_model = tie` when "
+    P("Source: `tabel_4.7_csa_winners_testing.csv`")
+    P("")
+    P(_md_table(t47))
+    P("")
+
+    P("## Tabel 4.8 — BASE pairwise Diebold-Mariano (HLN-corrected)")
+    P("")
+    P("Source: `tabel_4.8_dm_base_pairwise.csv`. `better_model = tie` when "
       "p >= 0.05; otherwise the side with lower squared loss is reported.")
     P("")
-    P(_md_table(t412))
+    P(_md_table(t48))
     P("")
 
-    P("## Tabel 4.13 — CSA vs BASE on winners (DM HLN)")
+    P("## Tabel 4.9 — CSA vs BASE on winners (DM HLN)")
     P("")
-    P("Source: `tabel_4.13_dm_csa_vs_base_winners.csv`. Per winner cell, "
+    P("Source: `tabel_4.9_dm_csa_vs_base_winners.csv`. Per winner cell, "
       "tests whether CSA-tuned hyperparams beat the BASE defaults.")
     P("")
-    P(_md_table(t413))
+    P(_md_table(t49))
     P("")
 
     P("## H3 — Pesaran-Timmermann directional skill per ablation")
@@ -553,14 +561,14 @@ def write_winners_payload(winners: Dict[int, str], out_dir: Path,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csa-population", type=int, default=10)
-    ap.add_argument("--csa-iterations", type=int, default=10)
-    ap.add_argument("--csa-cv-folds", type=int, default=3)
+    ap.add_argument("--csa-population", type=int, default=DEFAULT_CSA_POPULATION)
+    ap.add_argument("--csa-iterations", type=int, default=DEFAULT_CSA_ITERATIONS)
+    ap.add_argument("--csa-cv-folds", type=int, default=5)
     ap.add_argument("--skip-base-pass", action="store_true",
                     help="Use existing testing_results_h{h}.csv (assumes BASE pass "
                          "already done) and only run the CSA pass + aggregation.")
     ap.add_argument("--skip-csa-pass", action="store_true",
-                    help="Skip CSA on winners; Tabel 4.11 + 4.13 will be empty.")
+                    help="Skip CSA on winners; Tabel 4.7 + 4.9 will be empty.")
     ap.add_argument("--out-dir", type=str, default="")
     args = ap.parse_args()
 
@@ -576,9 +584,9 @@ def main() -> int:
         run_pass({"enabled": False, "population_size": 0,
                   "max_iterations": 0, "cv_folds": 3}, only=None)
 
-    print("\n[Step 2] Aggregate BASE -> Tabel 4.10; pick winners")
-    t410 = build_table_4_10_base(out_dir)
-    winners = pick_winners_by_base_rmse(t410)
+    print("\n[Step 2] Aggregate BASE -> Tabel 4.6; pick winners")
+    t46 = build_table_4_6_base(out_dir)
+    winners = pick_winners_by_base_rmse(t46)
     print(f"  Winners by horizon: {winners}")
 
     if not args.skip_csa_pass:
@@ -591,17 +599,17 @@ def main() -> int:
                   "cv_folds": args.csa_cv_folds}, only=winner_pairs)
 
     print("\n[Step 4] Build deliverables")
-    t411 = build_table_4_11_csa(winners, out_dir)
-    t412 = build_table_4_12_dm_base_pairwise(out_dir)
-    t413 = build_table_4_13_dm_csa_vs_base(winners, out_dir)
+    t47 = build_table_4_7_csa(winners, out_dir)
+    t48 = build_table_4_8_dm_base_pairwise(out_dir)
+    t49 = build_table_4_9_dm_csa_vs_base(winners, out_dir)
     pt_csv = build_pt_directional(out_dir)
     pt_df = pd.read_csv(pt_csv) if pt_csv is not None else pd.DataFrame()
     h4   = build_h4_sufficiency(out_dir)
     h2_i = build_h2_feature_importance(out_dir)
     h2_a = build_h2_acf(out_dir)
-    build_figure_4_3(t410, t411, out_dir)
-    write_winners_payload(winners, out_dir, t410, t411)
-    write_summary(out_dir, t410, t411, t412, t413, h4, h2_i, h2_a, pt_df,
+    build_figure_4_3(t46, t47, out_dir)
+    write_winners_payload(winners, out_dir, t46, t47)
+    write_summary(out_dir, t46, t47, t48, t49, h4, h2_i, h2_a, pt_df,
                   winners,
                   {"population_size": args.csa_population,
                    "max_iterations": args.csa_iterations,
