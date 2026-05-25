@@ -92,7 +92,11 @@ def reconcile_news(db, articles: list[dict]) -> int:
         logger.info('  Reconcile news: CSV empty or unreadable; nothing to do.')
         return 0
 
-    existing_ids = {doc.id for doc in db.collection('news_articles').stream()}
+    # Projection-only stream: we just need the doc IDs to diff against the
+    # CSV's URL hashes. Pulling the full payload (incl. the multi-KB `content`
+    # field) for 10k+ docs trips Firestore's server-side query timeout.
+    existing_ids = {doc.id for doc in
+                    db.collection('news_articles').select(['__name__']).stream()}
     missing = [a for a in articles
                if a.get('url') and url_to_doc_id(a['url']) not in existing_ids]
     if not missing:

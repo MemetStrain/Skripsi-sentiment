@@ -296,6 +296,7 @@
     const chartData    = JSON.parse('{{ chart_data|safe }}');
     const winnersData  = JSON.parse('{{ winners_data|safe }}');
     const sentimentData = JSON.parse('{{ sentiment_data|safe }}');
+    const latestDate   = '{{ latest_date|escapejs }}';
 
     const labels = chartData.map(d => d.date);
     const prices = chartData.map(d => d.actual);
@@ -570,6 +571,25 @@
     }
     function kiNote(text) { return `<li class="text-slate-400">${text}</li>`; }
 
+    // Trading-day gap from `from` (exclusive) to `to` (inclusive). Skips Sat/Sun.
+    // Holidays are not modelled — a long-weekend public holiday will read as
+    // 1 extra "stale" day, which is the safe direction to err.
+    function tradingDaysBetween(fromIso, toIso) {
+        if (!fromIso || !toIso || fromIso === 'N/A') return 0;
+        const from = new Date(fromIso + 'T00:00:00');
+        const to   = new Date(toIso   + 'T00:00:00');
+        if (!(from < to)) return 0;
+        let n = 0;
+        const cur = new Date(from);
+        cur.setDate(cur.getDate() + 1);
+        while (cur <= to) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) n++;
+            cur.setDate(cur.getDate() + 1);
+        }
+        return n;
+    }
+
     function renderKeyInsights(forecasts) {
         // ---- PRICE (chartData) ----------------------------------------------
         const cd = chartData.filter(d => d.actual != null);
@@ -732,6 +752,17 @@
             const note  = st === 1 ? 'Upward regime in recent sessions.'
                         : st === 0 ? 'Downward regime in recent sessions.'
                         : 'No clear up or down trend right now.';
+            // Staleness — flag when the latest data point is more than 3 trading
+            // days behind today (i.e. the scheduler missed multiple runs).
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const staleDays = tradingDaysBetween(latestDate, todayIso);
+            const stale = staleDays > 3;
+            const stalePill = stale
+                ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold">Stale · ${staleDays}d</span>`
+                : '';
+            const asOf = (latestDate && latestDate !== 'N/A')
+                ? `<div class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100">as of ${latestDate}${stalePill}</div>`
+                : '';
             elP.innerHTML = `
                 <div class="text-xl font-bold ${tone} mb-3">${label} <span class="text-sm font-normal text-slate-400">· ${dur} days</span></div>
                 <div class="flex gap-1.5 text-[11px] mb-2">
@@ -739,7 +770,9 @@
                     ${chip('Neutral', st === 2, 'bg-amber-100 text-amber-700 font-semibold')}
                     ${chip('Bullish', st === 1, 'bg-green-100 text-green-700 font-semibold')}
                 </div>
-                <div class="text-[11px] text-slate-400 leading-snug">${note}</div>`;
+                <div class="text-[11px] text-slate-400 leading-snug">${note}</div>
+                ${asOf}`;
+            elP.parentElement.classList.toggle('opacity-60', stale);
         } else if (elP) {
             elP.innerHTML = `<div class="text-sm text-slate-400">Not enough price data.</div>`;
         }

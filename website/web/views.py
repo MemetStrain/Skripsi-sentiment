@@ -7,6 +7,7 @@ Public-facing read-only site; no authentication required.
 from django.shortcuts import render
 from django.contrib import messages
 from django.http import JsonResponse
+from django.views.decorators.cache import cache_control
 from datetime import datetime, timedelta
 from firebase_admin import firestore
 import json
@@ -284,16 +285,29 @@ def forecasts_api(request):
 # News
 # ---------------------------------------------------------------------------
 
+@cache_control(public=True, s_maxage=3600, max_age=60)
 def news(request):
-    """Display news articles from `news_articles` collection."""
+    """Display news articles from `news_articles` collection.
+
+    Edge-cached for 1h (Vercel CDN) / 1min (browser): news only changes
+    when the scheduler runs (~daily), so repeat hits should never touch
+    Firestore. Drop s_maxage if you need fresher.
+    """
     db = firestore.client()
 
     sentiment_filter = request.GET.get('sentiment')
     page_number = int(request.GET.get('page', 1))
     items_per_page = 9
 
-    # Fetch all and sort in Python (avoids composite index requirement)
-    news_docs = db.collection('news_articles').stream()
+    # Fetch all and sort in Python (avoids composite index requirement).
+    # .select() drops the heavy `content` field server-side — every article
+    # has a precomputed `snippet` from the scheduler, so content is unused.
+    news_docs = (
+        db.collection('news_articles')
+          .select(['date', 'title', 'category', 'snippet', 'url',
+                   'sentiment_label', 'sentiment_score'])
+          .stream()
+    )
     news_list = []
     sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0, 'total': 0}
 
@@ -328,17 +342,11 @@ def news(request):
         if sentiment_filter and label != sentiment_filter:
             continue
 
-        # First paragraph: use the snippet field (pre-computed by scheduler)
-        snippet = d.get('snippet', '')
-        if not snippet and d.get('content'):
-            # Fallback: first 200 chars of content
-            snippet = d['content'][:200].rsplit(' ', 1)[0] + '…'
-
         news_list.append({
             'date': d.get('date', ''),
             'title': d.get('title', ''),
             'category': d.get('category', ''),
-            'snippet': snippet,
+            'snippet': d.get('snippet', ''),
             'url': d.get('url', '#'),
             'sentiment_label': label,
             'sentiment_score': float(d.get('sentiment_score', 0)),
