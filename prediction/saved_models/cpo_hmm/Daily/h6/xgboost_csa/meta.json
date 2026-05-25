@@ -45,10 +45,10 @@
   "params": {
     "n_estimators": 50,
     "max_depth": 3,
-    "learning_rate": 0.01,
-    "subsample": 0.6058972025180736,
-    "colsample_bytree": 0.6483793418682054,
+    "learning_rate": 0.010002377897765705,
+    "subsample": 0.6029175580101934,
+    "colsample_bytree": 0.7115745825934696,
     "min_child_weight": 8
   },
-  "saved_at": "2026-05-23T19:46:58.076951"
+  "saved_at": "2026-05-24T23:34:58.808845"
 }

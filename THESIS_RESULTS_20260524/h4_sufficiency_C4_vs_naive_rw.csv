@@ -1,0 +1,8 @@
+Horizon,n,DM_star,p_value,significant_at_0.05,better_model
+1,263,3.9067,0.0001,True,naive_rw
+2,263,5.0701,0.0,True,naive_rw
+3,263,3.4486,0.0007,True,naive_rw
+4,263,1.0994,0.2726,False,tie
+5,263,1.9544,0.0517,False,tie
+6,263,1.9659,0.0504,False,tie
+7,263,2.2804,0.0234,True,naive_rw
