@@ -67,52 +67,52 @@ Source: `tabel_4.7_csa_winners_testing.csv`
 
 ## Tabel 4.8 — BASE pairwise Diebold-Mariano (HLN-corrected)
 
-Source: `tabel_4.8_dm_base_pairwise.csv`. `better_model = tie` when p >= 0.05; otherwise the side with lower squared loss is reported.
+Source: `tabel_4.8_dm_base_pairwise.csv`. `better_model = tie` when p >= 0.05; otherwise the side with lower squared loss is reported. Kolom `significant_holm_at_0.05` menerapkan koreksi Holm-Bonferroni pada family 42 uji (6 pair x 7 horizon); verdict skripsi mengacu ke kolom Holm ini.
 
-|   Horizon | Model_A   | Model_B   |   n |   DM_star |   p_value | significant_at_0.05   | better_model   |
-|----------:|:----------|:----------|----:|----------:|----------:|:----------------------|:---------------|
-|         1 | C1        | C2        | 275 |    2.4871 |    0.0135 | True                  | C2             |
-|         1 | C1        | C3        | 263 |    1.7736 |    0.0773 | False                 | tie            |
-|         1 | C1        | C4        | 263 |    1.6114 |    0.1083 | False                 | tie            |
-|         1 | C2        | C3        | 263 |   -0.5061 |    0.6132 | False                 | tie            |
-|         1 | C2        | C4        | 263 |   -0.3841 |    0.7012 | False                 | tie            |
-|         1 | C3        | C4        | 263 |    0.0989 |    0.9213 | False                 | tie            |
-|         2 | C1        | C2        | 275 |    1.2163 |    0.2249 | False                 | tie            |
-|         2 | C1        | C3        | 263 |    1.7042 |    0.0895 | False                 | tie            |
-|         2 | C1        | C4        | 263 |    0.6306 |    0.5288 | False                 | tie            |
-|         2 | C2        | C3        | 263 |    0.7139 |    0.4759 | False                 | tie            |
-|         2 | C2        | C4        | 263 |   -0.3206 |    0.7488 | False                 | tie            |
-|         2 | C3        | C4        | 263 |   -1.2939 |    0.1968 | False                 | tie            |
-|         3 | C1        | C2        | 275 |    0.2788 |    0.7806 | False                 | tie            |
-|         3 | C1        | C3        | 263 |    0.1451 |    0.8847 | False                 | tie            |
-|         3 | C1        | C4        | 263 |   -0.2752 |    0.7834 | False                 | tie            |
-|         3 | C2        | C3        | 263 |   -0.3379 |    0.7357 | False                 | tie            |
-|         3 | C2        | C4        | 263 |   -1.4265 |    0.1549 | False                 | tie            |
-|         3 | C3        | C4        | 263 |   -0.4385 |    0.6614 | False                 | tie            |
-|         4 | C1        | C2        | 275 |    1.8664 |    0.0631 | False                 | tie            |
-|         4 | C1        | C3        | 263 |    2.4257 |    0.016  | True                  | C3             |
-|         4 | C1        | C4        | 263 |    2.5142 |    0.0125 | True                  | C4             |
-|         4 | C2        | C3        | 263 |   -0.0389 |    0.969  | False                 | tie            |
-|         4 | C2        | C4        | 263 |    0.9778 |    0.3291 | False                 | tie            |
-|         4 | C3        | C4        | 263 |    0.8771 |    0.3812 | False                 | tie            |
-|         5 | C1        | C2        | 275 |    0.9552 |    0.3403 | False                 | tie            |
-|         5 | C1        | C3        | 263 |    0.7734 |    0.44   | False                 | tie            |
-|         5 | C1        | C4        | 263 |    1.6172 |    0.107  | False                 | tie            |
-|         5 | C2        | C3        | 263 |   -0.6153 |    0.5389 | False                 | tie            |
-|         5 | C2        | C4        | 263 |    0.2341 |    0.8151 | False                 | tie            |
-|         5 | C3        | C4        | 263 |    1.2829 |    0.2007 | False                 | tie            |
-|         6 | C1        | C2        | 275 |    2.1682 |    0.031  | True                  | C2             |
-|         6 | C1        | C3        | 263 |    0.6562 |    0.5123 | False                 | tie            |
-|         6 | C1        | C4        | 263 |    1.9881 |    0.0478 | True                  | C4             |
-|         6 | C2        | C3        | 263 |   -1.6602 |    0.0981 | False                 | tie            |
-|         6 | C2        | C4        | 263 |   -0.3905 |    0.6965 | False                 | tie            |
-|         6 | C3        | C4        | 263 |    1.2979 |    0.1954 | False                 | tie            |
-|         7 | C1        | C2        | 275 |    0.6119 |    0.5411 | False                 | tie            |
-|         7 | C1        | C3        | 263 |    0.7932 |    0.4284 | False                 | tie            |
-|         7 | C1        | C4        | 263 |    1.0544 |    0.2927 | False                 | tie            |
-|         7 | C2        | C3        | 263 |   -0.2192 |    0.8267 | False                 | tie            |
-|         7 | C2        | C4        | 263 |    0.3297 |    0.7419 | False                 | tie            |
-|         7 | C3        | C4        | 263 |    0.5144 |    0.6074 | False                 | tie            |
+|   Horizon | Model_A   | Model_B   |   n |   DM_star |   p_value | significant_at_0.05   | better_model   |   p_value_holm | significant_holm_at_0.05   |
+|----------:|:----------|:----------|----:|----------:|----------:|:----------------------|:---------------|---------------:|:---------------------------|
+|         1 | C1        | C2        | 275 |    2.4871 |    0.0135 | True                  | C2             |         0.5535 | False                      |
+|         1 | C1        | C3        | 263 |    1.7736 |    0.0773 | False                 | tie            |         1      | False                      |
+|         1 | C1        | C4        | 263 |    1.6114 |    0.1083 | False                 | tie            |         1      | False                      |
+|         1 | C2        | C3        | 263 |   -0.5061 |    0.6132 | False                 | tie            |         1      | False                      |
+|         1 | C2        | C4        | 263 |   -0.3841 |    0.7012 | False                 | tie            |         1      | False                      |
+|         1 | C3        | C4        | 263 |    0.0989 |    0.9213 | False                 | tie            |         1      | False                      |
+|         2 | C1        | C2        | 275 |    1.2163 |    0.2249 | False                 | tie            |         1      | False                      |
+|         2 | C1        | C3        | 263 |    1.7042 |    0.0895 | False                 | tie            |         1      | False                      |
+|         2 | C1        | C4        | 263 |    0.6306 |    0.5288 | False                 | tie            |         1      | False                      |
+|         2 | C2        | C3        | 263 |    0.7139 |    0.4759 | False                 | tie            |         1      | False                      |
+|         2 | C2        | C4        | 263 |   -0.3206 |    0.7488 | False                 | tie            |         1      | False                      |
+|         2 | C3        | C4        | 263 |   -1.2939 |    0.1968 | False                 | tie            |         1      | False                      |
+|         3 | C1        | C2        | 275 |    0.2788 |    0.7806 | False                 | tie            |         1      | False                      |
+|         3 | C1        | C3        | 263 |    0.1451 |    0.8847 | False                 | tie            |         1      | False                      |
+|         3 | C1        | C4        | 263 |   -0.2752 |    0.7834 | False                 | tie            |         1      | False                      |
+|         3 | C2        | C3        | 263 |   -0.3379 |    0.7357 | False                 | tie            |         1      | False                      |
+|         3 | C2        | C4        | 263 |   -1.4265 |    0.1549 | False                 | tie            |         1      | False                      |
+|         3 | C3        | C4        | 263 |   -0.4385 |    0.6614 | False                 | tie            |         1      | False                      |
+|         4 | C1        | C2        | 275 |    1.8664 |    0.0631 | False                 | tie            |         1      | False                      |
+|         4 | C1        | C3        | 263 |    2.4257 |    0.016  | True                  | C3             |         0.64   | False                      |
+|         4 | C1        | C4        | 263 |    2.5142 |    0.0125 | True                  | C4             |         0.525  | False                      |
+|         4 | C2        | C3        | 263 |   -0.0389 |    0.969  | False                 | tie            |         1      | False                      |
+|         4 | C2        | C4        | 263 |    0.9778 |    0.3291 | False                 | tie            |         1      | False                      |
+|         4 | C3        | C4        | 263 |    0.8771 |    0.3812 | False                 | tie            |         1      | False                      |
+|         5 | C1        | C2        | 275 |    0.9552 |    0.3403 | False                 | tie            |         1      | False                      |
+|         5 | C1        | C3        | 263 |    0.7734 |    0.44   | False                 | tie            |         1      | False                      |
+|         5 | C1        | C4        | 263 |    1.6172 |    0.107  | False                 | tie            |         1      | False                      |
+|         5 | C2        | C3        | 263 |   -0.6153 |    0.5389 | False                 | tie            |         1      | False                      |
+|         5 | C2        | C4        | 263 |    0.2341 |    0.8151 | False                 | tie            |         1      | False                      |
+|         5 | C3        | C4        | 263 |    1.2829 |    0.2007 | False                 | tie            |         1      | False                      |
+|         6 | C1        | C2        | 275 |    2.1682 |    0.031  | True                  | C2             |         1      | False                      |
+|         6 | C1        | C3        | 263 |    0.6562 |    0.5123 | False                 | tie            |         1      | False                      |
+|         6 | C1        | C4        | 263 |    1.9881 |    0.0478 | True                  | C4             |         1      | False                      |
+|         6 | C2        | C3        | 263 |   -1.6602 |    0.0981 | False                 | tie            |         1      | False                      |
+|         6 | C2        | C4        | 263 |   -0.3905 |    0.6965 | False                 | tie            |         1      | False                      |
+|         6 | C3        | C4        | 263 |    1.2979 |    0.1954 | False                 | tie            |         1      | False                      |
+|         7 | C1        | C2        | 275 |    0.6119 |    0.5411 | False                 | tie            |         1      | False                      |
+|         7 | C1        | C3        | 263 |    0.7932 |    0.4284 | False                 | tie            |         1      | False                      |
+|         7 | C1        | C4        | 263 |    1.0544 |    0.2927 | False                 | tie            |         1      | False                      |
+|         7 | C2        | C3        | 263 |   -0.2192 |    0.8267 | False                 | tie            |         1      | False                      |
+|         7 | C2        | C4        | 263 |    0.3297 |    0.7419 | False                 | tie            |         1      | False                      |
+|         7 | C3        | C4        | 263 |    0.5144 |    0.6074 | False                 | tie            |         1      | False                      |
 
 ## Tabel 4.9 — CSA vs BASE on winners (DM HLN)
 

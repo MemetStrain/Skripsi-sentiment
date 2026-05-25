@@ -56,6 +56,7 @@ import horizon_forecast_C3_price_sentiment as c3mod  # noqa: E402
 import horizon_forecast_C4_full as c4mod         # noqa: E402
 from naive_baseline import diebold_mariano_test  # noqa: E402
 from baselines import pt_directional as pt_module  # noqa: E402
+from baselines.multiple_comparison import holm_bonferroni  # noqa: E402
 from utils.forecast_utils import VAL_CUTOFF      # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -208,7 +209,12 @@ def _load_errors_logreturn(tag: str, h: int, opt: str) -> tuple[np.ndarray, np.n
 
 
 def build_table_4_8_dm_base_pairwise(out_dir: Path) -> pd.DataFrame:
-    """Tabel 4.8 — BASE pairwise DM HLN across C1-C4 per horizon."""
+    """Tabel 4.8 — BASE pairwise DM HLN across C1-C4 per horizon
+    + kolom Holm-corrected (p_value_holm, significant_holm_at_0.05).
+
+    Family Holm = 42 baris (6 pair x 7 horizon) varian BASE, konsisten
+    dgn dm_ablation_pairwise.py.
+    """
     import itertools
     pairs = list(itertools.combinations(TAG_MODULES.keys(), 2))
     rows: List[dict] = []
@@ -233,6 +239,10 @@ def build_table_4_8_dm_base_pairwise(out_dir: Path) -> pd.DataFrame:
                                          TAG_TO_CONFIG[tag_b]),
             })
     df = pd.DataFrame(rows)
+    # Holm-Bonferroni FWER pada seluruh family (42 = 6 pair x 7 horizon)
+    adj, rej = holm_bonferroni(df["p_value"].to_numpy(), alpha=0.05)
+    df["p_value_holm"] = np.round(adj, 6)
+    df["significant_holm_at_0.05"] = rej
     df.to_csv(out_dir / "tabel_4.8_dm_base_pairwise.csv", index=False)
     return df
 
@@ -448,7 +458,10 @@ def write_summary(out_dir: Path,
     P("## Tabel 4.8 — BASE pairwise Diebold-Mariano (HLN-corrected)")
     P("")
     P("Source: `tabel_4.8_dm_base_pairwise.csv`. `better_model = tie` when "
-      "p >= 0.05; otherwise the side with lower squared loss is reported.")
+      "p >= 0.05; otherwise the side with lower squared loss is reported. "
+      "Kolom `significant_holm_at_0.05` menerapkan koreksi Holm-Bonferroni "
+      "pada family 42 uji (6 pair x 7 horizon); verdict skripsi mengacu "
+      "ke kolom Holm ini.")
     P("")
     P(_md_table(t48))
     P("")
