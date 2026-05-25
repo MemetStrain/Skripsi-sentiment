@@ -2,129 +2,138 @@
 
 {% block content %}
 <!-- Page Header -->
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-slate-800">CPO News &amp; Sentiment Analysis</h1>
-    <p class="text-slate-500 mt-1">Latest news with FinBERT sentiment classification</p>
-    <p class="text-xs text-slate-400 mt-2">
+<header class="mb-7">
+    <h1 class="text-2xl sm:text-[1.7rem] font-bold text-slate-900 tracking-tight">CPO News &amp; Sentiment Analysis</h1>
+    <p class="text-slate-500 mt-1 text-sm">Latest news with FinBERT sentiment classification.</p>
+    <p class="text-xs text-slate-400 mt-2 leading-relaxed">
         Source: news is extracted from the MPOB PrestasiSawit portal
-        (<a href="https://prestasisawit.mpob.gov.my" target="_blank" rel="noopener" class="text-primary hover:underline">prestasisawit.mpob.gov.my</a>).
-        {% if coverage_start and coverage_end %}Coverage: <strong>{{ coverage_start }}</strong> &ndash; <strong>{{ coverage_end }}</strong> ({{ sentiment_counts.total }} articles).{% endif %}
+        (<a href="https://prestasisawit.mpob.gov.my" target="_blank" rel="noopener" class="text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary rounded-sm">prestasisawit.mpob.gov.my</a>).
+        {% if coverage_start and coverage_end %}Coverage: <strong class="text-slate-600 tabular-nums">{{ coverage_start }}</strong> &ndash; <strong class="text-slate-600 tabular-nums">{{ coverage_end }}</strong> (<span class="tabular-nums">{{ sentiment_counts.total }}</span> articles).{% endif %}
     </p>
-</div>
+</header>
 
 <!-- Explanation (moved to top) -->
-<div class="mb-8 bg-slate-50 rounded-lg border border-slate-200 p-6">
-    <h5 class="text-base font-bold text-slate-800 mb-3">About Sentiment Analysis</h5>
+<section class="mb-8 bg-white rounded-xl border border-slate-200 shadow-card p-6" aria-labelledby="about-sentiment-heading">
+    <h2 id="about-sentiment-heading" class="text-base font-bold text-slate-900 mb-3">About sentiment analysis</h2>
     <p class="text-slate-600 mb-4 text-sm leading-relaxed">
         <strong>FinBERT</strong> is a pre-trained NLP model specifically designed for financial sentiment analysis.
-        It analyzes news articles and classifies them into:
+        It classifies each article into one of three classes:
     </p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-        <div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+        <div class="rounded-lg bg-green-50/60 border border-green-100 p-3">
             <strong class="text-green-700">Positive</strong>
-            <span class="text-slate-500"> &mdash; Optimistic outlook, price increases, favorable market conditions</span>
+            <p class="text-slate-500 mt-0.5 text-xs leading-relaxed">Optimistic outlook, price increases, favourable market conditions.</p>
         </div>
-        <div>
+        <div class="rounded-lg bg-red-50/60 border border-red-100 p-3">
             <strong class="text-red-700">Negative</strong>
-            <span class="text-slate-500"> &mdash; Pessimistic outlook, price drops, unfavorable market conditions</span>
+            <p class="text-slate-500 mt-0.5 text-xs leading-relaxed">Pessimistic outlook, price drops, unfavourable market conditions.</p>
         </div>
-        <div>
+        <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
             <strong class="text-slate-700">Neutral</strong>
-            <span class="text-slate-500"> &mdash; Balanced or factual information without clear sentiment direction</span>
+            <p class="text-slate-500 mt-0.5 text-xs leading-relaxed">Balanced or factual information without a clear sentiment direction.</p>
         </div>
     </div>
-</div>
+</section>
 
-<!-- Sentiment Statistics -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
-        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.positive }}</div>
-        <div class="text-sm text-slate-500">Positive</div>
+<!-- Sentiment Statistics (consolidated card with internal dividers) -->
+<section class="bg-white rounded-xl shadow-card border border-slate-100 mb-8 overflow-hidden" aria-label="Sentiment article counts">
+    <div class="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-slate-100">
+        <div class="p-5 text-center">
+            <div class="text-2xl font-bold text-green-600 font-mono tabular-nums">{{ sentiment_counts.positive }}</div>
+            <div class="text-xs uppercase tracking-wide text-slate-400 mt-0.5">Positive</div>
+        </div>
+        <div class="p-5 text-center">
+            <div class="text-2xl font-bold text-red-600 font-mono tabular-nums">{{ sentiment_counts.negative }}</div>
+            <div class="text-xs uppercase tracking-wide text-slate-400 mt-0.5">Negative</div>
+        </div>
+        <div class="p-5 text-center">
+            <div class="text-2xl font-bold text-slate-700 font-mono tabular-nums">{{ sentiment_counts.neutral }}</div>
+            <div class="text-xs uppercase tracking-wide text-slate-400 mt-0.5">Neutral</div>
+        </div>
+        <div class="p-5 text-center">
+            <div class="text-2xl font-bold text-slate-800 font-mono tabular-nums">{{ sentiment_counts.total }}</div>
+            <div class="text-xs uppercase tracking-wide text-slate-400 mt-0.5">Total</div>
+        </div>
     </div>
-    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
-        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.negative }}</div>
-        <div class="text-sm text-slate-500">Negative</div>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
-        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.neutral }}</div>
-        <div class="text-sm text-slate-500">Neutral</div>
-    </div>
-    <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 text-center">
-        <div class="text-2xl font-bold text-slate-800">{{ sentiment_counts.total }}</div>
-        <div class="text-sm text-slate-500">Total</div>
-    </div>
-</div>
+</section>
 
 <!-- Filter Bar -->
-<div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 mb-8">
+<section class="bg-white rounded-xl shadow-card border border-slate-100 p-4 mb-8" aria-label="Filter news by sentiment">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <span class="text-sm font-medium text-slate-700">Filter by Sentiment:</span>
+        <span class="text-sm font-medium text-slate-700">Filter by sentiment</span>
         <div class="flex flex-wrap gap-2">
             <a href="{% url 'news' %}"
-               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if not current_filter %}bg-primary text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 {% if not current_filter %}bg-primary text-white shadow-sm{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
                 All
             </a>
             <a href="{% url 'news' %}?sentiment=Positive"
-               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if current_filter == 'Positive' %}bg-green-600 text-white{% else %}bg-green-50 text-green-700 hover:bg-green-100{% endif %}">
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-1 {% if current_filter == 'Positive' %}bg-green-600 text-white shadow-sm{% else %}bg-green-50 text-green-700 hover:bg-green-100{% endif %}">
                 Positive
             </a>
             <a href="{% url 'news' %}?sentiment=Negative"
-               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if current_filter == 'Negative' %}bg-red-600 text-white{% else %}bg-red-50 text-red-700 hover:bg-red-100{% endif %}">
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 {% if current_filter == 'Negative' %}bg-red-600 text-white shadow-sm{% else %}bg-red-50 text-red-700 hover:bg-red-100{% endif %}">
                 Negative
             </a>
             <a href="{% url 'news' %}?sentiment=Neutral"
-               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors {% if current_filter == 'Neutral' %}bg-slate-600 text-white{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
+               class="px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 {% if current_filter == 'Neutral' %}bg-slate-700 text-white shadow-sm{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
                 Neutral
             </a>
         </div>
     </div>
-</div>
+</section>
 
 <!-- News Grid -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
     {% if news_page %}
         {% for news_item in news_page %}
-        <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-6 flex flex-col h-full">
+        <article class="group bg-white rounded-xl shadow-card hover:shadow-card-hover border border-slate-100 hover:border-slate-200 p-6 flex flex-col h-full transition-all duration-200">
             <!-- Top row: category + date -->
-            <div class="flex justify-between items-start mb-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-700 truncate max-w-[60%]">
+            <div class="flex justify-between items-start mb-2 gap-2">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-teal-50 text-teal-700 truncate max-w-[60%]">
                     {{ news_item.category|default:"General" }}
                 </span>
-                <span class="text-slate-400 text-xs shrink-0">{{ news_item.date }}</span>
+                <span class="text-slate-400 text-xs shrink-0 tabular-nums">{{ news_item.date }}</span>
             </div>
 
             <!-- Sentiment badge -->
             <div class="mb-2">
                 {% if news_item.sentiment_label == 'Positive' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Positive</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden="true"></span>Positive
+                    </span>
                 {% elif news_item.sentiment_label == 'Negative' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Negative</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-500" aria-hidden="true"></span>Negative
+                    </span>
                 {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Neutral</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400" aria-hidden="true"></span>Neutral
+                    </span>
                 {% endif %}
             </div>
 
             <!-- Title -->
-            <h5 class="text-sm font-bold text-slate-800 mb-2 line-clamp-2 flex-grow">
+            <h2 class="text-sm font-bold text-slate-900 mb-2 line-clamp-2 leading-snug">
                 {{ news_item.title }}
-            </h5>
+            </h2>
 
             <!-- First paragraph / snippet -->
-            <p class="text-slate-500 text-xs mb-4 line-clamp-3">{{ news_item.snippet }}</p>
+            <p class="text-slate-500 text-xs mb-4 line-clamp-3 leading-relaxed flex-grow">{{ news_item.snippet }}</p>
 
             <!-- Footer -->
             <div class="pt-3 border-t border-slate-100">
                 <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer"
-                   class="text-primary hover:underline font-medium text-sm">
-                    Read original &rarr;
+                   class="inline-flex items-center gap-1 text-primary hover:underline font-medium text-sm rounded-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1">
+                    Read original
+                    <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">&rarr;</span>
                 </a>
             </div>
-        </div>
+        </article>
         {% endfor %}
     {% else %}
         <div class="col-span-full">
-            <div class="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
-                <h4 class="text-lg font-bold text-slate-800 mb-2">No News Found</h4>
+            <div class="bg-white border border-slate-200 rounded-xl p-8 text-center shadow-card">
+                <h2 class="text-lg font-bold text-slate-800 mb-2">No news found</h2>
                 <p class="text-slate-600 text-sm">
                     {% if current_filter %}
                         No {{ current_filter|lower }} news available. Try selecting a different filter.
@@ -146,25 +155,25 @@
                 <li>
                     <a href="?page=1{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
                        aria-label="First page"
-                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary text-sm">
                         &laquo;
                     </a>
                 </li>
                 <li>
                     <a href="?page={{ pagination.previous_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
                        aria-label="Previous page"
-                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary text-sm">
                         &lsaquo;
                     </a>
                 </li>
             {% else %}
                 <li>
-                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm" aria-hidden="true">
                         &laquo;
                     </span>
                 </li>
                 <li>
-                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm" aria-hidden="true">
                         &lsaquo;
                     </span>
                 </li>
@@ -172,7 +181,7 @@
 
             {% if pagination.show_left_ellipsis %}
                 <li>
-                    <span class="w-9 h-9 flex items-center justify-center text-slate-400 text-sm">
+                    <span class="w-9 h-9 flex items-center justify-center text-slate-400 text-sm" aria-hidden="true">
                         &hellip;
                     </span>
                 </li>
@@ -181,14 +190,14 @@
             {% for num in pagination.page_range %}
                 {% if pagination.current_page == num %}
                     <li>
-                        <span class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white font-medium text-sm">
+                        <span aria-current="page" class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white font-medium text-sm shadow-sm tabular-nums">
                             {{ num }}
                         </span>
                     </li>
                 {% else %}
                     <li>
                         <a href="?page={{ num }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
-                           class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                           class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary text-sm tabular-nums">
                             {{ num }}
                         </a>
                     </li>
@@ -197,7 +206,7 @@
 
             {% if pagination.show_right_ellipsis %}
                 <li>
-                    <span class="w-9 h-9 flex items-center justify-center text-slate-400 text-sm">
+                    <span class="w-9 h-9 flex items-center justify-center text-slate-400 text-sm" aria-hidden="true">
                         &hellip;
                     </span>
                 </li>
@@ -207,25 +216,25 @@
                 <li>
                     <a href="?page={{ pagination.next_page }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
                        aria-label="Next page"
-                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary text-sm">
                         &rsaquo;
                     </a>
                 </li>
                 <li>
                     <a href="?page={{ pagination.total_pages }}{% if current_filter %}&sentiment={{ current_filter }}{% endif %}"
                        aria-label="Last page"
-                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">
+                       class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary text-sm">
                         &raquo;
                     </a>
                 </li>
             {% else %}
                 <li>
-                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm" aria-hidden="true">
                         &rsaquo;
                     </span>
                 </li>
                 <li>
-                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm">
+                    <span class="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-300 text-sm" aria-hidden="true">
                         &raquo;
                     </span>
                 </li>
@@ -234,7 +243,7 @@
     </nav>
 
     <p class="text-sm text-slate-500">
-        Page <span class="font-medium text-slate-700">{{ pagination.current_page }}</span> of <span class="font-medium text-slate-700">{{ pagination.total_pages }}</span>
+        Page <span class="font-medium text-slate-700 tabular-nums">{{ pagination.current_page }}</span> of <span class="font-medium text-slate-700 tabular-nums">{{ pagination.total_pages }}</span>
     </p>
 </div>
 {% endif %}

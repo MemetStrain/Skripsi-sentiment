@@ -3,108 +3,109 @@
 {% block content %}
 
 <!-- Hero -->
-<div class="text-center max-w-2xl mx-auto mb-12">
-    <h1 class="text-3xl font-bold text-slate-800 mb-3">About This Project</h1>
+<header class="text-center max-w-2xl mx-auto mb-12">
+    <span class="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-primary mb-3">Skripsi project</span>
+    <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight mb-3">About this project</h1>
     <p class="text-slate-500 leading-relaxed">
         An automated system for monitoring and forecasting Crude Palm Oil (CPO) prices,
         built as a thesis project at Universitas Bina Nusantara.
     </p>
-</div>
+</header>
 
 <!-- What it does -->
-<div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
-        <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+<section class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" aria-label="Project features">
+    <article class="bg-white rounded-xl border border-slate-100 shadow-card hover:shadow-card-hover transition-shadow duration-200 p-6 text-center">
+        <div class="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
         </div>
-        <h3 class="font-bold text-slate-800 mb-2">Price Monitoring</h3>
+        <h2 class="font-bold text-slate-900 mb-2">Price monitoring</h2>
         <p class="text-slate-500 text-sm leading-relaxed">
             Tracks daily CPO prices from global commodity markets and displays trends over time with interactive charts.
         </p>
-    </div>
-    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
-        <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    </article>
+    <article class="bg-white rounded-xl border border-slate-100 shadow-card hover:shadow-card-hover transition-shadow duration-200 p-6 text-center">
+        <div class="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
         </div>
-        <h3 class="font-bold text-slate-800 mb-2">Market State Detection</h3>
+        <h2 class="font-bold text-slate-900 mb-2">Market state detection</h2>
         <p class="text-slate-500 text-sm leading-relaxed">
-            Identifies whether the market is in a Bullish, Bearish, or Neutral state using statistical models trained on historical price data.
+            Identifies whether the market is Bullish, Bearish, or Neutral using a Hidden Markov Model trained on historical price data.
         </p>
-    </div>
-    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
-        <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    </article>
+    <article class="bg-white rounded-xl border border-slate-100 shadow-card hover:shadow-card-hover transition-shadow duration-200 p-6 text-center">
+        <div class="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
         </div>
-        <h3 class="font-bold text-slate-800 mb-2">Price Forecasting</h3>
+        <h2 class="font-bold text-slate-900 mb-2">Price forecasting</h2>
         <p class="text-slate-500 text-sm leading-relaxed">
-            Forecasts CPO prices 1–7 days ahead using multiple machine learning models that combine price history with news sentiment signals.
+            Forecasts CPO prices 1&ndash;7 days ahead using multiple XGBoost configurations that combine price history with FinBERT news sentiment.
         </p>
-    </div>
-</div>
+    </article>
+</section>
 
 <!-- Data sources + automation -->
-<div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-        <h3 class="font-bold text-slate-800 mb-4">Data Sources</h3>
+<section class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-12" aria-label="Data sources and pipeline">
+    <div class="bg-white rounded-xl border border-slate-100 shadow-card p-6">
+        <h2 class="font-bold text-slate-900 mb-4">Data sources</h2>
         <ul class="space-y-3 text-sm text-slate-600">
             <li class="flex gap-3">
-                <span class="mt-0.5 w-5 h-5 rounded-full bg-teal-100 text-primary flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                <span class="mt-0.5 w-5 h-5 rounded-full bg-teal-100 text-primary flex items-center justify-center text-xs font-bold shrink-0 tabular-nums" aria-hidden="true">1</span>
                 <div>
-                    <strong class="text-slate-700">CPO Price Data</strong> — Daily commodity prices fetched automatically from Investing.com, covering open, high, low, and close values.
+                    <strong class="text-slate-800">CPO price data</strong> &mdash; daily commodity prices fetched automatically from Investing.com, covering open, high, low, and close values.
                 </div>
             </li>
             <li class="flex gap-3">
-                <span class="mt-0.5 w-5 h-5 rounded-full bg-teal-100 text-primary flex items-center justify-center text-xs font-bold shrink-0">2</span>
+                <span class="mt-0.5 w-5 h-5 rounded-full bg-teal-100 text-primary flex items-center justify-center text-xs font-bold shrink-0 tabular-nums" aria-hidden="true">2</span>
                 <div>
-                    <strong class="text-slate-700">MPOB News</strong> — Articles from the Malaysian Palm Oil Board, automatically scraped daily and analyzed for market sentiment.
+                    <strong class="text-slate-800">MPOB news</strong> &mdash; articles from the Malaysian Palm Oil Board, automatically scraped daily and analysed for market sentiment.
                 </div>
             </li>
         </ul>
     </div>
-    <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-        <h3 class="font-bold text-slate-800 mb-4">Fully Automated Pipeline</h3>
+    <div class="bg-white rounded-xl border border-slate-100 shadow-card p-6">
+        <h2 class="font-bold text-slate-900 mb-4">Fully automated pipeline</h2>
         <p class="text-slate-500 text-sm leading-relaxed mb-3">
             No manual data uploads are needed. Every day, a scheduled cloud job:
         </p>
         <ul class="space-y-2 text-sm text-slate-600">
             <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true"></span>
                 Fetches the latest CPO closing price
             </li>
             <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true"></span>
                 Scrapes new MPOB news articles
             </li>
             <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true"></span>
                 Runs sentiment analysis on new articles
             </li>
             <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true"></span>
                 Updates market state predictions
             </li>
             <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true"></span>
                 Refreshes all price forecasts
             </li>
         </ul>
     </div>
-</div>
+</section>
 
 <!-- Author -->
-<div class="max-w-md mx-auto bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center">
-    <div class="w-16 h-16 bg-slate-100 rounded-full mx-auto mb-4 flex items-center justify-center text-slate-400 text-2xl font-bold">
+<section class="max-w-md mx-auto bg-white rounded-xl border border-slate-100 shadow-card p-6 text-center" aria-label="Author">
+    <div class="w-16 h-16 bg-gradient-to-br from-teal-100 to-teal-50 ring-1 ring-teal-100 rounded-full mx-auto mb-4 flex items-center justify-center text-primary text-2xl font-bold" aria-hidden="true">
         M
     </div>
-    <h3 class="text-lg font-bold text-slate-800">Matthew / ExMatter</h3>
+    <h2 class="text-lg font-bold text-slate-900">Matthew / ExMatter</h2>
     <p class="text-primary text-sm font-medium mt-1">Universitas Bina Nusantara</p>
-    <p class="text-slate-500 text-sm mt-1">Computer Science — Skripsi Project, 2025</p>
-</div>
+    <p class="text-slate-500 text-sm mt-1">Computer Science &mdash; Skripsi Project, 2025</p>
+</section>
 
 {% endblock %}

@@ -3,7 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{{ page_title|default:"CPO Predictor" }}{% endblock %} - CPO Prediction</title>
+    <title>{% block title %}{{ page_title|default:"CPO Predictor" }}{% endblock %} · CPO Prediction</title>
+
+    <!-- Meta -->
+    <meta name="description" content="CPO Predictor — daily crude palm oil price monitoring, HMM market-regime detection, and 1–7 day forecasts blended with FinBERT news sentiment. Thesis project, Universitas Bina Nusantara.">
+    <meta name="theme-color" content="#0f766e">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:title" content="CPO Predictor — Daily Forecasts &amp; Market Regime">
+    <meta property="og:description" content="Daily CPO price analytics with HMM regime detection and FinBERT-blended 1–7 day forecasts.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201200%20630%22%3E%3Crect%20width%3D%221200%22%20height%3D%22630%22%20fill%3D%22%230f766e%22%2F%3E%3Ctext%20x%3D%2260%22%20y%3D%22330%22%20fill%3D%22%23fff%22%20font-family%3D%22sans-serif%22%20font-size%3D%2280%22%20font-weight%3D%22700%22%3ECPO%20Predictor%3C%2Ftext%3E%3Ctext%20x%3D%2260%22%20y%3D%22400%22%20fill%3D%22%23ccfbf1%22%20font-family%3D%22sans-serif%22%20font-size%3D%2236%22%3EDaily%20commodity%20price%20analytics%3C%2Ftext%3E%3C%2Fsvg%3E">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Favicon (inline SVG, no extra file) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M6%2022l5-6%204%203%207-9%204%204%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.4%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,62 +36,88 @@
         tailwind.config = {
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+                    },
                     colors: {
                         primary: '#0f766e',
                         secondary: '#334155',
                         accent: '#ef4444',
                         bullish: '#22c55e',
                         bearish: '#ef4444',
+                        // Neutral market state — slate, matches the chart band and legend swatch.
+                        // Amber is reserved for warnings (stale data, near-coin-flip DA).
                         neutral: '#94a3b8',
-                    }
+                    },
+                    boxShadow: {
+                        'card':       '0 1px 2px rgba(15,23,42,0.04), 0 1px 1px rgba(15,23,42,0.03)',
+                        'card-hover': '0 4px 14px rgba(15,23,42,0.06), 0 2px 4px rgba(15,23,42,0.04)',
+                    },
                 }
             }
         }
     </script>
 
+    <style>
+      /* Subtle global polish that does not require a build step. */
+      html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+      body { font-feature-settings: 'cv11', 'ss01'; }
+      :focus-visible { outline: none; }
+    </style>
+
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-dvh flex flex-col">
 
     <!-- Global Navigation -->
-    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <nav class="bg-white/85 backdrop-blur border-b border-slate-200 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-14">
                 <!-- Left: Brand -->
                 <div class="flex items-center">
-                    <a href="{% url 'dashboard' %}" class="font-bold text-xl text-slate-800 tracking-tight">
-                        CPO Predictor
+                    <a href="{% url 'dashboard' %}" class="flex items-center gap-2 font-bold text-lg text-slate-900 tracking-tight rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-primary text-white" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-6 4 3 7-9"/></svg>
+                        </span>
+                        <span>CPO Predictor</span>
                     </a>
                 </div>
 
                 <!-- Center: Navigation Links -->
                 <div class="hidden md:flex items-center space-x-1">
-                    <a href="{% url 'dashboard' %}" class="px-3 py-2 text-sm font-medium transition-colors {% if request.resolver_match.url_name == 'dashboard' %}text-primary border-b-2 border-primary{% else %}text-slate-600 hover:text-primary{% endif %}">
+                    <a href="{% url 'dashboard' %}" class="px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary {% if request.resolver_match.url_name == 'dashboard' %}text-primary border-b-2 border-primary rounded-b-none{% else %}text-slate-600 hover:text-primary hover:bg-slate-50{% endif %}">
                         Dashboard
                     </a>
-                    <a href="{% url 'news' %}" class="px-3 py-2 text-sm font-medium transition-colors {% if request.resolver_match.url_name == 'news' %}text-primary border-b-2 border-primary{% else %}text-slate-600 hover:text-primary{% endif %}">
+                    <a href="{% url 'news' %}" class="px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary {% if request.resolver_match.url_name == 'news' %}text-primary border-b-2 border-primary rounded-b-none{% else %}text-slate-600 hover:text-primary hover:bg-slate-50{% endif %}">
                         News
                     </a>
-                    <a href="{% url 'about' %}" class="px-3 py-2 text-sm font-medium transition-colors {% if request.resolver_match.url_name == 'about' %}text-primary border-b-2 border-primary{% else %}text-slate-600 hover:text-primary{% endif %}">
+                    <a href="{% url 'about' %}" class="px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary {% if request.resolver_match.url_name == 'about' %}text-primary border-b-2 border-primary rounded-b-none{% else %}text-slate-600 hover:text-primary hover:bg-slate-50{% endif %}">
                         About
                     </a>
                 </div>
 
                 <!-- Right: Mobile menu button -->
                 <div class="flex items-center">
-                    <button type="button" class="md:hidden text-slate-500 hover:text-slate-700 text-xl" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
-                        &#9776;
+                    <button type="button"
+                            class="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            aria-controls="mobile-menu"
+                            aria-expanded="false"
+                            aria-label="Toggle navigation menu"
+                            onclick="(function(b){var m=document.getElementById('mobile-menu');var open=m.classList.toggle('hidden')===false;b.setAttribute('aria-expanded',open);b.querySelector('[data-icon=open]').classList.toggle('hidden',open);b.querySelector('[data-icon=close]').classList.toggle('hidden',!open);})(this)">
+                        <svg data-icon="open" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+                        <svg data-icon="close" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
                     </button>
                 </div>
             </div>
         </div>
 
         <!-- Mobile Menu -->
-        <div class="hidden md:hidden bg-white border-t border-slate-100" id="mobile-menu">
+        <div class="hidden md:hidden bg-white border-t border-slate-100 transition-all duration-200" id="mobile-menu">
             <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <a href="{% url 'dashboard' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary hover:bg-slate-50">Dashboard</a>
-                <a href="{% url 'news' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary hover:bg-slate-50">News</a>
-                <a href="{% url 'about' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary hover:bg-slate-50">About</a>
+                <a href="{% url 'dashboard' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary hover:bg-slate-50 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary">Dashboard</a>
+                <a href="{% url 'news' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary hover:bg-slate-50 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary">News</a>
+                <a href="{% url 'about' %}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary hover:bg-slate-50 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary">About</a>
             </div>
         </div>
     </nav>
@@ -93,11 +138,10 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t border-slate-200 mt-auto">
-        <div class="max-w-7xl mx-auto py-4 px-4 text-center">
-            <p class="text-slate-400 text-sm">
-                &copy; 2025 CPO Predictor. Skripsi Project - Universitas Bina Nusantara.
-            </p>
+    <footer class="border-t border-slate-200 mt-auto bg-white/60">
+        <div class="max-w-7xl mx-auto py-5 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+            <p>&copy; 2025 CPO Predictor &middot; Skripsi Project, Universitas Bina Nusantara.</p>
+            <p>Daily-scheduled pipeline &middot; HMM &times; FinBERT &times; XGBoost</p>
         </div>
     </footer>
 
