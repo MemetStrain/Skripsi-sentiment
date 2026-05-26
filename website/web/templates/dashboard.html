@@ -88,6 +88,11 @@
 
   /* Sidebar consolidated stat block dividers. */
   .stat-grid > * + * { border-left: 1px solid #e2e8f0; }
+
+  /* Per-tile collapsible summary — matches existing horizon-toggle focus style. */
+  .details-summary { font-size: 0.75rem; font-weight: 500; color: #64748b; cursor: pointer; user-select: none; transition: color 140ms ease; }
+  .details-summary:hover { color: #334155; }
+  .details-summary:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; border-radius: 2px; }
 </style>
 
 <!-- Page Header -->
@@ -101,171 +106,112 @@
     </div>
 </header>
 
-<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+<div class="space-y-6">
 
-    <!-- Sidebar -->
-    <aside class="lg:col-span-1 space-y-4" aria-label="Dashboard summary">
+    <!-- Row 1: Price chart aligned with its context cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
 
-        <!-- Price Statistics -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-            <h3 class="eyebrow mb-3">Price stats &middot; 90d</h3>
-            <div class="space-y-2.5">
-                <div class="flex justify-between items-baseline">
-                    <span class="text-xs text-slate-500">Highest</span>
-                    <span class="text-sm font-semibold text-slate-800 font-mono tabular-nums">MYR {{ stats.max_price|floatformat:0 }}</span>
-                </div>
-                <div class="flex justify-between items-baseline">
-                    <span class="text-xs text-slate-500">Lowest</span>
-                    <span class="text-sm font-semibold text-slate-800 font-mono tabular-nums">MYR {{ stats.min_price|floatformat:0 }}</span>
-                </div>
-                <div class="flex justify-between items-baseline">
-                    <span class="text-xs text-slate-500">Average</span>
-                    <span class="text-sm font-semibold text-slate-800 font-mono tabular-nums">MYR {{ stats.avg_price|floatformat:0 }}</span>
-                </div>
-                <div class="pt-2.5 mt-1 border-t border-slate-100 flex justify-between items-baseline">
-                    <span class="text-xs text-slate-500">Current</span>
-                    <span class="text-base font-bold text-primary font-mono tabular-nums">MYR {{ stats.current_price|floatformat:0 }}</span>
-                </div>
-            </div>
-        </section>
+        <div class="lg:col-span-1 space-y-4">
 
-        <!-- Forecast Configuration (auto-picked per horizon) -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-            <h3 class="eyebrow mb-2">Forecast models</h3>
-            <p class="text-xs text-slate-500 mb-3 leading-relaxed">Auto-picked per horizon (lowest BASE MAPE). Inference uses the chosen config's CSA model.</p>
-            <div id="winners-summary" class="space-y-1.5 text-xs">
-                <!-- Populated from winners_data on render -->
-            </div>
-        </section>
-
-        <!-- Feature Set per Configuration -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-            <h3 class="eyebrow mb-2">Feature set</h3>
-            <p class="text-xs text-slate-500 mb-3 leading-relaxed">Which inputs each configuration (C1&ndash;C4) feeds into its model.</p>
-            <table class="w-full text-[11px] text-slate-600 tabular-nums">
-                <thead>
-                    <tr class="text-slate-400 border-b border-slate-100">
-                        <th class="text-left font-medium py-1">Config</th>
-                        <th class="text-center font-medium py-1 tip" data-tip="CPO closing price (lagged). Base feature in every configuration.">Price</th>
-                        <th class="text-center font-medium py-1 tip" data-tip="HMM market regime state: Bullish / Neutral / Bearish.">HMM</th>
-                        <th class="text-center font-medium py-1 tip" data-tip="FinBERT aggregated news sentiment.">News</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr class="border-b border-slate-50">
-                        <td class="py-1 font-semibold text-slate-700">C1</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                        <td class="text-center text-slate-300">&ndash;</td>
-                        <td class="text-center text-slate-300">&ndash;</td>
-                    </tr>
-                    <tr class="border-b border-slate-50">
-                        <td class="py-1 font-semibold text-slate-700">C2</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                        <td class="text-center text-slate-300">&ndash;</td>
-                    </tr>
-                    <tr class="border-b border-slate-50">
-                        <td class="py-1 font-semibold text-slate-700">C3</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                        <td class="text-center text-slate-300">&ndash;</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                    </tr>
-                    <tr>
-                        <td class="py-1 font-semibold text-slate-700">C4</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                        <td class="text-center text-teal-600">&#10003;</td>
-                    </tr>
-                </tbody>
-            </table>
-            <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
-        </section>
-
-        <!-- Model Metrics Summary (winning CSA at h=1) -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5" aria-label="Best model summary, h=1">
-            <div class="flex items-baseline justify-between mb-1">
-                <h3 class="eyebrow">Best model &middot; h=1</h3>
-                <span class="text-[10px] text-slate-400">winning CSA</span>
-            </div>
-            <p class="text-sm font-semibold text-slate-800 leading-tight mb-4">{{ metrics.best_model }}</p>
-            <div class="grid grid-cols-3 stat-grid">
-                <div class="px-1 text-center">
-                    <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">MAPE</p>
-                    <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.mape }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
-                </div>
-                <div class="px-1 text-center">
-                    <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">sMAPE</p>
-                    <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.smape }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
-                </div>
-                <div class="px-1 text-center">
-                    <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Dir Acc</p>
-                    <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.accuracy }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Key Insights relocated into sidebar — all inner ids preserved -->
-        <section id="key-insights" class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-            <div class="flex items-baseline justify-between mb-1">
-                <h3 class="text-base font-bold text-slate-900">Key insights</h3>
-                <span class="text-[10px] text-slate-400">no model re-run</span>
-            </div>
-            <p class="text-xs text-slate-400 mb-3">One takeaway per chart.</p>
-
-            <!-- Hero tiles — single-column stack in the narrow sidebar; 2-col at 2xl+ -->
-            <div class="grid grid-cols-1 2xl:grid-cols-2 gap-3">
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
-                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Market regime &middot; price</div>
-                    <div id="ki-hero-price"></div>
-                </div>
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
-                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">News sentiment</div>
-                    <div id="ki-hero-sentiment"></div>
-                </div>
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
-                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Feature comparison</div>
-                    <div id="ki-hero-comparison"></div>
-                </div>
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
-                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Forecast reliability</div>
-                    <div id="ki-hero-metrics"></div>
-                </div>
-            </div>
-
-            <!-- Collapsible full breakdown — collapses to single column in the narrow sidebar -->
-            <details class="mt-4 border-t border-slate-100 pt-3 group">
-                <summary class="text-xs font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 transition-colors">
-                    Details &mdash; full breakdown
-                    <span class="ml-1 text-slate-300 group-open:rotate-180 inline-block transition-transform">&#9662;</span>
-                </summary>
-                <div class="grid grid-cols-1 gap-4 mt-4">
-                    <div>
-                        <h4 class="eyebrow mb-2">Price movement</h4>
-                        <ul id="ki-price" class="space-y-1.5 text-xs text-slate-600"></ul>
+            <!-- Price Statistics -->
+            <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
+                <h3 class="eyebrow mb-3">Price stats &middot; 90d</h3>
+                <div class="space-y-2.5">
+                    <div class="flex justify-between items-baseline">
+                        <span class="text-xs text-slate-500">Highest</span>
+                        <span class="text-sm font-semibold text-slate-800 font-mono tabular-nums">MYR {{ stats.max_price|floatformat:0 }}</span>
                     </div>
-                    <div>
-                        <h4 class="eyebrow mb-2">Sentiment trend</h4>
-                        <ul id="ki-sentiment" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    <div class="flex justify-between items-baseline">
+                        <span class="text-xs text-slate-500">Lowest</span>
+                        <span class="text-sm font-semibold text-slate-800 font-mono tabular-nums">MYR {{ stats.min_price|floatformat:0 }}</span>
                     </div>
-                    <div>
-                        <h4 class="eyebrow mb-2">Model comparison</h4>
-                        <ul id="ki-comparison" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    <div class="flex justify-between items-baseline">
+                        <span class="text-xs text-slate-500">Average</span>
+                        <span class="text-sm font-semibold text-slate-800 font-mono tabular-nums">MYR {{ stats.avg_price|floatformat:0 }}</span>
                     </div>
-                    <div>
-                        <h4 class="eyebrow mb-2">Model metrics</h4>
-                        <ul id="ki-metrics" class="space-y-1.5 text-xs text-slate-600"></ul>
+                    <div class="pt-2.5 mt-1 border-t border-slate-100 flex justify-between items-baseline">
+                        <span class="text-xs text-slate-500">Current</span>
+                        <span class="text-base font-bold text-primary font-mono tabular-nums">MYR {{ stats.current_price|floatformat:0 }}</span>
                     </div>
                 </div>
-            </details>
-        </section>
+            </section>
 
-    </aside><!-- /Sidebar -->
+            <!-- Market Regime · Price insight tile -->
+            <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
+                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Market regime &middot; price</div>
+                <div id="ki-hero-price"></div>
+            </div>
 
-    <!-- Main Content -->
-    <div class="lg:col-span-3 space-y-5">
+            <!-- Feature Set per Configuration -->
+            <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
+                <h3 class="eyebrow mb-2">Feature set</h3>
+                <p class="text-xs text-slate-500 mb-3 leading-relaxed">Which inputs each configuration (C1&ndash;C4) feeds into its model.</p>
+                <table class="w-full text-[11px] text-slate-600 tabular-nums">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-100">
+                            <th class="text-left font-medium py-1">Config</th>
+                            <th class="text-center font-medium py-1 tip" data-tip="CPO closing price (lagged). Base feature in every configuration.">Price</th>
+                            <th class="text-center font-medium py-1 tip" data-tip="HMM market regime state: Bullish / Neutral / Bearish.">HMM</th>
+                            <th class="text-center font-medium py-1 tip" data-tip="FinBERT aggregated news sentiment.">News</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-1 font-semibold text-slate-700">C1</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                            <td class="text-center text-slate-300">&ndash;</td>
+                            <td class="text-center text-slate-300">&ndash;</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-1 font-semibold text-slate-700">C2</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                            <td class="text-center text-slate-300">&ndash;</td>
+                        </tr>
+                        <tr class="border-b border-slate-50">
+                            <td class="py-1 font-semibold text-slate-700">C3</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                            <td class="text-center text-slate-300">&ndash;</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                        </tr>
+                        <tr>
+                            <td class="py-1 font-semibold text-slate-700">C4</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                            <td class="text-center text-teal-600">&#10003;</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
+            </section>
+
+            <!-- Best Model (winning CSA at h=1) -->
+            <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5" aria-label="Best model summary, h=1">
+                <div class="flex items-baseline justify-between mb-1">
+                    <h3 class="eyebrow">Best model &middot; h=1</h3>
+                    <span class="text-[10px] text-slate-400">winning CSA</span>
+                </div>
+                <p class="text-sm font-semibold text-slate-800 leading-tight mb-4">{{ metrics.best_model }}</p>
+                <div class="grid grid-cols-3 stat-grid">
+                    <div class="px-1 text-center">
+                        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">MAPE</p>
+                        <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.mape }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
+                    </div>
+                    <div class="px-1 text-center">
+                        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">sMAPE</p>
+                        <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.smape }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
+                    </div>
+                    <div class="px-1 text-center">
+                        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Dir Acc</p>
+                        <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.accuracy }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
+                    </div>
+                </div>
+            </section>
+
+        </div><!-- /Row 1 left -->
 
         <!-- Price Chart with Rolling Forecast Trails -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
+        <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
             <div class="flex items-start justify-between mb-4 gap-3 flex-wrap">
                 <div>
                     <h3 class="text-base font-bold text-slate-900">Price history &amp; direct multi-step horizon forecast</h3>
@@ -308,8 +254,23 @@
             </div>
         </section>
 
+    </div><!-- /Row 1 -->
+
+    <!-- Row 2: Sentiment chart aligned with its context card -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+
+        <div class="lg:col-span-1 space-y-4">
+
+            <!-- News Sentiment insight tile -->
+            <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
+                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">News sentiment</div>
+                <div id="ki-hero-sentiment"></div>
+            </div>
+
+        </div><!-- /Row 2 left -->
+
         <!-- Sentiment Trend Chart (Daily, 90d) -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
+        <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
             <h3 class="text-base font-bold text-slate-900 mb-1">Sentiment trend &middot; 90d</h3>
             <p class="text-xs text-slate-400 mb-4">Daily aggregated FinBERT-Tone sentiment probabilities.</p>
             <div class="relative" style="height:200px;">
@@ -320,36 +281,60 @@
             <div id="sentiment-insight-strip"></div>
         </section>
 
-        <!-- Ablation × Horizon Metrics Comparison -->
-        <section class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
-            <div class="flex items-start justify-between mb-3 flex-wrap gap-2">
-                <div>
-                    <h3 class="text-base font-bold text-slate-900">Configuration comparison</h3>
-                    <p class="text-xs text-slate-400 mt-0.5">Test-set metrics for every (config, horizon, variant). Winning BASE per horizon highlighted.</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <label for="metric-select" class="text-xs text-slate-500">Metric</label>
-                    <select id="metric-select" class="metric-select text-xs bg-white border border-slate-200 rounded-md pl-2.5 py-1.5 text-slate-700 hover:border-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary">
-                        <option value="mape" selected>MAPE (%)</option>
-                        <option value="smape">sMAPE (%)</option>
-                        <option value="rmse">RMSE</option>
-                        <option value="da">Directional Acc. (%)</option>
-                    </select>
-                </div>
+    </div><!-- /Row 2 -->
+
+    <!-- Row 3: Model details aligned with its context cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+
+        <div class="lg:col-span-1 space-y-4">
+
+            <!-- Feature Comparison insight tile -->
+            <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
+                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Feature comparison</div>
+                <div id="ki-hero-comparison"></div>
             </div>
-            <div id="metrics-table" class="overflow-x-auto">
-                <!-- Placeholder skeleton while JS renders the real table. -->
-                <div class="space-y-2" aria-hidden="true">
-                    <div class="skeleton h-6 w-full"></div>
-                    <div class="skeleton h-5 w-full"></div>
-                    <div class="skeleton h-5 w-11/12"></div>
-                    <div class="skeleton h-5 w-full"></div>
-                    <div class="skeleton h-5 w-11/12"></div>
-                </div>
+
+            <!-- Forecast Reliability insight tile -->
+            <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
+                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Forecast reliability</div>
+                <div id="ki-hero-metrics"></div>
+            </div>
+
+        </div><!-- /Row 3 left -->
+
+        <!-- Combined: Model details & breakdown -->
+        <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
+            <h3 class="text-base font-bold text-slate-900">Model details &amp; breakdown</h3>
+            <p class="text-xs text-slate-400 mt-0.5 mb-5">Per-horizon winning configs and the full per-category insight breakdown.</p>
+            <!-- Forecast Models (auto-picked per horizon) -->
+            <div class="mb-5 pb-5 border-b border-slate-100">
+                <h4 class="eyebrow mb-2">Forecast models</h4>
+                <p class="text-xs text-slate-500 mb-3 leading-relaxed">Auto-picked per horizon (lowest BASE MAPE). Inference uses the chosen config's CSA model.</p>
+                <div id="winners-summary" class="space-y-1.5 text-xs"></div>
+            </div>
+            <!-- Per-category detail lists in a responsive 2-column grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <details>
+                    <summary class="details-summary">Price &amp; regime</summary>
+                    <ul id="ki-price" class="space-y-1.5 text-xs text-slate-600 mt-2"></ul>
+                </details>
+                <details>
+                    <summary class="details-summary">News sentiment</summary>
+                    <ul id="ki-sentiment" class="space-y-1.5 text-xs text-slate-600 mt-2"></ul>
+                </details>
+                <details>
+                    <summary class="details-summary">Configuration comparison</summary>
+                    <ul id="ki-comparison" class="space-y-1.5 text-xs text-slate-600 mt-2"></ul>
+                </details>
+                <details>
+                    <summary class="details-summary">Forecast reliability</summary>
+                    <ul id="ki-metrics" class="space-y-1.5 text-xs text-slate-600 mt-2"></ul>
+                </details>
             </div>
         </section>
 
-    </div><!-- /Main Content -->
+    </div><!-- /Row 3 -->
+
 </div>
 {% endblock %}
 
@@ -455,15 +440,29 @@
                     borderColor: '#334155', borderWidth: 1, padding: 10,
                     cornerRadius: 6, displayColors: true, boxPadding: 4,
                     titleFont: { weight: '600' },
+                    footerFont: { weight: 'normal' },
+                    footerColor: '#94a3b8',
                     callbacks: {
+                        // Make the shared target date explicit in the tooltip header.
+                        title: (items) => items.length ? `All forecasts for ${items[0].label}` : '',
                         label: (c) => {
                             const v = c.parsed.y;
                             if (v == null) return null;
                             const ds = c.dataset;
                             const name = (ds._isFan && ds.pointLabels && ds.pointLabels[c.dataIndex])
                                 ? ds.pointLabels[c.dataIndex] : ds.label;
-                            return `${name}: MYR ${v.toLocaleString('id-ID')}`;
+                            let line = `${name}: MYR ${v.toLocaleString('id-ID')}`;
+                            // Append deviation vs the actual close at this date, for model lines only.
+                            const close = c.chart.data.datasets[0]?.data?.[c.dataIndex];
+                            const isCloseLine = c.datasetIndex === 0;
+                            if (!isCloseLine && close != null && Number.isFinite(close) && close !== 0) {
+                                const dev = (v - close) / close * 100;
+                                line += ` (${dev >= 0 ? '+' : ''}${dev.toFixed(1)}% vs close)`;
+                            }
+                            return line;
                         },
+                        // Teach the concept once at the bottom of the tooltip.
+                        footer: () => 'Each line is one model predicting this same day,\nmade 1–7 days earlier.',
                     },
                 },
                 annotation: { annotations },
@@ -623,6 +622,13 @@
         });
     }
 
+    const CONFIG_FEATURES = {
+        cpo_only:      'Price only',
+        cpo_hmm:       'Price + HMM',
+        cpo_sentiment: 'Price + News',
+        full:          'Price + HMM + News',
+    };
+
     function renderWinnersSummary(forecasts) {
         const el = document.getElementById('winners-summary');
         if (!el) return;
@@ -632,13 +638,17 @@
         for (let h = 1; h <= 7; h++) {
             const tag = winners[h] || winners[String(h)];
             const cfg = configs[h] || configs[String(h)] || (tag ? TAG_LABEL[tag] : '—');
+            const feat = tag ? (CONFIG_FEATURES[tag] || '') : '';
             rows.push(`
-                <div class="tip flex justify-between items-center" data-tip="h=${h}: model that predicts the ${h}-day-ahead horizon. ${cfg || '—'} is the auto-picked winning config here.">
-                    <span class="flex items-center gap-1.5 text-slate-600 tabular-nums">
+                <div class="flex justify-between items-start gap-2">
+                    <span class="flex items-center gap-1.5 text-slate-600 tabular-nums shrink-0">
                         <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${HORIZON_COLORS[h]}"></span>
                         h=${h}
                     </span>
-                    <span class="font-semibold text-slate-700 tabular-nums">${cfg || '—'}</span>
+                    <div class="text-right">
+                        <div class="font-semibold text-slate-700 tabular-nums">${cfg || '—'}</div>
+                        ${feat ? `<div class="text-[11px] text-slate-400 leading-snug">${feat}</div>` : ''}
+                    </div>
                 </div>`);
         }
         el.innerHTML = rows.join('');
@@ -964,7 +974,7 @@
         if (elM && s1) {
             const da1 = s1.da, da7 = s7 ? s7.da : NaN;
             const tone = da1 < 55 ? 'text-amber-600' : 'text-green-600';
-            const head = da1 < 55 ? 'Near coin-flip at 1 day' : `${kiFmt(da1, '%')} at 1 day`;
+            const head = da1 < 55 ? 'Around 50% at 1 day' : `${kiFmt(da1, '%')} at 1 day`;
             const posOf = da => Math.max(2, Math.min(98, (da - 40) / 30 * 100));
             const ref50 = (50 - 40) / 30 * 100;
             elM.innerHTML = `
@@ -1108,13 +1118,17 @@
             return;
         }
         const last7 = sd.slice(-7);
-        const pos = kiMean(last7.map(d => d.positive_prob)) * 100;
-        const neg = kiMean(last7.map(d => d.negative_prob)) * 100;
-        // Use neutral_prob mean if any entry carries the field; otherwise infer from 100 - pos - neg
-        const hasNeutral = last7.some(d => d.neutral_prob != null);
-        const neu = hasNeutral
-            ? kiMean(last7.filter(d => d.neutral_prob != null).map(d => d.neutral_prob)) * 100
-            : Math.max(0, 100 - pos - neg);
+        // positive_prob / negative_prob are on a 0–100 scale (same scale the sentiment chart plots).
+        // Normalize the three means to sum to exactly 100 — scale-invariant, prevents rounding drift.
+        const mean = (k) => last7.reduce((a, d) => a + (d[k] ?? 0), 0) / (last7.length || 1);
+        let p = mean('positive_prob');
+        let n = mean('negative_prob');
+        let u = last7.some(d => d.neutral_prob != null) ? mean('neutral_prob')
+                                                        : Math.max(0, (p + n > 1.5 ? 100 : 1) - p - n);
+        const total = p + n + u || 1;
+        const pos = Math.round(p / total * 100);
+        const neg = Math.round(n / total * 100);
+        const neu = 100 - pos - neg;
 
         const chips = [];
         chips.push(
@@ -1185,67 +1199,6 @@
     renderWinnersSummary({});
 
     loadForecasts();
-
-    // -----------------------------------------------------------------------
-    // Configuration Comparison Table — server-rendered from winnersData
-    // -----------------------------------------------------------------------
-    function fmtMetric(v, key) {
-        if (v == null) return '—';
-        const n = parseFloat(v);
-        if (isNaN(n)) return '—';
-        if (key === 'mape' || key === 'da') return n.toFixed(2);
-        return n.toFixed(4);
-    }
-
-    function isLowerBetter(key) {
-        return key === 'mape' || key === 'rmse';
-    }
-
-    function renderMetricsTable() {
-        const container = document.getElementById('metrics-table');
-        if (!container) return;
-        const metric = document.getElementById('metric-select').value;
-        const metrics = winnersData.metrics || {};
-        const winners = winnersData.winners_by_horizon || {};
-        const horizons = winnersData.horizons || [1,2,3,4,5,6,7];
-        const lower = isLowerBetter(metric);
-
-        let html = `<table class="w-full min-w-[640px] text-xs tabular-nums">
-            <thead>
-                <tr class="text-slate-400 uppercase tracking-wide text-[10px]">
-                    <th class="pb-2 pr-4 text-left font-semibold">Config</th>
-                    <th class="pb-2 pr-4 text-left font-semibold">Variant</th>`;
-        for (const h of horizons) {
-            html += `<th class="pb-2 px-2 text-center font-semibold">h=${h}</th>`;
-        }
-        html += `</tr></thead><tbody>`;
-
-        for (const tag of TAGS) {
-            for (const v of ['BASE', 'CSA']) {
-                const isWinnerRow = (v === 'BASE');  // winners are picked by base MAPE
-                html += `<tr class="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
-                    <td class="py-1.5 pr-4 font-semibold text-slate-700">${TAG_LABEL[tag]}</td>
-                    <td class="py-1.5 pr-4 text-slate-500">${v}</td>`;
-                for (const h of horizons) {
-                    const cell = (((metrics[tag] || {})[String(h)] || {})[v] || {})[metric];
-                    const isWinner = isWinnerRow && winners[String(h)] === tag;
-                    const cellCls = isWinner ? 'font-bold text-teal-700 bg-teal-50 rounded-md' : 'text-slate-600';
-                    html += `<td class="py-1.5 px-2 text-center font-mono ${cellCls}">${fmtMetric(cell, metric)}</td>`;
-                }
-                html += `</tr>`;
-            }
-        }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-    }
-
-    document.getElementById('metric-select').addEventListener('change', renderMetricsTable);
-    if (Object.keys(winnersData.metrics || {}).length > 0) {
-        renderMetricsTable();
-    } else {
-        document.getElementById('metrics-table').innerHTML =
-            `<div class="text-xs text-slate-400">No comparison data yet. Run prediction/compute_winners.py after the C1-C4 training scripts.</div>`;
-    }
 
     // -----------------------------------------------------------------------
     // Sentiment Trend Chart — x-axis aligned to price chart, forward-filled
