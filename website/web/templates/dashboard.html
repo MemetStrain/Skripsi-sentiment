@@ -204,46 +204,41 @@
             </div>
         </section>
 
-    </aside><!-- /Sidebar -->
-
-    <!-- Main Content -->
-    <div class="lg:col-span-3 space-y-5">
-
-        <!-- Key Insights: always-visible hero strip + collapsible details (client-side) -->
-        <section id="key-insights" class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
+        <!-- Key Insights relocated into sidebar — all inner ids preserved -->
+        <section id="key-insights" class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
             <div class="flex items-baseline justify-between mb-1">
                 <h3 class="text-base font-bold text-slate-900">Key insights</h3>
-                <span class="text-[11px] text-slate-400">Computed in-browser &middot; no model re-run</span>
+                <span class="text-[10px] text-slate-400">no model re-run</span>
             </div>
-            <p class="text-xs text-slate-400 mb-4">The one thing to read from each chart.</p>
+            <p class="text-xs text-slate-400 mb-3">One takeaway per chart.</p>
 
-            <!-- Hero strip: one key takeaway per chart -->
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-4">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Market regime &middot; price chart</div>
+            <!-- Hero tiles — single-column stack in the narrow sidebar; 2-col at 2xl+ -->
+            <div class="grid grid-cols-1 2xl:grid-cols-2 gap-3">
+                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Market regime &middot; price</div>
                     <div id="ki-hero-price"></div>
                 </div>
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-4">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-2">News sentiment &middot; sentiment chart</div>
+                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">News sentiment</div>
                     <div id="ki-hero-sentiment"></div>
                 </div>
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-4">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Feature comparison &middot; model table</div>
+                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Feature comparison</div>
                     <div id="ki-hero-comparison"></div>
                 </div>
-                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-4">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Forecast reliability &middot; metrics</div>
+                <div class="bg-gradient-to-br from-slate-50 to-white rounded-lg border border-slate-100 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Forecast reliability</div>
                     <div id="ki-hero-metrics"></div>
                 </div>
             </div>
 
-            <!-- Collapsible full breakdown (the previous per-category lists) -->
-            <details class="mt-5 border-t border-slate-100 pt-3 group">
+            <!-- Collapsible full breakdown — collapses to single column in the narrow sidebar -->
+            <details class="mt-4 border-t border-slate-100 pt-3 group">
                 <summary class="text-xs font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 transition-colors">
-                    Details &mdash; full per-category breakdown
+                    Details &mdash; full breakdown
                     <span class="ml-1 text-slate-300 group-open:rotate-180 inline-block transition-transform">&#9662;</span>
                 </summary>
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mt-4">
+                <div class="grid grid-cols-1 gap-4 mt-4">
                     <div>
                         <h4 class="eyebrow mb-2">Price movement</h4>
                         <ul id="ki-price" class="space-y-1.5 text-xs text-slate-600"></ul>
@@ -263,6 +258,11 @@
                 </div>
             </details>
         </section>
+
+    </aside><!-- /Sidebar -->
+
+    <!-- Main Content -->
+    <div class="lg:col-span-3 space-y-5">
 
         <!-- Price Chart with Rolling Forecast Trails -->
         <section class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
@@ -293,6 +293,13 @@
                 <div id="priceChart-skeleton" class="chart-loading skeleton" aria-hidden="true"></div>
                 <canvas id="priceChart" class="relative"></canvas>
             </div>
+            <!-- Price quick-insight strip — populated by renderPriceInsightStrip() after forecasts load -->
+            <div id="price-insight-strip">
+                <div class="flex items-center gap-1.5 text-xs text-slate-400 py-2 border-t border-slate-100 mt-2">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-300 animate-pulse" aria-hidden="true"></span>
+                    Loading forecasts&hellip;
+                </div>
+            </div>
             <!-- State legend -->
             <div class="flex flex-wrap gap-4 mt-3 text-xs text-slate-500">
                 <span class="tip flex items-center gap-1.5" data-tip="State where the market condition is going up."><span class="w-3 h-3 rounded-sm bg-green-200 inline-block"></span> Bullish</span>
@@ -309,6 +316,8 @@
                 <div id="sentimentChart-skeleton" class="chart-loading skeleton" aria-hidden="true"></div>
                 <canvas id="sentimentChart" class="relative"></canvas>
             </div>
+            <!-- Sentiment quick-insight strip — populated by renderSentimentInsightStrip() on load -->
+            <div id="sentiment-insight-strip"></div>
         </section>
 
         <!-- Ablation × Horizon Metrics Comparison -->
@@ -974,6 +983,174 @@
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Price insight caption strip — reads forward_fan; no model re-run
+    // -----------------------------------------------------------------------
+    function renderPriceInsightStrip(forecasts) {
+        const el = document.getElementById('price-insight-strip');
+        if (!el) return;
+        if (!forecasts) {
+            el.innerHTML = '<div class="flex items-center gap-1.5 text-xs text-slate-400 py-2 border-t border-slate-100 mt-2">' +
+                '<span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-300 animate-pulse" aria-hidden="true"></span>' +
+                'Loading forecast data…</div>';
+            return;
+        }
+
+        const fan = forecasts.forward_fan || [];
+
+        // Chip 1: next-step forecast with ±MAPE error band
+        let anchor = fan.length ? fan[0].anchor_price : null;
+        if (anchor == null) {
+            for (let i = prices.length - 1; i >= 0; i--) {
+                if (prices[i] != null) { anchor = prices[i]; break; }
+            }
+        }
+        const next1 = fan.find(p => p.horizon === 1);
+        let nextPrice = next1 ? next1.predicted_price : null;
+        if (nextPrice == null) {
+            const trail1 = (forecasts.trails || []).find(t => t.horizon === 1);
+            if (trail1 && trail1.points && trail1.points.length)
+                nextPrice = trail1.points[trail1.points.length - 1].predicted_price;
+        }
+        const pct = (nextPrice != null && anchor) ? (nextPrice - anchor) / anchor * 100 : NaN;
+        const pctUp = pct >= 0;
+        const pctCls = pctUp ? 'text-green-600' : 'text-red-600';
+        const arrow = pctUp ? '▲' : '▼';
+        const cfgLabel = (forecasts.configs && (forecasts.configs['1'] || forecasts.configs[1]))
+            || (forecasts.winners && TAG_LABEL[forecasts.winners['1'] || forecasts.winners[1]])
+            || '—';
+        let mape1 = NaN;
+        try {
+            const wTag = forecasts.winners['1'] || forecasts.winners[1];
+            const mObj = forecasts.metrics[wTag]['1'];
+            mape1 = (mObj.CSA || mObj.BASE).mape;
+        } catch (e) {}
+
+        // Chip 2: direction consensus across all forward-fan horizons h=1…7
+        const totalFan = fan.length;
+        let upCount = 0;
+        for (const p of fan) { if (anchor != null && p.predicted_price > anchor) upCount++; }
+        let consText = '', consCls = 'text-slate-600';
+        if (totalFan > 0) {
+            consCls = upCount > totalFan / 2 ? 'text-green-600' : (upCount < totalFan / 2 ? 'text-red-600' : 'text-slate-600');
+            consText = upCount + '/' + totalFan + ' horizons up';
+        } else {
+            // Fallback to trail endpoints when forward_fan is empty
+            const trails = forecasts.trails || [];
+            let trailUp = 0;
+            for (const t of trails) {
+                if (t.points && t.points.length && anchor != null && t.points[t.points.length - 1].predicted_price > anchor) trailUp++;
+            }
+            if (trails.length > 0) {
+                consCls = trailUp > trails.length / 2 ? 'text-green-600' : (trailUp < trails.length / 2 ? 'text-red-600' : 'text-slate-600');
+                consText = trailUp + '/' + trails.length + ' horizons up';
+            }
+        }
+
+        // Chip 3: window trend over the visible price window
+        const validPrices = prices.filter(p => p != null);
+        const tFirst = validPrices[0], tLast = validPrices[validPrices.length - 1];
+        const trend = (tFirst && tLast) ? (tLast - tFirst) / tFirst * 100 : NaN;
+        const trendUp = trend >= 0;
+        const trendCls = trendUp ? 'text-green-600' : 'text-red-600';
+        const minP = validPrices.length ? Math.min(...validPrices) : NaN;
+        const maxP = validPrices.length ? Math.max(...validPrices) : NaN;
+        const nDays = chartData.length;
+
+        const chips = [];
+        if (nextPrice != null && Number.isFinite(pct)) {
+            chips.push(
+                '<span class="flex items-center gap-1.5 flex-wrap">' +
+                '<span class="text-slate-400">Next day (h=1):</span>' +
+                '<span class="font-semibold tabular-nums text-slate-800">MYR ' + nextPrice.toLocaleString('id-ID') + '</span>' +
+                '<span class="font-semibold tabular-nums ' + pctCls + '">' + arrow + ' ' + (pctUp ? '+' : '') + pct.toFixed(1) + '%</span>' +
+                (Number.isFinite(mape1) ? '<span class="text-slate-400">· ±' + mape1.toFixed(1) + '% MAPE</span>' : '') +
+                (cfgLabel !== '—' ? '<span class="text-slate-400">(' + cfgLabel + ')</span>' : '') +
+                '</span>'
+            );
+        }
+        if (consText) {
+            chips.push(
+                '<span class="text-slate-300" aria-hidden="true">|</span>' +
+                '<span class="flex items-center gap-1.5">' +
+                '<span class="text-slate-400">Direction:</span>' +
+                '<span class="font-semibold tabular-nums ' + consCls + '">' + consText + '</span>' +
+                '</span>'
+            );
+        }
+        if (Number.isFinite(trend) && Number.isFinite(minP)) {
+            chips.push(
+                '<span class="text-slate-300" aria-hidden="true">|</span>' +
+                '<span class="flex items-center gap-1.5 flex-wrap">' +
+                '<span class="text-slate-400">Window:</span>' +
+                '<span class="font-semibold tabular-nums ' + trendCls + '">' + (trendUp ? '+' : '') + trend.toFixed(1) + '%</span>' +
+                '<span class="text-slate-400">over ' + nDays + 'd (MYR ' + minP.toLocaleString('id-ID') + '–' + maxP.toLocaleString('id-ID') + ')</span>' +
+                '</span>'
+            );
+        }
+
+        el.innerHTML = chips.length
+            ? '<div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs py-2.5 border-t border-slate-100 mt-2">' + chips.join('') + '</div>'
+            : '<div class="text-xs text-slate-400 py-2 border-t border-slate-100 mt-2">No forecast data available.</div>';
+    }
+
+    // -----------------------------------------------------------------------
+    // Sentiment insight caption strip — reads sentimentData global; no API call
+    // -----------------------------------------------------------------------
+    function renderSentimentInsightStrip() {
+        const el = document.getElementById('sentiment-insight-strip');
+        if (!el) return;
+        const sd = sentimentData
+            .filter(d => d.positive_prob != null && d.negative_prob != null)
+            .slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+        if (sd.length < 3) {
+            el.innerHTML = '<div class="text-xs text-slate-400 py-2 border-t border-slate-100 mt-2">Not enough sentiment data.</div>';
+            return;
+        }
+        const last7 = sd.slice(-7);
+        const pos = kiMean(last7.map(d => d.positive_prob)) * 100;
+        const neg = kiMean(last7.map(d => d.negative_prob)) * 100;
+        // Use neutral_prob mean if any entry carries the field; otherwise infer from 100 - pos - neg
+        const hasNeutral = last7.some(d => d.neutral_prob != null);
+        const neu = hasNeutral
+            ? kiMean(last7.filter(d => d.neutral_prob != null).map(d => d.neutral_prob)) * 100
+            : Math.max(0, 100 - pos - neg);
+
+        const chips = [];
+        chips.push(
+            '<span class="flex items-center gap-1.5 flex-wrap">' +
+            '<span class="text-slate-400">Last 7d:</span>' +
+            '<span class="font-semibold tabular-nums text-green-600">' + pos.toFixed(0) + '% positive</span>' +
+            '<span class="text-slate-400">·</span>' +
+            '<span class="font-semibold tabular-nums text-slate-600">' + neu.toFixed(0) + '% neutral</span>' +
+            '<span class="text-slate-400">·</span>' +
+            '<span class="font-semibold tabular-nums text-red-600">' + neg.toFixed(0) + '% negative</span>' +
+            '</span>'
+        );
+
+        // Detect an article-count field in priority order.
+        // No count field is expected in the current sentimentData schema — chip is omitted if absent.
+        const countField = ['article_count', 'count', 'n', 'num_articles', 'volume']
+            .find(f => last7.some(d => d[f] != null));
+        if (countField) {
+            const total7 = last7.reduce((s, d) => s + (d[countField] ?? 0), 0);
+            // < 5 articles over 7 days = very thin news coverage for CPO commodity
+            const thinPill = total7 < 5
+                ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold">thin coverage</span>'
+                : '';
+            chips.push(
+                '<span class="text-slate-300" aria-hidden="true">|</span>' +
+                '<span class="flex items-center gap-1.5">' +
+                '<span class="text-slate-400">Coverage:</span>' +
+                '<span class="font-semibold tabular-nums text-slate-700">' + total7 + ' articles (7d)</span>' +
+                thinPill +
+                '</span>'
+            );
+        }
+
+        el.innerHTML = '<div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs py-2.5 border-t border-slate-100 mt-2">' + chips.join('') + '</div>';
+    }
+
     async function loadForecasts() {
         const status = document.getElementById('forecasts-status');
         try {
@@ -989,6 +1166,7 @@
             plotTrails(data);
             renderKeyInsights(data);
             renderKeyInsightsHero(data);
+            renderPriceInsightStrip(data);
             status.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-green-500" aria-hidden="true"></span> Forecasts updated · <span class="tabular-nums">${(data.trails || []).length}</span> horizons`;
             status.className = 'text-xs text-slate-500 inline-flex items-center gap-2';
         } catch (e) {
@@ -1130,9 +1308,11 @@
             },
         });
         dismissSkeleton('sentimentChart-skeleton');
+        renderSentimentInsightStrip(); // sentimentData already available; independent of /api/forecasts
     } else {
         // Nothing to render — still drop the skeleton so the placeholder doesn't loop forever.
         dismissSkeleton('sentimentChart-skeleton');
+        renderSentimentInsightStrip(); // will show "Not enough sentiment data."
     }
 </script>
 {% endblock %}
