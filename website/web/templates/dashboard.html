@@ -93,6 +93,10 @@
   .details-summary { font-size: 0.75rem; font-weight: 500; color: #64748b; cursor: pointer; user-select: none; transition: color 140ms ease; }
   .details-summary:hover { color: #334155; }
   .details-summary:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; border-radius: 2px; }
+
+  /* Horizon dropdown panel shadow. */
+  #horizon-dropdown-panel { box-shadow: 0 4px 16px rgba(15,23,42,.12), 0 1px 4px rgba(15,23,42,.06); }
+  #horizon-dropdown-chevron { display: inline-block; transition: transform 200ms ease; }
 </style>
 
 <!-- Page Header -->
@@ -185,29 +189,6 @@
                 <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
             </section>
 
-            <!-- Best Model (winning CSA at h=1) -->
-            <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5" aria-label="Best model summary, h=1">
-                <div class="flex items-baseline justify-between mb-1">
-                    <h3 class="eyebrow">Best model &middot; h=1</h3>
-                    <span class="text-[10px] text-slate-400">winning CSA</span>
-                </div>
-                <p class="text-sm font-semibold text-slate-800 leading-tight mb-4">{{ metrics.best_model }}</p>
-                <div class="grid grid-cols-3 stat-grid">
-                    <div class="px-1 text-center">
-                        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">MAPE</p>
-                        <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.mape }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
-                    </div>
-                    <div class="px-1 text-center">
-                        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">sMAPE</p>
-                        <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.smape }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
-                    </div>
-                    <div class="px-1 text-center">
-                        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Dir Acc</p>
-                        <p class="text-lg font-bold text-slate-800 font-mono tabular-nums leading-none">{{ metrics.accuracy }}<span class="text-xs text-slate-400 ml-0.5">%</span></p>
-                    </div>
-                </div>
-            </section>
-
         </div><!-- /Row 1 left -->
 
         <!-- Price Chart with Rolling Forecast Trails -->
@@ -217,23 +198,35 @@
                     <h3 class="text-base font-bold text-slate-900">Price history &amp; direct multi-step horizon forecast</h3>
                     <p class="text-xs text-slate-400 mt-0.5">Each model produces a forecast value from its horizon that trails across the visible window.</p>
                 </div>
-                <div id="forecasts-status" class="text-xs text-slate-400 inline-flex items-center gap-2">
+            </div>
+            <!-- Horizon model dropdown toggle -->
+            <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-slate-500">
+                <span class="text-slate-400">Forecast models:</span>
+                <div class="relative" id="horizon-dropdown-wrapper">
+                    <button type="button" id="horizon-dropdown-btn"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-[11px] text-slate-600 font-medium transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            aria-haspopup="true" aria-expanded="false">
+                        <span id="horizon-dropdown-label">All models shown</span>
+                        <svg class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200" id="horizon-dropdown-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                    </button>
+                    <div id="horizon-dropdown-panel"
+                         class="hidden absolute left-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-lg shadow-lg min-w-[180px] py-1.5">
+                        <div class="px-3 py-1.5 text-[10px] text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100 mb-1">Toggle model trails</div>
+                        <div id="horizon-legend" class="flex flex-col gap-0 px-1"></div>
+                    </div>
+                </div>
+                <span id="forecasts-status" class="text-xs text-slate-400 inline-flex items-center gap-2 ml-1">
                     <span class="inline-block w-2 h-2 rounded-full bg-slate-300 animate-pulse" aria-hidden="true"></span>
                     Loading forecasts&hellip;
-                </div>
+                </span>
             </div>
-            <!-- Horizon model toggle -->
-            <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-slate-500">
-                <span class="text-slate-400">Horizon models (click to toggle):</span>
-                <span id="horizon-legend" class="flex flex-wrap gap-2"></span>
-            </div>
-            <!-- Experimental: direct multi-step forward fan -->
+            <!-- 7-day forward fan (default on) -->
             <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
                 <label class="inline-flex items-center gap-1.5 cursor-pointer select-none rounded-md px-1 py-0.5 transition-colors hover:bg-slate-50 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1">
-                    <input type="checkbox" id="fan-mode-toggle" class="accent-primary focus-visible:outline-none">
-                    <span class="text-slate-600 font-medium">Experimental: direct multi-step forward fan</span>
+                    <input type="checkbox" id="fan-mode-toggle" class="accent-primary focus-visible:outline-none" checked>
+                    <span class="text-slate-600 font-medium">Show 7-day forward forecast</span>
                 </label>
-                <span class="text-slate-400">&mdash; one connected forecast from the last actual day (T &rarr; T+1&hellip;T+7). Horizon toggles then affect historical trails only.</span>
+                <span class="text-slate-400">&mdash; connected forecast from the last actual day (T &rarr; T+7). Model toggles above then affect historical trails only.</span>
             </div>
             <div class="relative h-[420px] w-full">
                 <div id="priceChart-skeleton" class="chart-loading skeleton" aria-hidden="true"></div>
@@ -306,12 +299,34 @@
         <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
             <h3 class="text-base font-bold text-slate-900">Model details &amp; breakdown</h3>
             <p class="text-xs text-slate-400 mt-0.5 mb-5">Per-horizon winning configs and the full per-category insight breakdown.</p>
-            <!-- Forecast Models (auto-picked per horizon) -->
+
+            <!-- Model name mapping & metrics comparison -->
             <div class="mb-5 pb-5 border-b border-slate-100">
-                <h4 class="eyebrow mb-2">Forecast models</h4>
-                <p class="text-xs text-slate-500 mb-3 leading-relaxed">Auto-picked per horizon (lowest BASE MAPE). Inference uses the chosen config's CSA model.</p>
-                <div id="winners-summary" class="space-y-1.5 text-xs"></div>
+                <h4 class="eyebrow mb-2">Model index</h4>
+                <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+                    Each <strong>Model N</strong> corresponds to the best-performing configuration for that forecast horizon (H&nbsp;=&nbsp;N days ahead). Config label indicates the feature set used.
+                </p>
+                <div id="model-index-table" class="overflow-x-auto">
+                    <table class="w-full text-[11px] text-slate-600 tabular-nums">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-100 text-left">
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Model</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Full name</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Config</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Features</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Mean Absolute Percentage Error — lower is better.">MAPE</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Root Mean Squared Error in price space (MYR).">RMSE</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Directional accuracy — % of correct up/down calls. >50% beats random.">DA</th>
+                            </tr>
+                        </thead>
+                        <tbody id="model-index-tbody" class="divide-y divide-slate-50">
+                            <!-- Populated by renderModelIndex() after forecasts load -->
+                            <tr><td colspan="7" class="py-2 text-slate-400 italic">Loading model data&hellip;</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
             <!-- Per-category detail lists in a responsive 2-column grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <details>
@@ -482,7 +497,7 @@
     // Rolling forecast overlay — fetch /api/forecasts/ and add per-horizon datasets
     // -----------------------------------------------------------------------
     let lastForecasts = null;
-    let fanMode = false;  // experimental forward-fan mode (off by default)
+    let fanMode = true;  // 7-day forward fan on by default
     const visibleHorizons = new Set([1, 2, 3, 4, 5, 6, 7]);
 
     // Date of the last actual close — the fan's single forecast origin (T).
@@ -547,7 +562,7 @@
                 if (idx !== -1) data[idx] = p.predicted_price;
             }
             priceChart.data.datasets.push({
-                label: `${ordinalHorizon(t.horizon)} Horizon Model (${t.config})`,
+                label: `Model ${t.horizon}`,
                 data,
                 borderColor: color,
                 backgroundColor: color + '14',
@@ -572,7 +587,7 @@
                 const idx = extLabels.indexOf(p.predicted_date);
                 if (idx !== -1) {
                     data[idx] = p.predicted_price;
-                    pointLabels[idx] = `${ordinalHorizon(p.horizon)} Horizon Model (${p.config})`;
+                    pointLabels[idx] = `Model ${p.horizon} (H=${p.horizon}, ${p.config})`;
                 }
             }
             priceChart.data.datasets.push({
@@ -599,21 +614,29 @@
         el.innerHTML = trails.map(t => {
             const on = visibleHorizons.has(t.horizon);
             const color = HORIZON_COLORS[t.horizon];
+            // Full descriptive label for the dropdown row; chart uses "Model N"
+            const fullLabel = `${ordinalHorizon(t.horizon)} Horizon Model (${t.config})`;
             return `
-                <button type="button"
-                        data-horizon="${t.horizon}"
-                        aria-pressed="${on}"
-                        class="horizon-toggle tip flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] tabular-nums ${on ? 'border-slate-200 text-slate-600 bg-white' : 'border-transparent text-slate-300 line-through'}"
-                        data-tip="Model that predicts the ${t.horizon}-day-ahead horizon. Click to ${on ? 'hide' : 'show'} this trail.">
-                    <span class="inline-block w-5 h-0 border-t-2 border-dashed" style="border-color:${on ? color : '#cbd5e1'}"></span>
-                    <span>${ordinalHorizon(t.horizon)} Horizon Model (${t.config})</span>
-                </button>`;
+                <label class="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-slate-50 text-[11px] transition-colors">
+                    <input type="checkbox" class="horizon-checkbox accent-primary" data-horizon="${t.horizon}" ${on ? 'checked' : ''}>
+                    <span class="inline-block w-5 h-0 border-t-2 border-dashed flex-shrink-0" style="border-color:${color}"></span>
+                    <span class="text-slate-600 tabular-nums">
+                        <span class="font-semibold">Model ${t.horizon}</span>
+                        <span class="text-slate-400 ml-1">${fullLabel}</span>
+                    </span>
+                </label>`;
         }).join('');
-        el.querySelectorAll('.horizon-toggle').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const h = parseInt(btn.dataset.horizon, 10);
-                if (visibleHorizons.has(h)) visibleHorizons.delete(h);
-                else visibleHorizons.add(h);
+        // Update summary label in the button
+        const total = trails.length;
+        const shown = trails.filter(t => visibleHorizons.has(t.horizon)).length;
+        const labelEl = document.getElementById('horizon-dropdown-label');
+        if (labelEl) labelEl.textContent = shown === total ? 'All models shown' : shown === 0 ? 'No models shown' : `${shown}/${total} models shown`;
+
+        el.querySelectorAll('.horizon-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const h = parseInt(cb.dataset.horizon, 10);
+                if (cb.checked) visibleHorizons.add(h);
+                else visibleHorizons.delete(h);
                 if (lastForecasts) {
                     plotTrails(lastForecasts);
                     renderHorizonLegend(lastForecasts);
@@ -621,6 +644,28 @@
             });
         });
     }
+
+    // Wire dropdown open/close
+    (function () {
+        const btn   = document.getElementById('horizon-dropdown-btn');
+        const panel = document.getElementById('horizon-dropdown-panel');
+        const chev  = document.getElementById('horizon-dropdown-chevron');
+        if (!btn || !panel) return;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = panel.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', String(!open));
+            chev.style.transform = open ? '' : 'rotate(180deg)';
+        });
+        document.addEventListener('click', () => {
+            if (!panel.classList.contains('hidden')) {
+                panel.classList.add('hidden');
+                btn.setAttribute('aria-expanded', 'false');
+                chev.style.transform = '';
+            }
+        });
+        panel.addEventListener('click', e => e.stopPropagation());
+    })();
 
     const CONFIG_FEATURES = {
         cpo_only:      'Price only',
@@ -639,11 +684,12 @@
             const tag = winners[h] || winners[String(h)];
             const cfg = configs[h] || configs[String(h)] || (tag ? TAG_LABEL[tag] : '—');
             const feat = tag ? (CONFIG_FEATURES[tag] || '') : '';
-            rows.push(`
+        rows.push(`
                 <div class="flex justify-between items-start gap-2">
                     <span class="flex items-center gap-1.5 text-slate-600 tabular-nums shrink-0">
                         <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${HORIZON_COLORS[h]}"></span>
-                        h=${h}
+                        <span class="font-semibold">Model ${h}</span>
+                        <span class="text-slate-400 text-[10px]">(H=${h})</span>
                     </span>
                     <div class="text-right">
                         <div class="font-semibold text-slate-700 tabular-nums">${cfg || '—'}</div>
@@ -655,7 +701,48 @@
     }
 
     // -----------------------------------------------------------------------
-    // Key Insights — client-side only. Reads chartData, sentimentData globals
+    // Model index table — maps Model N → horizon label, config, feature set, metrics
+    // -----------------------------------------------------------------------
+    function renderModelIndex(forecasts) {
+        const tbody = document.getElementById('model-index-tbody');
+        if (!tbody) return;
+        const winners = forecasts.winners || {};
+        const configs = forecasts.configs || {};
+        const metrics = forecasts.metrics || {};
+        const m = (tag, h, v) => { try { return metrics[tag][String(h)][v]; } catch (e) { return null; } };
+        const mb = (tag, h) => m(tag, h, 'CSA') || m(tag, h, 'BASE');
+
+        const rows = [];
+        for (let h = 1; h <= 7; h++) {
+            const tag = winners[h] || winners[String(h)] || '';
+            const cfg = configs[h] || configs[String(h)] || (tag ? TAG_LABEL[tag] : '—');
+            const feat = tag ? (CONFIG_FEATURES[tag] || '—') : '—';
+            const met = tag ? mb(tag, h) : null;
+            const mape = met ? kiFmt(met.mape, '%') : '—';
+            const rmse = met && met.rmse != null ? kiFmt(met.rmse, '', 1) : '—';
+            const da   = met ? kiFmt(met.da, '%') : '—';
+            const daClass = met && met.da >= 55 ? 'text-green-600 font-semibold' : met && met.da < 50 ? 'text-red-500' : 'text-amber-600';
+            const color = HORIZON_COLORS[h] || '#64748b';
+            const fullName = `${ordinalHorizon(h)} Horizon Model (${cfg})`;
+            rows.push(`
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="py-1.5 pr-3 font-bold" style="color:${color}">
+                        Model ${h}
+                    </td>
+                    <td class="py-1.5 pr-3 text-slate-500">${fullName}</td>
+                    <td class="py-1.5 pr-3">
+                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">${cfg}</span>
+                    </td>
+                    <td class="py-1.5 pr-3 text-slate-500">${feat}</td>
+                    <td class="py-1.5 pr-3 tabular-nums text-slate-700">${mape}</td>
+                    <td class="py-1.5 pr-3 tabular-nums text-slate-700">${rmse}</td>
+                    <td class="py-1.5 pr-3 tabular-nums ${daClass}">${da}</td>
+                </tr>`);
+        }
+        tbody.innerHTML = rows.join('');
+    }
+
+
     // and the /api/forecasts response (may be null on failure). No backend.
     // -----------------------------------------------------------------------
     const KI_STATE_LABEL = { 0: 'Bearish', 1: 'Bullish', 2: 'Neutral' };
@@ -975,8 +1062,11 @@
             const da1 = s1.da, da7 = s7 ? s7.da : NaN;
             const tone = da1 < 55 ? 'text-amber-600' : 'text-green-600';
             const head = da1 < 55 ? 'Around 50% at 1 day' : `${kiFmt(da1, '%')} at 1 day`;
-            const posOf = da => Math.max(2, Math.min(98, (da - 40) / 30 * 100));
-            const ref50 = (50 - 40) / 30 * 100;
+            // posOf maps directional accuracy (0–100%) directly to bar position.
+            // Clamp to 1–99 so dots stay inside the bar.
+            const posOf = da => Math.max(1, Math.min(99, da));
+            // 50% chance line is exactly at 50% of the bar width.
+            const ref50 = 50;
             elM.innerHTML = `
                 <div class="text-xl font-bold ${tone} mb-3 tabular-nums">${head}</div>
                 <div class="relative h-2 bg-slate-100 rounded-full mb-1.5">
@@ -1177,6 +1267,7 @@
             lastForecasts = data;
             renderHorizonLegend(data);
             renderWinnersSummary(data);
+            renderModelIndex(data);
             plotTrails(data);
             renderKeyInsights(data);
             renderKeyInsightsHero(data);
