@@ -150,9 +150,20 @@ For every generated diagram:
 
 ## 6. Branch & Commit Status
 
-- **Branch:** `feature/diagrams-precompute` (created from `fix/critical-major-cleanup`).
-- **Commits:** none — `diagrams/` is `.gitignored` per repo policy ("local docs, not pushed"). Per user instruction in this session, diagrams remain untracked local artefacts; archive is also untracked.
-- **Untracked addition:** [_archive_diagrams_preprecompute/](_archive_diagrams_preprecompute/) — 3 misnumbered legacy files (`P5_dashboard_misnumbered.html` × 3) preserved per "never delete" constraint.
+- **Branch:** `feature/diagrams-precompute`
+- **`diagrams/` removed from `.gitignore`** — was blocking all diagram commits (line removed 2026-05-27; `drawio_xml_charts/` kept ignored).
+- **Commits on this branch (diagram tiers):**
+
+| Hash | Message |
+|------|---------|
+| `65fdf7d` | `docs(diagrams): DFD level 0/1/2 reflecting precompute architecture` |
+| `297577c` | `docs(diagrams): per-L2 structure charts with call-order + I/O` |
+| `0dea9a3` | `docs(diagrams): per-L2 flowcharts with reconcile sub-process` |
+| `67ca8e0` | `docs(diagrams): per-flowchart pseudocode with helpers` |
+
+**P1/P2 reconcile update** (user-approved): P1 flowchart+pseudocode now include step 1.5 `reconcile_prices → D1`; P2 flowchart+pseudocode relabel FinBERT as 2.4 (was 3.1), add step 2.6 `reconcile_news → D2`; deferred-write footnotes removed.
+
+**D8/D9 numbering** (user-approved): `forecasts` = D8, `forecast_meta` = D9, consistent with pre-existing P6 structure chart.
 
 ---
 
