@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P2 News Acquisition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P2 News Acquisition</h1>
+      <p class="text-teal-100 text-sm mt-1">Control-flow proses 2.0 (DFD Level 2: 2.1 → 2.6). Loop multi-keyword × halaman + decision drop-empty; berakhir dengan reconcile ke Firestore D2.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../structure_charts/P2_news_acquisition.html" class="nav-pill">Structure Chart P2</a>
+    <a href="../pseudocodes/P2_news_acquisition.html" class="nav-pill">Pseudocode P2</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill active">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Setiap blok merepresentasikan sub-proses pada DFD Level 2 (2.1–2.6).
+        Termasuk dua decision yang menghentikan run lebih awal
+        (<em>news CSV current</em>, <em>tidak ada artikel baru</em>),
+        loop scraping multi-keyword × halaman, satu decision setelah preprocessing
+        (cleaned kosong setelah drop-empty), dan reconcile batch ke Firestore D2 di akhir.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: _step_news(paths)"]):::startend
+    A["2.1a most_recent_trading_day() → cutoff<br/>2.1b latest_news_date(news_sent) → have"]:::process
+    Q1{"have &gt;= cutoff?<br/>(news CSV current)"}:::decision
+    SkipA(["RETURN ([], False)<br/>(skip news step)"]):::startend
+    B["2.2 scrape_new_articles(have)<br/>loop 2 keyword × N halaman<br/>(_make_session → _scrape_keyword<br/>→ _parse_cards → _fetch_contents)"]:::process
+    Q2{"raw kosong?"}:::decision
+    SkipB(["RETURN ([], False)<br/>(no new articles)"]):::startend
+    Caw["2.5a append_news_rows(news_raw, raw, RAW_FIELDS)<br/>(dedup by URL)"]:::process
+    C["2.3 preprocess_articles(raw)<br/>(NewsPreprocessor: title + content,<br/>drop yang title+content kosong)"]:::process
+    Q3{"cleaned kosong?<br/>(semua di-drop saat preprocess)"}:::decision
+    SkipC(["RETURN ([], False)<br/>(all dropped)"]):::startend
+    Cpw["2.5b append_news_rows(news_preproc, cleaned, RAW_FIELDS)"]:::process
+    D["2.4 run_sentiment_on_articles(cleaned)<br/>(FinBERT-Tone, title-only, batch 16)"]:::process
+    Csw["2.5c append_news_rows(news_sent, scored, SENTIMENT_FIELDS)"]:::process
+    F["2.6 reconcile_news(db, scored)<br/>→ compare D2 vs articles → missing list<br/>→ write_news_articles(db, missing)<br/>→ D2 news_articles (batch upsert; doc id = md5(url))"]:::process
+    End(["RETURN (scored, True)<br/>(news + Firestore updated)"]):::startend
+
+    Start --> A
+    A --> Q1
+    Q1 -- "Ya" --> SkipA
+    Q1 -- "Tidak" --> B
+    B --> Q2
+    Q2 -- "Ya" --> SkipB
+    Q2 -- "Tidak" --> Caw
+    Caw --> C
+    C --> Q3
+    Q3 -- "Ya" --> SkipC
+    Q3 -- "Tidak" --> Cpw
+    Cpw --> D
+    D --> Csw
+    Csw --> F
+    F --> End
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#a16207,stroke-width:1.5px,color:#713f12;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Lihat <a href="../structure_charts/P2_news_acquisition.html" class="text-teal-700 underline">Structure Chart P2</a>
+        untuk dekomposisi modul (terutama scraping internals
+        <code>_scrape_keyword → _fetch_contents</code>), dan
+        <a href="../pseudocodes/P2_news_acquisition.html" class="text-teal-700 underline">Pseudocode P2</a>
+        untuk algoritma tekstual termasuk loop multi-keyword × halaman.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

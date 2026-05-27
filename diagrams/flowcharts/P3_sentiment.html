@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P3 Sentiment Analysis &amp; Aggregation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P3 Sentiment Analysis &amp; Aggregation</h1>
+      <p class="text-teal-100 text-sm mt-1">Control-flow proses 3.0 (DFD Level 2: 3.1 → 3.2 → 3.3). Load CSV → hitung agregat harian → reconcile ke Firestore D3.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../structure_charts/P3_sentiment.html" class="nav-pill">Structure Chart P3</a>
+    <a href="../pseudocodes/P3_sentiment.html" class="nav-pill">Pseudocode P3</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill active">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Tiga sub-proses berurutan di dalam <code>reconcile_all</code> (fase P3,
+        <code>scheduler/reconcile.py:156</code>). Sub-proses 3.1 membaca seluruh
+        artikel dari CSV lokal; 3.2 menghitung bucket harian (frequency, article_count,
+        probabilitas sentimen, sentiment_score); 3.3 membandingkan dengan D3 di Firestore
+        dan hanya menulis bucket yang missing atau berubah (<em>stale</em>).
+        Dua early-exit: articles kosong dan stale_aggs kosong (tidak ada yang perlu ditulis).
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: reconcile_aggregates(db, articles)<br/>reconcile.py:122"]):::startend
+    A["3.1 load_news_from_csv(news_raw, news_sent)<br/>news_extractor.py:175<br/>(merge raw CSV + sentimen CSV → articles list)"]:::process
+    Q1{"articles kosong?"}:::decision
+    SkipA(["RETURN 0<br/>(tidak ada artikel)"]):::startend
+    B["3.2 compute_sentiment_aggregates(articles)<br/>sentiment_runner.py:139<br/>(group by date → bucket harian:<br/>article_count, positive_prob,<br/>negative_prob, neutral_prob,<br/>sentiment_score)"]:::process
+    Q2{"aggregates kosong?"}:::decision
+    SkipB(["RETURN 0<br/>(tidak ada agregat)"]):::startend
+    Fetch["ambil existing docs dari D3<br/>sentiment_aggregates (Firestore)<br/>→ existing_keys: set(frequency_date)"]:::process
+    Compare["bandingkan aggregates vs existing_keys<br/>→ stale_aggs: list[dict]<br/>(yang missing atau berubah)"]:::process
+    Q3{"stale_aggs kosong?<br/>(D3 sudah up-to-date)"}:::decision
+    SkipC(["RETURN 0<br/>(tidak ada yang perlu ditulis)"]):::startend
+    C["3.3 write_sentiment_aggregates(db, stale_aggs)<br/>firestore_writer.py:197<br/>(batch upsert ke D3 sentiment_aggregates;<br/>doc id = Daily_YYYY-MM-DD)"]:::process
+    End(["RETURN n_written"]):::startend
+
+    Start --> A
+    A --> Q1
+    Q1 -- "Ya" --> SkipA
+    Q1 -- "Tidak" --> B
+    B --> Q2
+    Q2 -- "Ya" --> SkipB
+    Q2 -- "Tidak" --> Fetch
+    Fetch --> Compare
+    Compare --> Q3
+    Q3 -- "Ya" --> SkipC
+    Q3 -- "Tidak" --> C
+    C --> End
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#a16207,stroke-width:1.5px,color:#713f12;
+    classDef error    fill:#fee2e2,stroke:#991b1b,stroke-width:1.5px,color:#7f1d1d;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Lihat <a href="../structure_charts/P3_sentiment.html" class="text-teal-700 underline">Structure Chart P3</a>
+        untuk dekomposisi modul, dan <a href="../pseudocodes/P3_sentiment.html" class="text-teal-700 underline">Pseudocode P3</a>
+        untuk algoritma tekstual lengkap.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
