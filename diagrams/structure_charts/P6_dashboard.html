@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P6 Dashboard Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } .page-break { page-break-before: always; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P6 Dashboard Web</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 6.0 (DFD Level 1 &amp; Level 2) — Django + 4 view read-only dari Firestore. Tanpa modul ML di jalur request. Urutan view = urutan url pattern.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill active">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P6 — Dashboard Web</strong> dimulai dari perintah
+        <code>python manage.py runserver</code> (pada Vercel: WSGI handler
+        di <code>website/vercel_wsgi.py</code>) yang menyalakan Django.
+        Setiap HTTP request dari Pengunjung di-<em>route</em> oleh
+        <code>web/urls.py</code> ke salah satu dari empat fungsi view.
+        Karena rantai boot Django adalah infrastruktur <em>framework</em>,
+        bukan modul aplikasi, akar diagram disederhanakan menjadi satu node
+        tunggal (lihat tabel “Modul Boot &amp; Dispatch”). Empat sub-proses
+        6.1–6.4 adalah view publik <strong>read-only</strong>, dengan urutan
+        di diagram = urutan url-pattern (<code>/</code>,
+        <code>/api/forecasts/</code>, <code>/news/</code>,
+        <code>/about/</code>) — kiri ke kanan.
+      </p>
+      <p class="text-sm text-slate-700 leading-relaxed mt-3">
+        <strong>Tidak ada modul ML</strong> (<code>joblib</code>,
+        <code>numpy</code>, <code>pandas</code>, <code>xgboost</code>) yang
+        di-impor oleh <code>website/web/*.py</code>. Trail forecast diproduksi
+        oleh proses 5.0 (P5) di scheduler dan dipersisten ke koleksi
+        <code>forecasts</code> (D8) + dokumen <code>forecast_meta/Daily</code>
+        (D9); P6 hanya membacanya.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TB
+    R["python manage.py runserver / WSGI handler<br/>website/manage.py + website/vercel_wsgi.py"]:::root
+
+    %% Four views in URL-pattern order (left -> right by url pattern in web/urls.py).
+    R -->|"in: HttpRequest (GET /)<br/>out: HttpResponse (dashboard.html)"| V1["6.1 dashboard(request)<br/>website/web/views.py:20"]:::view
+    R -->|"in: HttpRequest (GET /api/forecasts/?max_horizon=&amp;window_days=)<br/>out: JsonResponse"| V2["6.2 forecasts_api(request)<br/>website/web/views.py:184"]:::view
+    R -->|"in: HttpRequest (GET /news/?sentiment=&amp;page=)<br/>out: HttpResponse (news.html, edge-cached 1h)"| V3["6.3 news(request)<br/>website/web/views.py:289"]:::view
+    R -->|"in: HttpRequest (GET /about/)<br/>out: HttpResponse (about.html)"| V4["6.4 about(request)<br/>website/web/views.py:395"]:::view
+
+    %% Lock left-to-right by url pattern.
+    V1 ~~~ V2 ~~~ V3 ~~~ V4
+
+    %% Shared modules.
+    FC["firestore.client()<br/>(firebase_admin)"]:::ext
+    RENDER["render(template, ctx)<br/>(django.shortcuts)"]:::ext
+    JR["JsonResponse(payload)<br/>(django.http)"]:::ext
+
+    %% --- 6.1 dashboard internals ---
+    V1 -->|"in: —<br/>out: Firestore client"| FC
+    V1 -->|"in: cutoff (365d) where date &gt;= cutoff<br/>out: price_list[] (date,open,high,low,close,volume)"| Q1A["daily_prices.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D1"]:::query
+    V1 -->|"in: cutoff where date &gt;= cutoff<br/>out: state_dict[date]"| Q1B["hmm_states.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D4"]:::query
+    V1 -->|"in: cutoff where date &gt;= cutoff<br/>out: sentiment_list[]"| Q1C["sentiment_aggregates.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D3"]:::query
+    V1 -->|"in: document('Daily').get()<br/>out: meta dict (parse payload_json) → metrics h=1 + winners"| Q1D["forecast_meta.document('Daily').get()<br/>← D9"]:::query
+    V1 -->|"in: 'dashboard.html', ctx<br/>out: HttpResponse"| RENDER
+
+    %% --- 6.2 forecasts_api internals ---
+    V2 -->|"in: GET params<br/>out: clamped (max_horizon ∈ [1,7], window_days ∈ [7,365])"| C2P["clamp params<br/>(inline int + min/max)"]:::util
+    V2 -->|"in: —<br/>out: Firestore client"| FC
+    V2 -->|"in: document('Daily').get()<br/>out: meta_payload (winners, configs, metrics, horizons, forward_fan, tag_to_config)"| Q2A["forecast_meta.document('Daily').get()<br/>← D9 (parse payload_json)"]:::query
+    V2 -->|"in: collection.stream()<br/>out: trails_by_h dict (filter predicted_date ≥ cutoff &amp; horizon ≤ max_h, in Python)"| Q2B["forecasts.stream() + filter Python<br/>← D8"]:::query
+    V2 -->|"in: trails_by_h<br/>out: trails[] sorted by anchor_date"| ASM["assemble trails {horizon,tag,config,points[]}<br/>(inline)"]:::util
+    V2 -->|"in: payload dict<br/>out: JsonResponse 200 / 503 / 500"| JR
+
+    %% --- 6.3 news internals ---
+    V3 -->|"in: —<br/>out: Firestore client"| FC
+    V3 -->|"in: .select(date,title,category,snippet,url,sentiment_label,sentiment_score).stream()<br/>out: news_list[] (project-only, drops heavy content)"| Q3["news_articles projection stream<br/>← D2"]:::query
+    V3 -->|"in: news_list + sentiment_filter + page<br/>out: paged + filtered + sorted"| F3["Python filter + sort + paginate (9/page)<br/>(inline)"]:::util
+    V3 -->|"in: 'news.html', ctx<br/>out: HttpResponse (edge-cached 1h)"| RENDER
+
+    %% --- 6.4 about internals ---
+    V4 -->|"in: 'about.html', ctx<br/>out: HttpResponse"| RENDER
+
+    %% Data stores read.
+    Q1A -.->|"read"| D1S[("D1: daily_prices")]:::store
+    Q1B -.->|"read"| D4S[("D4: hmm_states")]:::store
+    Q1C -.->|"read"| D3S[("D3: sentiment_aggregates")]:::store
+    Q1D -.->|"read"| D9S[("D9: forecast_meta/Daily")]:::store
+    Q2A -.->|"read"| D9S
+    Q2B -.->|"read + Python filter"| D8S[("D8: forecasts (per-titik)")]:::store
+    Q3  -.->|"read .select(projection)"| D2S[("D2: news_articles")]:::store
+
+    classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
+    classDef view  fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+    classDef ext   fill:#fae8ff,stroke:#86198f,stroke-width:1px,color:#701a75;
+    classDef query fill:#fef9c3,stroke:#a16207,stroke-width:1px,color:#713f12;
+    classDef store fill:#f3e8ff,stroke:#7e22ce,stroke-width:1px,color:#581c87;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Legenda:
+        <span class="px-1 rounded" style="background:#fde68a;border:1px solid #92400e">kuning</span> = root CLI (mencakup keseluruhan Django boot &amp; dispatch),
+        <span class="px-1 rounded" style="background:#ccfbf1;border:1px solid #0d9488">teal</span> = view endpoint,
+        <span class="px-1 rounded" style="background:#dbeafe;border:1px solid #1e40af">biru</span> = fungsi modul internal (inline),
+        <span class="px-1 rounded" style="background:#fae8ff;border:1px solid #86198f">ungu</span> = pustaka eksternal,
+        <span class="px-1 rounded" style="background:#fef9c3;border:1px solid #a16207">krem-kuning</span> = query Firestore inline,
+        <span class="px-1 rounded" style="background:#f3e8ff;border:1px solid #7e22ce">lavender</span> = data store DFD (read-only di P6).
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Modul Boot &amp; Dispatch (terkompresi pada akar diagram)</h3>
+      <p class="text-xs text-slate-600 mb-2">
+        Tabel ini menjelaskan rantai modul Django yang secara implisit terkandung
+        dalam akar diagram. Modul-modul ini tidak digambar karena merupakan
+        infrastruktur <em>framework</em>, bukan modul aplikasi yang ditulis pengembang.
+      </p>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Urutan</th><th>Modul</th><th>Fungsi</th><th>Peran</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><code>website/manage.py</code> (lokal) atau <code>website/vercel_wsgi.py</code> (Vercel)</td><td><code>main()</code> / WSGI handler</td>
+                <td>Set <code>DJANGO_SETTINGS_MODULE=config.settings</code>; bootstrap Django.</td></tr>
+            <tr><td>2</td><td><code>django.core.management</code></td><td><code>execute_from_command_line(argv)</code></td>
+                <td>Parse <code>argv</code>; cari command <code>runserver</code>.</td></tr>
+            <tr><td>3</td><td><code>django.core.management.commands.runserver</code></td><td><code>Command.handle()</code></td>
+                <td>Start dev HTTP server (lokal) / handle request per request (Vercel).</td></tr>
+            <tr><td>4</td><td><code>website/config/wsgi.py</code></td><td><code>get_wsgi_application()</code></td>
+                <td>Bangun WSGI handler — entry point per-request.</td></tr>
+            <tr><td>5</td><td><code>website/config/urls.py</code></td><td><code>urlpatterns</code></td>
+                <td><code>include('web.urls')</code>.</td></tr>
+            <tr><td>6</td><td><code>website/web/urls.py</code></td><td><code>urlpatterns</code></td>
+                <td>4 path: <code>/</code>, <code>/api/forecasts/</code>, <code>/news/</code>, <code>/about/</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Modul View (urut url-pattern)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>Modul · Fungsi</th><th>Input</th><th>Output</th></tr></thead>
+          <tbody>
+            <tr><td>6.1</td><td><code>web/views.py</code> · <code>dashboard(request)</code></td>
+                <td><code>HttpRequest</code></td>
+                <td><code>HttpResponse</code> — <code>dashboard.html</code> dengan <code>chart_data</code>, <code>metrics</code>, <code>winners_data</code>, <code>sentiment_data</code>, <code>stats</code>, <code>latest_date</code></td></tr>
+            <tr><td>6.2</td><td><code>web/views.py</code> · <code>forecasts_api(request)</code></td>
+                <td>Query opsional: <code>max_horizon ∈ [1,7]</code>, <code>window_days ∈ [7,365]</code></td>
+                <td><code>JsonResponse</code> — <code>{horizons, winners, configs, trails, forward_fan, metrics, tag_to_config, generated_at}</code> (200 / 503 jika <code>forecast_meta/Daily</code> atau koleksi <code>forecasts</code> kosong / 500)</td></tr>
+            <tr><td>6.3</td><td><code>web/views.py</code> · <code>news(request)</code></td>
+                <td>Query: <code>sentiment ∈ {Positive,Negative,Neutral}</code>, <code>page</code></td>
+                <td><code>HttpResponse</code> — <code>news.html</code> (paginated 9/page, edge-cached 1h Vercel CDN)</td></tr>
+            <tr><td>6.4</td><td><code>web/views.py</code> · <code>about(request)</code></td>
+                <td>—</td>
+                <td><code>HttpResponse</code> — <code>about.html</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Tabel — Coupling (Data yang Dilewatkan)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
+          <tbody>
+            <tr><td><code>runserver</code> (akar)</td><td><em>view function</em></td><td><code>HttpRequest</code> (via URL dispatcher)</td><td>Stamp</td></tr>
+            <tr><td><code>dashboard</code></td><td>D1 / D3 / D4</td><td><code>where date ≥ 365d</code>; stats computed from <code>price_list[-90:]</code></td><td>Data</td></tr>
+            <tr><td><code>dashboard</code></td><td>D9</td><td>doc <code>Daily</code>; parse <code>payload_json</code></td><td>Data (JSON)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td>D9</td><td>doc <code>Daily</code>; parse <code>payload_json</code></td><td>Data (JSON)</td></tr>
+            <tr><td><code>forecasts_api</code></td><td>D8</td><td><code>stream()</code> + filter Python (<code>predicted_date ≥ cutoff</code>, <code>horizon ≤ max_h</code>)</td><td>Data</td></tr>
+            <tr><td><code>news</code></td><td>D2</td><td>stream + projection (<code>.select(...)</code>) tanpa <code>content</code></td><td>Data</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Akar = CLI tunggal:</strong> rantai Django boot ditampilkan
+            sebagai satu node tunggal pada diagram; detail boot ada di tabel
+            di atas.</li>
+        <li><strong>Tanpa autentikasi:</strong> seluruh endpoint publik read-only.</li>
+        <li><strong>forecasts_api read-only:</strong> hanya membaca
+            <code>forecast_meta/Daily</code> + koleksi <code>forecasts</code>.
+            <em>Tidak ada</em> <code>joblib.load</code>, model XGBoost, scaler
+            di jalur request. Filter <code>predicted_date</code> &amp;
+            <code>horizon</code> dilakukan di Python untuk menghindari
+            kebutuhan composite index Firestore.</li>
+        <li><strong>Inferensi dipre-komputasi:</strong> trail forecast diproduksi
+            oleh proses 5.0 (<code>scheduler/precompute_forecasts.py</code>)
+            yang memanggil <code>prediction/inference.py::compute_forecast_trails</code>
+            dan menulis hasilnya ke D8 + D9. Sebelumnya algoritma yang sama
+            berada di <code>website/web/predictor.py</code>; kini direlokasi ke
+            <code>prediction/inference.py</code> agar bisa di-share antara
+            scheduler precompute dan (hipotetis) jalur batch lain.</li>
+        <li><strong>Composite-index avoidance:</strong> <code>news</code> men-fetch
+            semua doc lalu sort di Python; <code>forecasts_api</code> juga men-stream
+            seluruh koleksi <code>forecasts</code> lalu filter di Python.</li>
+        <li><strong>Edge-caching:</strong> <code>news</code> di-decorate dengan
+            <code>@cache_control(public=True, s_maxage=3600, max_age=60)</code>
+            agar Vercel CDN menyimpan respons selama 1 jam — berita hanya
+            berubah saat scheduler jalan (~harian).</li>
+        <li><strong>Data store yang dibaca P6:</strong> D1 (daily_prices),
+            D2 (news_articles), D3 (sentiment_aggregates), D4 (hmm_states),
+            D8 (forecasts per-point), D9 (forecast_meta/Daily). Tidak ada write
+            apapun.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

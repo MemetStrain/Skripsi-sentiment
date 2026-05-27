@@ -25,12 +25,15 @@ def dashboard(request):
         messages.error(request, 'Firebase is not initialized.')
         return render(request, 'dashboard.html', _empty_dashboard_ctx())
 
-    three_months_ago = (datetime.now().date() - timedelta(days=90)).isoformat()
+    # Fetch a year of history so the dashboard's 30/90/180/1Y range toggle
+    # can switch client-side without re-querying. Stats below still summarise
+    # the most recent 90 days to keep the "Price stats · 90d" label honest.
+    one_year_ago = (datetime.now().date() - timedelta(days=365)).isoformat()
 
     # Fetch price data from new `daily_prices` collection
     price_docs = (
         db.collection('daily_prices')
-        .where('date', '>=', three_months_ago)
+        .where('date', '>=', one_year_ago)
         .order_by('date')
         .stream()
     )
@@ -51,7 +54,7 @@ def dashboard(request):
     # to avoid a composite Firestore index requirement.
     state_docs = (
         db.collection('hmm_states')
-        .where('date', '>=', three_months_ago)
+        .where('date', '>=', one_year_ago)
         .order_by('date')
         .stream()
     )
@@ -84,9 +87,11 @@ def dashboard(request):
             'state_label': state_label,
         })
 
-    # Stats
+    # Stats — summarise the last 90 days regardless of the broader fetch
+    # window, since the sidebar label reads "Price stats · 90d".
     if price_list:
-        prices = [p['close'] for p in price_list]
+        recent = price_list[-90:]
+        prices = [p['close'] for p in recent]
         stats = {
             'current_price': prices[-1],
             'avg_price': sum(prices) / len(prices),
@@ -131,12 +136,13 @@ def dashboard(request):
         # forecast_meta/Daily not produced yet — page still renders with N/A metrics.
         pass
 
-    # Sentiment trend from `sentiment_aggregates` (Daily, 90-day window).
+    # Sentiment trend from `sentiment_aggregates` — fetch a full year so the
+    # dashboard range toggle (30/90/180/1Y) can switch entirely client-side.
     sentiment_list = []
     try:
         sent_docs = (
             db.collection('sentiment_aggregates')
-            .where('date', '>=', three_months_ago)
+            .where('date', '>=', one_year_ago)
             .order_by('date')
             .stream()
         )

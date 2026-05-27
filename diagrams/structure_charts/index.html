@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Charts — Index</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    .legend-pill { display: inline-block; border-radius: 0.375rem; padding: 0.15rem 0.7rem; font-size: 0.75rem; font-weight: 600; margin-right: 0.4rem; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Charts — Index</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul enam proses Level 1 DFD. Urutan anak = urutan eksekusi aktual (kiri → kanan). I/O terdapat pada setiap edge pemanggilan.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill active">Structure Charts (Index)</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-10">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pemetaan Proses → Structure Chart</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr>
+              <th>Proses</th>
+              <th>Entry Function</th>
+              <th>File</th>
+              <th>Sub-proses (L2)</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>P1</strong> Price Acquisition</td>
+              <td><code>_step_price()</code> + <code>reconcile_prices()</code></td>
+              <td>main.py:222 · reconcile.py:55</td>
+              <td>1.1–1.5 (5 anak)</td>
+              <td><a href="P1_price_acquisition.html" class="text-teal-700 underline font-medium">P1 Price →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P2</strong> News Acquisition</td>
+              <td><code>_step_news()</code> + <code>reconcile_news()</code></td>
+              <td>main.py:260 · reconcile.py:85</td>
+              <td>2.1–2.6 (6 anak)</td>
+              <td><a href="P2_news_acquisition.html" class="text-teal-700 underline font-medium">P2 News →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P3</strong> Sentiment Analysis &amp; Aggregation</td>
+              <td><code>reconcile_aggregates()</code></td>
+              <td>reconcile.py:122</td>
+              <td>3.1–3.3 (3 anak)</td>
+              <td><a href="P3_sentiment.html" class="text-teal-700 underline font-medium">P3 Sentiment →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P4</strong> HMM State Decoding</td>
+              <td><code>update_hmm_states(db)</code></td>
+              <td>hmm_updater.py:157</td>
+              <td>4.1–4.5 (5 anak)</td>
+              <td><a href="P4_hmm_decoding.html" class="text-teal-700 underline font-medium">P4 HMM →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P5</strong> Forecast Precomputation</td>
+              <td><code>precompute_and_write(db)</code></td>
+              <td>precompute_forecasts.py:106</td>
+              <td>5.1–5.4 (4 anak)</td>
+              <td><a href="P5_forecast_precompute.html" class="text-teal-700 underline font-medium">P5 Forecast →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P6</strong> Dashboard Serving</td>
+              <td><code>dashboard()</code> / <code>forecasts_api()</code> / <code>news()</code> / <code>about()</code></td>
+              <td>web/views.py:20,184,289,395</td>
+              <td>6.1–6.4 (4 anak)</td>
+              <td><a href="P6_dashboard.html" class="text-teal-700 underline font-medium">P6 Dashboard →</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Konvensi Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Setiap structure chart menggunakan <code>flowchart TB</code> (Mermaid).
+        Node akar di puncak; anak-anak di bawah diurutkan <strong>kiri → kanan = urutan eksekusi aktual</strong>.
+        Setiap edge akar→anak diberi label <em>"in: … · out: …"</em>.
+        Penyelarasan horizontal dipaksakan dengan <code>subgraph [direction LR]</code>
+        dan invisible edge <code>~~~</code>.
+      </p>
+
+      <h3 class="sub-heading">Legenda Tipe Node</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Kelas CSS</th><th>Warna</th><th>Makna</th><th>Contoh</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>root</code></td>
+              <td><span class="legend-pill" style="background:#0d9488;color:#fff">root</span></td>
+              <td>Node akar — entry point / orchestrating function dari proses L1</td>
+              <td><code>_step_price()</code>, <code>update_hmm_states()</code></td>
+            </tr>
+            <tr>
+              <td><code>util</code></td>
+              <td><span class="legend-pill" style="background:#ccfbf1;color:#134e4a;border:1px solid #0d9488">util</span></td>
+              <td>Fungsi utilitas publik dari modul scheduler yang dapat digunakan ulang</td>
+              <td><code>fetch_latest_price()</code>, <code>preprocess_price_csv()</code></td>
+            </tr>
+            <tr>
+              <td><code>priv</code></td>
+              <td><span class="legend-pill" style="background:#e0e7ff;color:#312e81;border:1px solid #4338ca">priv</span></td>
+              <td>Fungsi privat (prefiks <code>_</code>) — helper internal satu modul</td>
+              <td><code>_build_hmm_features()</code>, <code>_forward_filter()</code></td>
+            </tr>
+            <tr>
+              <td><code>store</code></td>
+              <td><span class="legend-pill" style="background:#f3e8ff;color:#4c1d95;border:1px solid #7c3aed">store</span></td>
+              <td>Operasi tulis/baca Firestore — berinteraksi dengan data store</td>
+              <td><code>write_prices_batch()</code>, <code>write_hmm_states_batch()</code></td>
+            </tr>
+            <tr>
+              <td><code>ext</code></td>
+              <td><span class="legend-pill" style="background:#fef3c7;color:#78350f;border:1px solid #d97706">ext</span></td>
+              <td>Panggilan ke layanan eksternal atau library pihak ketiga</td>
+              <td><code>fetch_latest_price()</code> → Investing.com, <code>_score_texts()</code> → FinBERT</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

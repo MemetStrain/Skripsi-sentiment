@@ -198,6 +198,12 @@
                     <h3 class="text-base font-bold text-slate-900">Price History &amp; Direct Multi-Step Horizon Forecast</h3>
                     <p class="text-xs text-slate-400 mt-0.5">Each model produces a forecast value from its horizon that trails across the visible window.</p>
                 </div>
+                <div class="range-toggle inline-flex items-center bg-slate-100 rounded-md p-0.5 text-[11px]" role="group" aria-label="Date range">
+                    <button type="button" data-range="30"  class="px-2.5 py-1 rounded transition-colors">30D</button>
+                    <button type="button" data-range="90"  class="px-2.5 py-1 rounded transition-colors">90D</button>
+                    <button type="button" data-range="180" class="px-2.5 py-1 rounded transition-colors">180D</button>
+                    <button type="button" data-range="365" class="px-2.5 py-1 rounded transition-colors">1Y</button>
+                </div>
             </div>
             <!-- Horizon model dropdown toggle -->
             <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-slate-500">
@@ -206,7 +212,7 @@
                     <button type="button" id="horizon-dropdown-btn"
                             class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-600 font-medium transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             aria-haspopup="true" aria-expanded="false">
-                        <span id="horizon-dropdown-label">All models shown</span>
+                        <span id="horizon-dropdown-label">No models shown</span>
                         <svg class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200" id="horizon-dropdown-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                     </button>
                     <div id="horizon-dropdown-panel"
@@ -262,10 +268,20 @@
 
         </div><!-- /Row 2 left -->
 
-        <!-- Sentiment Trend Chart (Daily, 90d) -->
+        <!-- Sentiment Trend Chart (Daily, range-driven) -->
         <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
-            <h3 class="text-base font-bold text-slate-900 mb-1">Sentiment trend &middot; 90d</h3>
-            <p class="text-xs text-slate-400 mb-4">Daily aggregated FinBERT-Tone sentiment probabilities.</p>
+            <div class="flex items-start justify-between mb-4 gap-3 flex-wrap">
+                <div>
+                    <h3 id="sentiment-chart-title" class="text-base font-bold text-slate-900 mb-1">Sentiment trend &middot; 90d</h3>
+                    <p class="text-xs text-slate-400">Daily aggregated FinBERT-Tone sentiment probabilities.</p>
+                </div>
+                <div class="range-toggle inline-flex items-center bg-slate-100 rounded-md p-0.5 text-[11px]" role="group" aria-label="Date range">
+                    <button type="button" data-range="30"  class="px-2.5 py-1 rounded transition-colors">30D</button>
+                    <button type="button" data-range="90"  class="px-2.5 py-1 rounded transition-colors">90D</button>
+                    <button type="button" data-range="180" class="px-2.5 py-1 rounded transition-colors">180D</button>
+                    <button type="button" data-range="365" class="px-2.5 py-1 rounded transition-colors">1Y</button>
+                </div>
+            </div>
             <div class="relative" style="height:200px;">
                 <div id="sentimentChart-skeleton" class="chart-loading skeleton" aria-hidden="true"></div>
                 <canvas id="sentimentChart" class="relative"></canvas>
@@ -306,17 +322,17 @@
                 <p class="text-xs text-slate-500 mb-3 leading-relaxed">
                     Each <strong>Model N</strong> corresponds to the best-performing configuration for that forecast horizon (H&nbsp;=&nbsp;N days ahead). Config label indicates the feature set used.
                 </p>
-                <div id="model-index-table" class="overflow-x-auto">
-                    <table class="w-full text-xs text-slate-600 tabular-nums">
+                <div id="model-index-table">
+                    <table class="w-full table-fixed text-[11px] text-slate-600 tabular-nums">
                         <thead>
                             <tr class="text-slate-400 border-b border-slate-100 text-left">
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Model</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Full name</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Config</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Features</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Mean Absolute Percentage Error — lower is better.">MAPE</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Root Mean Squared Error in price space (MYR).">RMSE</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Directional accuracy — % of correct up/down calls. >50% beats random.">Directional Accuracy</th>
+                                <th class="py-1.5 pr-2 font-medium w-[12%]">Model</th>
+                                <th class="py-1.5 pr-2 font-medium w-[26%]">Full name</th>
+                                <th class="py-1.5 pr-2 font-medium w-[10%]">Config</th>
+                                <th class="py-1.5 pr-2 font-medium w-[22%]">Features</th>
+                                <th class="py-1.5 pr-2 font-medium w-[10%] tip" data-tip="Mean Absolute Percentage Error — lower is better.">MAPE</th>
+                                <th class="py-1.5 pr-2 font-medium w-[10%] tip" data-tip="Root Mean Squared Error in price space (MYR).">RMSE</th>
+                                <th class="py-1.5 pr-0 font-medium w-[10%] tip" data-tip="Directional accuracy — % of correct up/down calls. >50% beats random.">Directional Accuracy</th>
                             </tr>
                         </thead>
                         <tbody id="model-index-tbody" class="divide-y divide-slate-50">
@@ -382,6 +398,12 @@
 
     const labels = chartData.map(d => d.date);
     const prices = chartData.map(d => d.actual);
+
+    // Date-range toggle — both charts share one state so the time axes stay aligned.
+    // The server now returns ~1y of history; this picks which trailing window is visible.
+    let currentRangeDays = 90;
+    const rangeStartFor = (days) => labels.length ? labels[Math.max(0, labels.length - days)] : undefined;
+    let sentimentChart = null;
 
     // Helper — fade a chart skeleton out once Chart.js has painted.
     function dismissSkeleton(id) {
@@ -483,7 +505,8 @@
                 annotation: { annotations },
             },
             scales: {
-                x: { grid: { display: false },
+                x: { min: rangeStartFor(currentRangeDays),
+                     grid: { display: false },
                      ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 }, color: '#64748b' } },
                 y: { grid: { color: '#f1f5f9' },
                      ticks: { callback: v => 'MYR ' + v.toLocaleString('id-ID'), font: { size: 11 }, color: '#64748b' } },
@@ -498,7 +521,7 @@
     // -----------------------------------------------------------------------
     let lastForecasts = null;
     let fanMode = true;  // 7-day forward fan on by default
-    const visibleHorizons = new Set([1, 2, 3, 4, 5, 6, 7]);
+    const visibleHorizons = new Set();
 
     // Date of the last actual close — the fan's single forecast origin (T).
     function getLastActualDate() {
@@ -723,20 +746,20 @@
             const da   = met ? kiFmt(met.da, '%') : '—';
             const daClass = met && met.da >= 55 ? 'text-green-600 font-semibold' : met && met.da < 50 ? 'text-red-500' : 'text-amber-600';
             const color = HORIZON_COLORS[h] || '#64748b';
-            const fullName = `${ordinalHorizon(h)} Horizon Model (${cfg})`;
+            const fullName = `${ordinalHorizon(h)} Horizon Model`;
             rows.push(`
                 <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="py-1.5 pr-3 font-bold" style="color:${color}">
+                    <td class="py-1.5 pr-2 font-bold" style="color:${color}">
                         Model ${h}
                     </td>
                     <td class="py-1.5 pr-3 text-slate-500">${fullName}</td>
                     <td class="py-1.5 pr-3">
-                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-xs">${cfg}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">${cfg}</span>
                     </td>
-                    <td class="py-1.5 pr-3 text-slate-500">${feat}</td>
-                    <td class="py-1.5 pr-3 tabular-nums text-slate-700">${mape}</td>
-                    <td class="py-1.5 pr-3 tabular-nums text-slate-700">${rmse}</td>
-                    <td class="py-1.5 pr-3 tabular-nums ${daClass}">${da}</td>
+                    <td class="py-1.5 pr-2 text-slate-500">${feat}</td>
+                    <td class="py-1.5 pr-2 tabular-nums text-slate-700">${mape}</td>
+                    <td class="py-1.5 pr-2 tabular-nums text-slate-700">${rmse}</td>
+                    <td class="py-1.5 pr-0 tabular-nums ${daClass}">${da}</td>
                 </tr>`);
         }
         tbody.innerHTML = rows.join('');
@@ -1312,7 +1335,7 @@
         });
 
         const sCtx = document.getElementById('sentimentChart').getContext('2d');
-        new Chart(sCtx, {
+        sentimentChart = new Chart(sCtx, {
             type: 'line',
             data: {
                 labels: labels,   // same x-axis as price chart
@@ -1343,7 +1366,8 @@
                     },
                 },
                 scales: {
-                    x: { grid: { display: false },
+                    x: { min: rangeStartFor(currentRangeDays),
+                         grid: { display: false },
                          ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 }, color: '#64748b' } },
                     y: { min: 0, max: 100, grid: { color: '#f1f5f9' },
                          ticks: { callback: v => v + '%', stepSize: 20, font: { size: 11 }, color: '#64748b' } },
@@ -1358,5 +1382,49 @@
         dismissSkeleton('sentimentChart-skeleton');
         renderSentimentInsightStrip(); // will show "Not enough sentiment data."
     }
+
+    // -----------------------------------------------------------------------
+    // Date-range toggle (30D / 90D / 180D / 1Y) — shared between both charts.
+    // Uses scales.x.min to clip the viewport so HMM annotations, trails and
+    // the forward fan stay intact when switching ranges.
+    // -----------------------------------------------------------------------
+    (function () {
+        const RANGE_LABEL = { 30: '30d', 90: '90d', 180: '180d', 365: '1y' };
+        const sentTitle = document.getElementById('sentiment-chart-title');
+
+        function paintActive(days) {
+            document.querySelectorAll('.range-toggle').forEach(group => {
+                group.querySelectorAll('button[data-range]').forEach(btn => {
+                    const on = parseInt(btn.dataset.range, 10) === days;
+                    btn.classList.toggle('bg-white', on);
+                    btn.classList.toggle('shadow-sm', on);
+                    btn.classList.toggle('text-slate-900', on);
+                    btn.classList.toggle('font-semibold', on);
+                    btn.classList.toggle('text-slate-500', !on);
+                    btn.classList.toggle('hover:text-slate-700', !on);
+                });
+            });
+        }
+
+        function applyRange(days) {
+            currentRangeDays = days;
+            const minDate = rangeStartFor(days);
+            if (priceChart) {
+                priceChart.options.scales.x.min = minDate;
+                priceChart.update();
+            }
+            if (sentimentChart) {
+                sentimentChart.options.scales.x.min = minDate;
+                sentimentChart.update();
+            }
+            if (sentTitle) sentTitle.innerHTML = `Sentiment trend &middot; ${RANGE_LABEL[days] || days + 'd'}`;
+            paintActive(days);
+        }
+
+        document.querySelectorAll('.range-toggle button[data-range]').forEach(btn => {
+            btn.addEventListener('click', () => applyRange(parseInt(btn.dataset.range, 10)));
+        });
+        paintActive(currentRangeDays);
+    })();
 </script>
 {% endblock %}

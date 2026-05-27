@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P4 HMM State Decoding</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P4 HMM State Decoding</h1>
+      <p class="text-teal-100 text-sm mt-1">Control-flow proses 4.0 (DFD Level 2: 4.1 → 4.5). Parameter HMM beku (D5) — online forward filter, bukan Viterbi.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../structure_charts/P4_hmm_decoding.html" class="nav-pill">Structure Chart P4</a>
+    <a href="../pseudocodes/P4_hmm_decoding.html" class="nav-pill">Pseudocode P4</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill active">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Lima sub-proses berurutan di <code>update_hmm_states(db)</code>
+        (<code>scheduler/hmm_updater.py:157</code>). Parameter HMM
+        <strong>tidak pernah di-refit</strong> saat runtime — dibaca dari
+        D5 (<code>hmm_models/Daily</code>). Dekoding menggunakan
+        <em>online forward filter</em>: setiap baris dihitung secara berurutan,
+        α<sub>t</sub> = normalize(A · α<sub>t−1</sub> ⊙ B<sub>t</sub>),
+        state = argmax(α<sub>t</sub>).
+        Dengan <code>write_existing=False</code>, hanya tanggal yang belum ada
+        di D4 yang ditulis (idempoten).
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: update_hmm_states(db, write_existing=False)<br/>hmm_updater.py:157"]):::startend
+    A["4.1 read_hmm_params(db, 'Daily')<br/>firestore_writer.py:140<br/>(baca D5 hmm_models/Daily → params dict:<br/>feat_cols, vol_window, norm_window,<br/>state_to_label, startprob_,<br/>transmat_, means_, covars_)"]:::process
+    Q1{"params None?<br/>(D5 belum di-seed)"}:::decision
+    SkipA(["RETURN 0<br/>(model belum tersedia)"]):::error
+    B["4.2 db.collection('daily_prices')<br/>.order_by('date').stream()<br/>hmm_updater.py:188<br/>(baca D1 → price_rows: list[dict])"]:::process
+    Q2{"price_rows kosong?"}:::decision
+    SkipB(["RETURN 0<br/>(tidak ada data harga)"]):::error
+    C["4.3 _build_hmm_features(price_df, vol_window, norm_window)<br/>hmm_updater.py:79<br/>(hitung: Log_Return_Z, Volatility_Z,<br/>RSI_norm, MACD_Z, BB_Width_Z<br/>→ rolling Z-score window 252d;<br/>drop baris dengan NaN)"]:::process
+    Q3{"feat_df kosong setelah<br/>drop NaN?"}:::decision
+    SkipC(["RETURN 0<br/>(tidak cukup data untuk fitur)"]):::error
+    D1["4.4a _hmm_from_params(params)<br/>hmm_updater.py:112<br/>(rekonstruksi GaussianHMM dari<br/>startprob_, transmat_,<br/>means_, covars_)"]:::process
+    D2["4.4b _forward_filter(model, X)<br/>hmm_updater.py:135<br/>(for t in 0..T−1:<br/>  α₀ = startprob_ ⊙ B(x₀)<br/>  αₜ = normalize(transmat_.T · αₜ₋₁ ⊙ B(xₜ))<br/>  states[t] = argmax(αₜ))<br/>→ states: ndarray[int] (T×1)"]:::process
+    Filter["filter to_write:<br/>jika write_existing=False,<br/>lewati tanggal yang sudah ada di D4"]:::process
+    Q4{"to_write kosong?<br/>(semua tanggal sudah ada)"}:::decision
+    SkipD(["RETURN 0<br/>(tidak ada yang perlu ditulis)"]):::startend
+    E["4.5 write_hmm_states_batch(db, to_write)<br/>firestore_writer.py:73<br/>(batch upsert ke D4 hmm_states;<br/>doc id = Daily_YYYY-MM-DD;<br/>fields: date, state, label, frequency)"]:::process
+    End(["RETURN n_written"]):::startend
+
+    Start --> A
+    A --> Q1
+    Q1 -- "Ya" --> SkipA
+    Q1 -- "Tidak" --> B
+    B --> Q2
+    Q2 -- "Ya" --> SkipB
+    Q2 -- "Tidak" --> C
+    C --> Q3
+    Q3 -- "Ya" --> SkipC
+    Q3 -- "Tidak" --> D1
+    D1 --> D2
+    D2 --> Filter
+    Filter --> Q4
+    Q4 -- "Ya" --> SkipD
+    Q4 -- "Tidak" --> E
+    E --> End
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#a16207,stroke-width:1.5px,color:#713f12;
+    classDef error    fill:#fee2e2,stroke:#991b1b,stroke-width:1.5px,color:#7f1d1d;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Lihat <a href="../structure_charts/P4_hmm_decoding.html" class="text-teal-700 underline">Structure Chart P4</a>
+        untuk dekomposisi modul, dan <a href="../pseudocodes/P4_hmm_decoding.html" class="text-teal-700 underline">Pseudocode P4</a>
+        untuk algoritma tekstual termasuk detail forward filter.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

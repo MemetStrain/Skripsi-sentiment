@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowchart — P5 Forecast Precompute</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowchart — P5 Forecast Precompute</h1>
+      <p class="text-teal-100 text-sm mt-1">Control-flow proses 5.0 (DFD Level 2: 5.1 → 5.2 → 5.3 → 5.4 → 5.5). Loop h × anchors + forward fan + try/except wrapper.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../structure_charts/P5_forecast_precompute.html" class="nav-pill">Structure Chart P5</a>
+    <a href="../pseudocodes/P5_forecast_precompute.html" class="nav-pill">Pseudocode P5</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill active">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Lima sub-proses berurutan dengan try/except wrapper di
+        <code>_step_precompute</code> agar kegagalan inferensi tidak
+        membatalkan langkah 1–4. Loop nested: <code>for h in 1..7</code> ×
+        <code>for anchor in window_idx</code> (~365 anchors). Cabang nyata:
+        load model gagal, feature mismatch, NaN guard, target_idx clip ke T+1
+        (konvergensi trail), forward-fan kedua loop.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TD
+    Start(["MULAI: _step_precompute(db) [try/except]"]):::startend
+    Imp["5.1a _import_inference()<br/>(sys.path += ../prediction)"]:::process
+    BIF["5.1b build_inference_frame(db):<br/>_load_prices + _load_sentiment + _load_hmm_state<br/>→ add_price_features → add_hmm_derived_features<br/>→ merge + Change_Pct + Confidence<br/>→ engineer_all_features"]:::process
+    Q1{"df.empty?"}:::decision
+    EmptyRet(["RETURN payload kosong<br/>(horizons=[], trails=[])"]):::startend
+    LW["5.2a load_winners()<br/>(← D7 winners.json, lru_cache size=1)"]:::process
+    Init["winners = {h: tag}, configs = {h: cfg}<br/>cutoff = max(Date) − window_days<br/>window_idx = df.index[Date ≥ cutoff]<br/>next_td = next_trading_day_after(last)"]:::process
+
+    %% Rolling trails loop (5.2).
+    OuterH["5.2b for h in 1..max_horizon (=7):"]:::process
+    Q2{"winners[h] ada?"}:::decision
+    SkipH["log warn → next h"]:::process
+    LM["5.2c load_model(tag, h, 'csa')<br/>(joblib model.pkl + scaler.pkl + meta.json;<br/> lru_cache size=64)"]:::process
+    Q3{"load model gagal?"}:::decision
+    InnerA["for i in window_idx:"]:::process
+    Q4{"target_idx = i+h<br/>&gt; last_idx + 1?"}:::decision
+    SkipA["skip (konvergensi T+1)"]:::process
+    Sel["X = select_feature_matrix(row, feature_cols)"]:::process
+    Q5{"ValueError feature mismatch?"}:::decision
+    LogOnce["log mismatch sekali → skip anchor"]:::process
+    Q6{"isnan(X).any()?"}:::decision
+    Sk2["skip"]:::process
+    Pred["log_ret = model.predict(scaler.transform(X))<br/>pred_price = anchor_close * exp(clip(log_ret, -10, 10))<br/>append titik {anchor_date, anchor_price,<br/>  predicted_date, predicted_price, log_return}"]:::process
+    InnerEnd{"window selesai?"}:::decision
+    TrailA["append trail {horizon, tag, config, points[]}"]:::process
+    OuterEnd{"semua h selesai?"}:::decision
+
+    %% Forward fan (5.3).
+    Fan["5.3 forward fan: anchor = last_idx<br/>future_days[0..max_horizon-1] = next_trading_day× max_h"]:::process
+    FanLoop["for h in 1..7:"]:::process
+    Q7{"winners[h] ada<br/>+ load_model OK<br/>+ X bukan NaN?"}:::decision
+    FanSkip["skip h"]:::process
+    FanPred["log_ret = model.predict(scaler.transform(X))<br/>pred_price = anchor_close * exp(clip(log_ret, -10, 10))<br/>append forward_fan {h, tag, config,<br/>  anchor_date, predicted_date=future_days[h-1],<br/>  predicted_price, log_return}"]:::process
+    FanEnd{"fan loop selesai?"}:::decision
+
+    %% Persistence (5.4 + 5.5).
+    Flat["5.4a _flatten_trails(trails) → points[]<br/>{frequency='Daily', horizon, tag, config,<br/>  anchor_date, anchor_price, predicted_date,<br/>  predicted_price, log_return}"]:::process
+    Q8{"points kosong?"}:::decision
+    SkipW(["log warn + RETURN 0"]):::error
+    W1["5.4b write_forecasts(db, points)<br/>→ D8 (doc id = Daily_h&lt;h&gt;_&lt;anchor&gt;,<br/>  batch=100, 1s pause)"]:::process
+    W2["5.5a write_forecast_meta(db, meta_dict)<br/>→ D9 forecast_meta/Daily<br/>(payload_json bundle winners/configs/<br/>  metrics/horizons/forward_fan/tag_to_config)"]:::process
+    Del["5.5b _delete_legacy_doc(db)<br/>→ hapus forecasts/latest jika ada"]:::process
+    End(["RETURN n (count points written)"]):::startend
+    Catch(["except: log error + RETURN False<br/>(scheduler steps 1–4 tetap commit)"]):::error
+
+    Start --> Imp
+    Imp --> BIF
+    BIF --> Q1
+    Q1 -- "Ya" --> EmptyRet
+    Q1 -- "Tidak" --> LW
+    LW --> Init
+    Init --> OuterH
+    OuterH --> Q2
+    Q2 -- "Tidak" --> SkipH
+    SkipH --> OuterEnd
+    Q2 -- "Ya" --> LM
+    LM --> Q3
+    Q3 -- "Ya" --> SkipH
+    Q3 -- "Tidak" --> InnerA
+    InnerA --> Q4
+    Q4 -- "Ya" --> SkipA
+    Q4 -- "Tidak" --> Sel
+    SkipA --> InnerEnd
+    Sel --> Q5
+    Q5 -- "Ya" --> LogOnce
+    LogOnce --> InnerEnd
+    Q5 -- "Tidak" --> Q6
+    Q6 -- "Ya" --> Sk2
+    Sk2 --> InnerEnd
+    Q6 -- "Tidak" --> Pred
+    Pred --> InnerEnd
+    InnerEnd -- "Tidak" --> InnerA
+    InnerEnd -- "Ya" --> TrailA
+    TrailA --> OuterEnd
+    OuterEnd -- "Tidak" --> OuterH
+    OuterEnd -- "Ya" --> Fan
+    Fan --> FanLoop
+    FanLoop --> Q7
+    Q7 -- "Tidak" --> FanSkip
+    FanSkip --> FanEnd
+    Q7 -- "Ya" --> FanPred
+    FanPred --> FanEnd
+    FanEnd -- "Tidak" --> FanLoop
+    FanEnd -- "Ya" --> Flat
+    Flat --> Q8
+    Q8 -- "Ya" --> SkipW
+    Q8 -- "Tidak" --> W1
+    W1 --> W2
+    W2 --> Del
+    Del --> End
+    Start -.-> Catch
+
+    classDef startend fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#7c2d12;
+    classDef process  fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a;
+    classDef decision fill:#fef9c3,stroke:#a16207,stroke-width:1.5px,color:#713f12;
+    classDef error    fill:#fee2e2,stroke:#991b1b,stroke-width:1.5px,color:#7f1d1d;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        Lihat <a href="../structure_charts/P5_forecast_precompute.html" class="text-teal-700 underline">Structure Chart P5</a> untuk dekomposisi modul,
+        dan <a href="../pseudocodes/P5_forecast_precompute.html" class="text-teal-700 underline">Pseudocode P5</a> untuk algoritma tekstual lengkap.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowcharts — Index</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Flowcharts — Index</h1>
+      <p class="text-teal-100 text-sm mt-1">Control-flow enam proses Level 1 DFD. Setiap diagram menunjukkan jalur eksekusi aktual, cabang keputusan, dan early-exit guards.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../structure_charts/index.html" class="nav-pill">Structure Charts</a>
+    <a href="index.html" class="nav-pill active">Flowcharts (Index)</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-10">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pemetaan Proses → Flowchart</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr>
+              <th>Proses</th>
+              <th>Entry Function</th>
+              <th>Sub-proses (L2)</th>
+              <th>Cabang Utama</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>P1</strong> Price Acquisition</td>
+              <td><code>_step_price(paths)</code> + <code>reconcile_prices()</code></td>
+              <td>1.1–1.5 (5 langkah)</td>
+              <td>Skip if CSV current; skip if price not newer; idempotent CSV append; reconcile batch ke D1</td>
+              <td><a href="P1_price_acquisition.html" class="text-teal-700 underline font-medium">P1 Price →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P2</strong> News Acquisition</td>
+              <td><code>_step_news(paths)</code> + <code>reconcile_news()</code></td>
+              <td>2.1–2.6 (6 langkah)</td>
+              <td>Skip if news CSV current; skip if no new articles; drop-empty after preprocess; reconcile batch ke D2</td>
+              <td><a href="P2_news_acquisition.html" class="text-teal-700 underline font-medium">P2 News →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P3</strong> Sentiment Analysis &amp; Aggregation</td>
+              <td><code>reconcile_aggregates(db, articles)</code></td>
+              <td>3.1–3.3 (3 langkah)</td>
+              <td>Skip if articles empty; skip if aggregates empty; skip if stale_aggs empty (D3 up-to-date)</td>
+              <td><a href="P3_sentiment.html" class="text-teal-700 underline font-medium">P3 Sentiment →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P4</strong> HMM State Decoding</td>
+              <td><code>update_hmm_states(db)</code></td>
+              <td>4.1–4.5 (5 langkah)</td>
+              <td>Skip if D5 belum di-seed; skip if no price data; skip if feat_df kosong; forward filter loop; skip if all dates already in D4</td>
+              <td><a href="P4_hmm_decoding.html" class="text-teal-700 underline font-medium">P4 HMM →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P5</strong> Forecast Precomputation</td>
+              <td><code>precompute_and_write(db)</code></td>
+              <td>5.1–5.5 (5 langkah)</td>
+              <td>Skip if df empty; loop h×anchors (~365); feature mismatch + NaN guard; forward fan; skip if points empty; write ke D8+D9</td>
+              <td><a href="P5_forecast_precompute.html" class="text-teal-700 underline font-medium">P5 Forecast →</a></td>
+            </tr>
+            <tr>
+              <td><strong>P6</strong> Dashboard Serving</td>
+              <td><code>dashboard()</code> / <code>forecasts_api()</code> / <code>news()</code> / <code>about()</code></td>
+              <td>6.1–6.4 (4 views)</td>
+              <td>Read-only Firestore reads; 404 on missing data; JSON response vs. HTML render</td>
+              <td><a href="P6_dashboard.html" class="text-teal-700 underline font-medium">P6 Dashboard →</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Konvensi Diagram</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Setiap flowchart menggunakan <code>flowchart TD</code> (Mermaid, top-down).
+        Empat kelas node:
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Kelas</th><th>Warna</th><th>Makna</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>startend</code></td>
+              <td style="background:#fef3c7;color:#7c2d12">kuning</td>
+              <td>Start / End / Return node (stadium shape)</td>
+            </tr>
+            <tr>
+              <td><code>process</code></td>
+              <td style="background:#ccfbf1;color:#134e4a">teal muda</td>
+              <td>Langkah eksekusi / sub-proses (rectangle)</td>
+            </tr>
+            <tr>
+              <td><code>decision</code></td>
+              <td style="background:#fef9c3;color:#713f12">kuning tua</td>
+              <td>Cabang kondisional (diamond)</td>
+            </tr>
+            <tr>
+              <td><code>error</code></td>
+              <td style="background:#fee2e2;color:#7f1d1d">merah muda</td>
+              <td>Early-exit akibat error / data tidak tersedia</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

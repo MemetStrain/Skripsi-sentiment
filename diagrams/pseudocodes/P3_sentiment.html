@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P3 Sentiment Analysis &amp; Aggregation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    pre.algorithm { background: #0f172a; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.82rem; line-height: 1.45; padding: 1.25rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } pre.algorithm { background: #f8fafc; color: #0f172a; } pre.algorithm .kw { color: #0d9488; } pre.algorithm .cmt { color: #475569; } pre.algorithm .src { color: #b45309; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P3 Sentiment Analysis &amp; Aggregation</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>scheduler/reconcile.py::reconcile_aggregates</code> + <code>sentiment_runner.py::compute_sentiment_aggregates</code>.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P3_sentiment.html" class="nav-pill">P3 Flowchart</a>
+    <a href="../structure_charts/P3_sentiment.html" class="nav-pill">P3 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill active">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM reconcile_aggregates</h2>
+      <p class="text-sm text-slate-600 mb-3">Mirror 1:1 dari <a href="../flowcharts/P3_sentiment.html" class="text-teal-700 underline">flowchart P3</a>. Sub-proses 3.1–3.3.</p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> reconcile_aggregates
+<span class="src">SOURCE</span>: scheduler/reconcile.py :: reconcile_aggregates (dipanggil oleh reconcile_all)
+
+<span class="kw">INPUT</span>:
+    db       <span class="cmt">// Firestore client</span>
+    paths    <span class="cmt">// dict berisi 'news_raw' dan 'news_sent'</span>
+
+<span class="kw">OUTPUT</span>:
+    int      <span class="cmt">// jumlah dokumen yang ditulis ke D3</span>
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// 3.1 load seluruh artikel dari CSV lokal (termasuk sentimen)</span>
+    articles = load_news_from_csv(paths['news_raw'], paths['news_sent'])
+                                                     <span class="cmt">// news_extractor.py:175</span>
+    <span class="kw">IF</span> articles <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("No articles found in CSV; skip aggregation")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 3.2 hitung bucket agregat harian</span>
+    aggregates = compute_sentiment_aggregates(articles) <span class="cmt">// sentiment_runner.py:139</span>
+    <span class="kw">IF</span> aggregates <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("No aggregates computed; skip reconcile")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 3.3a ambil existing keys dari D3</span>
+    existing_docs = db.collection('sentiment_aggregates').stream()
+    existing_keys = { doc.id <span class="kw">FOR</span> doc <span class="kw">IN</span> existing_docs }
+                                                     <span class="cmt">// format: "Daily_YYYY-MM-DD"</span>
+
+    <span class="cmt">// 3.3b bandingkan → filter stale (missing atau berubah)</span>
+    stale_aggs = [
+        agg <span class="kw">FOR</span> agg <span class="kw">IN</span> aggregates
+        <span class="kw">IF</span> (agg.frequency + "_" + agg.date) <span class="kw">NOT IN</span> existing_keys
+    ]
+
+    <span class="kw">IF</span> stale_aggs <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("D3 already up-to-date; 0 writes")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 3.3c batch upsert ke D3</span>
+    n_written = write_sentiment_aggregates(db, stale_aggs)
+                                                     <span class="cmt">// firestore_writer.py:197</span>
+    log("Wrote " + n_written + " aggregates to D3 sentiment_aggregates")
+    <span class="kw">RETURN</span> n_written
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">FUNCTION compute_sentiment_aggregates (helper 3.2)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">FUNCTION</span> compute_sentiment_aggregates(articles) <span class="kw">RETURNS</span> list[dict]
+<span class="src">SOURCE</span>: scheduler/sentiment_runner.py :: compute_sentiment_aggregates
+
+<span class="kw">INPUT</span>:
+    articles   <span class="cmt">// list[dict] — setiap artikel memiliki: date, sentiment_label,</span>
+               <span class="cmt">//             positive_prob, negative_prob, neutral_prob, sentiment_score</span>
+
+<span class="kw">BEGIN</span>
+    buckets = {}   <span class="cmt">// key = (frequency, date_str)</span>
+
+    <span class="kw">FOR</span> article <span class="kw">IN</span> articles <span class="kw">DO</span>
+        date_str = article.date[0:10]                 <span class="cmt">// ambil YYYY-MM-DD</span>
+        key      = ("Daily", date_str)
+
+        <span class="kw">IF</span> key <span class="kw">NOT IN</span> buckets <span class="kw">THEN</span>
+            buckets[key] = {
+                frequency       : "Daily",
+                date            : date_str,
+                article_count   : 0,
+                positive_prob   : 0.0,
+                negative_prob   : 0.0,
+                neutral_prob    : 0.0,
+                sentiment_score : 0.0
+            }
+        <span class="kw">END IF</span>
+
+        b = buckets[key]
+        b.article_count   += 1
+        b.positive_prob   += article.positive_prob   <span class="kw">OR</span> 0.0
+        b.negative_prob   += article.negative_prob   <span class="kw">OR</span> 0.0
+        b.neutral_prob    += article.neutral_prob    <span class="kw">OR</span> 0.0
+        b.sentiment_score += article.sentiment_score <span class="kw">OR</span> 0.0
+    <span class="kw">END FOR</span>
+
+    aggregates = []
+    <span class="kw">FOR</span> b <span class="kw">IN</span> buckets.values() <span class="kw">DO</span>
+        n = b.article_count
+        <span class="kw">IF</span> n &gt; 0 <span class="kw">THEN</span>
+            b.positive_prob   /= n                   <span class="cmt">// rata-rata probabilitas</span>
+            b.negative_prob   /= n
+            b.neutral_prob    /= n
+            b.sentiment_score /= n
+        <span class="kw">END IF</span>
+        aggregates.append(b)
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> aggregates
+<span class="kw">END FUNCTION</span>
+</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P5 Forecast Precompute</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } .page-break { page-break-before: always; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P5 Forecast Precompute</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 5.0 (DFD Level 1 &amp; Level 2) — inferensi XGBoost lokal (h=1..7) + write per-titik ke Firestore. Urutan eksekusi: kiri → kanan.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill active">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P5 — Forecast Precompute</strong> adalah fase terakhir
+        scheduler harian. Inferensi XGBoost <em>tidak</em> dijalankan di jalur
+        request website (Vercel) — terlalu berat untuk serverless functions —
+        melainkan dipre-komputasi secara lokal lalu dipublikasikan ke
+        Firestore. Akar struktur chart ini adalah
+        <code>_step_precompute(db)</code> di <code>scheduler/main.py:303</code>,
+        wrapper try/except yang men-<em>delegate</em> ke
+        <code>precompute_forecasts.precompute_and_write(db)</code>
+        (<code>scheduler/precompute_forecasts.py:106</code>). Modul anak
+        dieksekusi <strong>kiri → kanan</strong>: 5.1 import inference &amp;
+        build frame → 5.2 rolling trails + forward fan
+        (<code>compute_forecast_trails</code>) → 5.3 flatten + write
+        <code>forecasts</code> → 5.4 write <code>forecast_meta</code> + hapus
+        legacy doc.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TB
+    R["_step_precompute(db) -> bool<br/>scheduler/main.py:303<br/>(try/except wrapper)"]:::root
+
+    %% Single child: orchestrator.
+    R -->|"in: db<br/>out: int n (point docs written)"| ORCH["precompute_and_write(db)<br/>scheduler/precompute_forecasts.py:106"]:::entry
+
+    %% Children of orchestrator, in execution order (left -> right).
+    ORCH -->|"in: —<br/>out: inference module"| A["5.1a _import_inference()<br/>scheduler/precompute_forecasts.py:48<br/>(sys.path += ../prediction)"]:::priv
+    ORCH -->|"in: db, max_horizon=7, window_days=365<br/>out: payload dict {horizons, winners, configs, trails[], forward_fan[], metrics, tag_to_config, generated_at}"| B["5.1b+5.2 compute_forecast_trails()<br/>prediction/inference.py:232"]:::entry
+    ORCH -->|"in: trails[] (nested)<br/>out: list[dict] per-titik scalar (~2500)"| C["5.3a _flatten_trails()<br/>scheduler/precompute_forecasts.py:63"]:::priv
+    ORCH -->|"in: db, points[]<br/>out: int written"| D["5.3b write_forecasts()<br/>scheduler/firestore_writer.py:217 (→ D8)"]:::util
+    ORCH -->|"in: db, meta dict<br/>out: None (write doc forecast_meta/Daily)"| E["5.4a write_forecast_meta()<br/>scheduler/firestore_writer.py:241 (→ D9)"]:::util
+    ORCH -->|"in: db, ('forecasts','latest')<br/>out: None (delete legacy doc)"| F["5.4b _delete_legacy_doc()<br/>scheduler/precompute_forecasts.py:91"]:::priv
+
+    %% Lock execution order.
+    A ~~~ B ~~~ C ~~~ D ~~~ E ~~~ F
+
+    %% --- compute_forecast_trails internals (5.1 + 5.2 + 5.3 in inference.py) ---
+    B -->|"in: —<br/>out: winners.json dict ({winners_by_horizon, configs_by_horizon, metrics, tag_to_config})"| BW["load_winners()<br/>prediction/inference.py:54 (← D7)"]:::util
+    B -->|"in: db<br/>out: engineered DataFrame (price+sent+HMM+technicals+lags+cyclical+interaksi)"| BIF["build_inference_frame(db)<br/>prediction/inference.py:169"]:::util
+    BIF -->|"in: db<br/>out: pd.DataFrame OHLCV"| BLP["_load_prices(db)<br/>prediction/inference.py:98 (← D1)"]:::priv
+    BIF -->|"in: db<br/>out: pd.DataFrame sentimen"| BLS["_load_sentiment(db)<br/>prediction/inference.py:118 (← D3)"]:::priv
+    BIF -->|"in: db<br/>out: pd.DataFrame state"| BLH["_load_hmm_state(db)<br/>prediction/inference.py:140 (← D4)"]:::priv
+    BIF -->|"in: price_df<br/>out: + technicals"| FE1["add_price_features()<br/>prediction/feature_engineering.py"]:::ext
+    BIF -->|"in: df<br/>out: + HMM_RSI/MACD/Volatility/LogReturn/Close"| FE2["add_hmm_derived_features()<br/>prediction/feature_engineering.py"]:::ext
+    BIF -->|"in: df<br/>out: + cyclical + lags + interaksi"| FE3["engineer_all_features()<br/>prediction/feature_engineering.py"]:::ext
+
+    %% Per-horizon model load + predict loop (the 5.2 core).
+    B -->|"in: tag, h, variant='csa'<br/>out: (model, scaler, feature_cols)"| LM["load_model(tag, h, 'csa')<br/>prediction/inference.py:70 (← D6, lru_cache)"]:::util
+    B -->|"in: row (1-row DataFrame), feature_cols<br/>out: ndarray X (1×D)"| SF["select_feature_matrix(row, feature_cols)<br/>prediction/feature_engineering.py"]:::ext
+    B -->|"in: X (after scaler)<br/>out: log_return prediction (float)"| MP["model.predict(X)<br/>(xgboost, via sklearn API)"]:::ext
+    B -->|"in: anchor_close, log_ret<br/>out: predicted_price = anchor_close * exp(clip(log_ret,-10,10))"| MX["np.exp / np.clip<br/>(numpy, inline)"]:::inline
+
+    %% Data store reads / writes.
+    BW -.->|"json.load"| D7[("D7: winners.json")]:::store
+    BLP -.->|"order_by('date').stream()"| D1S[("D1: daily_prices")]:::store
+    BLS -.->|"stream + filter Daily"| D3S[("D3: sentiment_aggregates")]:::store
+    BLH -.->|"stream + filter Daily"| D4S[("D4: hmm_states")]:::store
+    LM -.->|"joblib.load model.pkl + scaler.pkl + meta.json"| D6S[("D6: saved_models/&lt;tag&gt;/Daily/h&lt;h&gt;/xgboost_csa/")]:::store
+    D -.->|"write merge=False (doc id = Daily_h&lt;h&gt;_&lt;anchor_date&gt;)"| D8S[("D8: forecasts (per-titik)")]:::store
+    E -.->|"write payload_json bundle"| D9S[("D9: forecast_meta/Daily")]:::store
+    F -.->|"delete legacy forecasts/latest (if exists)"| D8S
+
+    classDef root  fill:#fde68a,stroke:#92400e,stroke-width:3px,color:#7c2d12;
+    classDef entry fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a;
+    classDef util  fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#1e3a8a;
+    classDef priv  fill:#e0e7ff,stroke:#4338ca,stroke-width:1px,color:#312e81;
+    classDef ext   fill:#fae8ff,stroke:#86198f,stroke-width:1px,color:#701a75;
+    classDef inline fill:#fef9c3,stroke:#a16207,stroke-width:1px,color:#713f12;
+    classDef store fill:#f3e8ff,stroke:#7e22ce,stroke-width:1px,color:#581c87;
+        </pre>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">
+        <strong>Sumbu waktu eksekusi:</strong> kiri → kanan. Try/except di
+        <code>_step_precompute</code> menjamin kegagalan inferensi tidak
+        membatalkan langkah 1–4 (Price/News/Reconcile/HMM) yang sudah
+        commit. <em>Full recompute (bukan incremental):</em> setiap run
+        meregenerasi seluruh window 365 anchor × 7 horizon — doc ID
+        deterministik <code>Daily_h&lt;h&gt;_&lt;anchor&gt;</code> membuat write
+        idempoten dan self-healing.
+      </p>
+    </section>
+
+    <section>
+      <h3 class="sub-heading">Tabel — Modul (urut eksekusi)</h3>
+      <div class="overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full border-collapse">
+          <thead><tr><th>#</th><th>Modul · Fungsi</th><th>Input</th><th>Output</th></tr></thead>
+          <tbody>
+            <tr><td>root</td><td><code>scheduler/main.py</code> · <code>_step_precompute(db)</code></td>
+                <td>Firestore client</td>
+                <td><code>bool</code> — True jika ≥1 doc forecast ditulis</td></tr>
+            <tr><td>5.0</td><td><code>scheduler/precompute_forecasts.py</code> · <code>precompute_and_write(db)</code></td>
+                <td>Firestore client</td>
+                <td><code>int</code> — jumlah doc per-titik ditulis</td></tr>
+            <tr><td>5.1a</td><td><code>scheduler/precompute_forecasts.py</code> · <code>_import_inference()</code></td>
+                <td>—</td>
+                <td>module <code>prediction.inference</code> (dengan <code>../prediction</code> di sys.path)</td></tr>
+            <tr><td>5.1b</td><td><code>prediction/inference.py</code> · <code>build_inference_frame(db)</code></td>
+                <td>Firestore client</td>
+                <td><code>pd.DataFrame</code> engineered (price + HMM dummies + sentimen + lags + cyclical + interaksi)</td></tr>
+            <tr><td>5.2</td><td><code>prediction/inference.py</code> · <code>compute_forecast_trails(db, max_horizon=7, window_days=365)</code></td>
+                <td>Firestore client + 2 int</td>
+                <td>payload dict — <code>{horizons, winners, configs, trails[], forward_fan[], metrics, tag_to_config, generated_at}</code></td></tr>
+            <tr><td>5.2a</td><td><code>prediction/inference.py</code> · <code>load_winners()</code></td>
+                <td>—</td>
+                <td>dict dari <code>winners.json</code> (lru_cache)</td></tr>
+            <tr><td>5.2b</td><td><code>prediction/inference.py</code> · <code>load_model(tag, h, 'csa')</code></td>
+                <td>tag string, horizon int</td>
+                <td><code>(model, scaler, feature_cols)</code> — joblib + meta (lru_cache 64)</td></tr>
+            <tr><td>5.2c</td><td>inner loop: <code>select_feature_matrix → scaler.transform → model.predict → exp(clip(log_ret, -10, 10))</code></td>
+                <td>row (1-row df)</td>
+                <td>predicted_price (float)</td></tr>
+            <tr><td>5.3a</td><td><code>scheduler/precompute_forecasts.py</code> · <code>_flatten_trails(trails)</code></td>
+                <td>nested trails[]</td>
+                <td><code>list[dict]</code> per-titik scalar-only</td></tr>
+            <tr><td>5.3b</td><td><code>scheduler/firestore_writer.py</code> · <code>write_forecasts(db, points)</code></td>
+                <td>Firestore client + points[]</td>
+                <td><code>int</code> doc ditulis</td></tr>
+            <tr><td>5.4a</td><td><code>scheduler/firestore_writer.py</code> · <code>write_forecast_meta(db, meta)</code></td>
+                <td>Firestore client + meta dict</td>
+                <td>None — doc <code>forecast_meta/Daily</code> dengan <code>payload_json</code></td></tr>
+            <tr><td>5.4b</td><td><code>scheduler/precompute_forecasts.py</code> · <code>_delete_legacy_doc(db)</code></td>
+                <td>Firestore client</td>
+                <td>None — hapus <code>forecasts/latest</code> jika ada</td></tr>
+            <tr><td>ext</td><td><code>joblib.load</code></td>
+                <td>file path .pkl</td>
+                <td>model / scaler object</td></tr>
+            <tr><td>ext</td><td><code>xgboost</code> (via sklearn API)</td>
+                <td>X matrix</td>
+                <td>log_return prediction</td></tr>
+            <tr><td>ext</td><td><code>numpy</code> · <code>exp, clip</code></td>
+                <td>log_ret</td>
+                <td>price multiplier</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading">Catatan Implementasi</h3>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
+        <li><strong>Full recompute, bukan incremental:</strong> setiap run
+            regenerasi window 365 hari penuh × 7 horizon = ~2500 doc per-titik.
+            Doc ID deterministik (<code>Daily_h&lt;h&gt;_&lt;anchor&gt;</code>)
+            membuat write idempoten dan self-healing — skipped run atau
+            externally-mutated doc langsung dikoreksi pada run berikutnya.</li>
+        <li><strong>Try/except wrapper:</strong> <code>_step_precompute</code>
+            membungkus orchestrator agar kegagalan inferensi (mis. model missing)
+            <em>tidak</em> membatalkan langkah 1–4 yang sudah commit ke Firestore.</li>
+        <li><strong>Konvergensi T+1:</strong> trail per-horizon men-clip
+            <code>target_idx &gt; last_idx + 1</code>, sehingga prediksi terakhir
+            tiap horizon mendarat di hari trading berikutnya (T+1) — semua 7
+            trail bertemu di titik shared.</li>
+        <li><strong>Forward fan:</strong> selain trail rolling yang konvergen di
+            T+1, ada satu prediksi per horizon dari anchor terakhir T → T+1..T+7
+            (digambarkan sebagai garis fan di dashboard).</li>
+        <li><strong>Clip log-return:</strong> <code>np.clip(log_ret, -10, 10)</code>
+            sebelum <code>exp</code> mencegah overflow numerik pada outlier
+            ekstrim model.</li>
+        <li><strong>Legacy doc cleanup:</strong> <code>_delete_legacy_doc</code>
+            menghapus dokumen <code>forecasts/latest</code> (jalur lama
+            single-doc) agar tidak menyajikan payload basi ke website.</li>
+        <li><strong>Cache lru:</strong> <code>load_winners</code> (size=1) dan
+            <code>load_model</code> (size=64) sehingga joblib.load tidak dipanggil
+            ulang per anchor.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

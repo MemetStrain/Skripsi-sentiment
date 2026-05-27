@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P2 News Acquisition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    pre.algorithm { background: #0f172a; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.82rem; line-height: 1.45; padding: 1.25rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } pre.algorithm { background: #f8fafc; color: #0f172a; } pre.algorithm .kw { color: #0d9488; } pre.algorithm .cmt { color: #475569; } pre.algorithm .src { color: #b45309; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P2 News Acquisition</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>scheduler/main.py::_step_news</code> + <code>reconcile.py::reconcile_news</code> + scraping internals.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P2_news_acquisition.html" class="nav-pill">P2 Flowchart</a>
+    <a href="../structure_charts/P2_news_acquisition.html" class="nav-pill">P2 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill active">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM _step_news + reconcile_news</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> _step_news
+<span class="src">SOURCE</span>: scheduler/main.py :: _step_news
+
+<span class="kw">INPUT</span>:
+    paths   <span class="cmt">// dict berisi 'news_raw', 'news_preproc', 'news_sent'</span>
+
+<span class="kw">OUTPUT</span>:
+    (scored_articles, did_change)   <span class="cmt">// list[dict], bool</span>
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// 2.1 tentukan cutoff &amp; latest tersimpan</span>
+    cutoff = most_recent_trading_day()
+    have   = latest_news_date(paths['news_sent'])
+
+    <span class="kw">IF</span> have <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> have &gt;= cutoff <span class="kw">THEN</span>
+        log("News CSV is current; skip scrape")
+        <span class="kw">RETURN</span> ([], <span class="kw">FALSE</span>)
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 2.2 scrape multi-keyword × halaman (newest-first; stop at cutoff)</span>
+    raw = scrape_new_articles(have)
+    <span class="kw">IF</span> raw <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("No new articles scraped")
+        <span class="kw">RETURN</span> ([], <span class="kw">FALSE</span>)
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 2.5a append CSV raw lebih dulu (arsip, sebelum drop empty)</span>
+    raw_rows = [article_to_raw_row(a) <span class="kw">FOR</span> a <span class="kw">IN</span> raw]
+    append_news_rows(paths['news_raw'], raw_rows, RAW_FIELDS)
+
+    <span class="cmt">// 2.3 preprocess (NewsPreprocessor: clean title + content, drop empty)</span>
+    cleaned = preprocess_articles(raw)                  <span class="cmt">// news_extractor.py:81</span>
+    <span class="kw">IF</span> cleaned <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("All scraped articles dropped during preprocessing")
+        <span class="kw">RETURN</span> ([], <span class="kw">FALSE</span>)
+    <span class="kw">END IF</span>
+
+    cleaned_rows = [article_to_raw_row(a) <span class="kw">FOR</span> a <span class="kw">IN</span> cleaned]
+    append_news_rows(paths['news_preproc'], cleaned_rows, RAW_FIELDS)  <span class="cmt">// 2.5b</span>
+
+    <span class="cmt">// 2.4 FinBERT-Tone title-only, batch 16 (sentiment_runner.py:63)</span>
+    scored = run_sentiment_on_articles(cleaned)
+
+    sentiment_rows = [article_to_sentiment_row(a) <span class="kw">FOR</span> a <span class="kw">IN</span> scored]
+    append_news_rows(paths['news_sent'], sentiment_rows, SENTIMENT_FIELDS)  <span class="cmt">// 2.5c</span>
+
+    <span class="cmt">// 2.6 reconcile CSV → Firestore D2 (batch upsert; idempoten by md5(url))</span>
+    n_written = reconcile_news(db, scored)              <span class="cmt">// reconcile.py:85</span>
+    log("News reconcile: " + n_written + " articles upserted to D2 news_articles")
+
+    <span class="kw">RETURN</span> (scored, <span class="kw">TRUE</span>)
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">FUNCTION scrape_new_articles (helper 2.2)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">FUNCTION</span> scrape_new_articles(cutoff_date) <span class="kw">RETURNS</span> list[dict]
+<span class="src">SOURCE</span>: scheduler/news_extractor.py :: scrape_new_articles
+
+<span class="kw">BEGIN</span>
+    <span class="kw">IF</span> cutoff_date <span class="kw">IS NULL</span> <span class="kw">THEN RETURN</span> []
+
+    session  = _make_session()                          <span class="cmt">// retry+backoff, pool 16 conn</span>
+    articles = []
+    <span class="kw">TRY</span>
+        <span class="kw">FOR</span> start_url <span class="kw">IN</span> MPOB_SEARCH_URLS <span class="kw">DO</span>   <span class="cmt">// keyword=cpo, keyword=crude%20palm%20oil</span>
+            articles += _scrape_keyword(session, start_url, cutoff_date)
+        <span class="kw">END FOR</span>
+    <span class="kw">FINALLY</span>
+        session.close()
+    <span class="kw">END TRY</span>
+
+    <span class="cmt">// dedup by URL — 2 keyword search sering overlap</span>
+    seen   = set()
+    unique = []
+    <span class="kw">FOR</span> a <span class="kw">IN</span> articles <span class="kw">DO</span>
+        <span class="kw">IF</span> a.url <span class="kw">IS NOT EMPTY</span> <span class="kw">AND</span> a.url <span class="kw">NOT IN</span> seen <span class="kw">THEN</span>
+            seen.add(a.url); unique.append(a)
+        <span class="kw">END IF</span>
+    <span class="kw">END FOR</span>
+    <span class="kw">RETURN</span> unique
+<span class="kw">END FUNCTION</span>
+
+
+<span class="kw">FUNCTION</span> _scrape_keyword(session, start_url, cutoff_date) <span class="kw">RETURNS</span> list[dict]
+<span class="kw">BEGIN</span>
+    articles = []
+    current_url = start_url
+    <span class="kw">WHILE</span> current_url <span class="kw">IS NOT NULL</span> <span class="kw">DO</span>
+        resp = session.get(current_url, timeout=(10,30), verify=<span class="kw">FALSE</span>)
+        <span class="kw">IF</span> resp fail <span class="kw">THEN BREAK</span>
+        cards = BeautifulSoup(resp.text).select("a &gt; div.rounded.shadow-md")
+        <span class="kw">IF</span> cards <span class="kw">IS EMPTY</span> <span class="kw">THEN BREAK</span>
+
+        (batch, reached_cutoff) = _parse_cards(cards, cutoff_date)
+        <span class="kw">IF</span> batch <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+            _fetch_contents(batch)                       <span class="cmt">// ThreadPool 8 workers, fetch body per URL</span>
+            articles += batch
+        <span class="kw">END IF</span>
+        <span class="kw">IF</span> reached_cutoff <span class="kw">THEN BREAK</span>
+
+        next_btn = soup.find("a", rel="next")
+        <span class="kw">IF</span> next_btn <span class="kw">HAS</span> href <span class="kw">THEN</span>
+            current_url = next_btn.href; sleep(random(0.3, 0.8))
+        <span class="kw">ELSE</span>
+            current_url = <span class="kw">NULL</span>
+        <span class="kw">END IF</span>
+    <span class="kw">END WHILE</span>
+    <span class="kw">RETURN</span> articles
+<span class="kw">END FUNCTION</span>
+</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
