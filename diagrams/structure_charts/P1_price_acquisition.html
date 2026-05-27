@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P1 Price Acquisition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } .page-break { page-break-before: always; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P1 Price Acquisition</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 1.0 (DFD L2: 1.1–1.5). 5 sub-proses; urutan eksekusi: kiri → kanan.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill active">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P1 — Price Acquisition</strong> berjalan pada langkah 1 dan 3
+        <code>run_daily_update()</code> di <code>scheduler/main.py</code>.
+        Akar structure chart ini adalah gabungan dua fungsi entry:
+        <code>_step_price(paths)</code> (main.py:222, akuisisi + CSV lokal) dan
+        <code>reconcile_prices(db, csv_prices)</code> (reconcile.py:55, mirror ke Firestore D1).
+        Kedua fungsi membentuk satu alur data lengkap: Investing.com → CSV lokal → <code>daily_prices</code>.
+        Lima sub-proses dieksekusi <strong>kiri → kanan</strong>:
+        1.1 cek kesegaran → 1.2 fetch harga → 1.3 append CSV → 1.4 preprocess → 1.5 reconcile ke Firestore.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TB
+    R["_step_price(paths) · reconcile_prices(db, csv_prices)<br/>scheduler/main.py:222 · scheduler/reconcile.py:55"]:::root
+
+    subgraph L1 [ ]
+        direction LR
+        A["1.1 most_recent_trading_day()<br/>+ latest_price_date(cpo_raw)<br/>price_fetcher.py:223<br/>local_csv_writer.py:76"]:::util
+        B["1.2 fetch_latest_price()<br/>scheduler/price_fetcher.py:122<br/>(HTTP → Investing.com)"]:::ext
+        C["1.3 append_price_row_indonesian<br/>(cpo_raw, price)<br/>scheduler/local_csv_writer.py:106"]:::priv
+        D["1.4 preprocess_price_csv<br/>(cpo_raw, cpo_preproc)<br/>scheduler/price_fetcher.py:244"]:::util
+        E["1.5 reconcile_prices(db, csv_prices)<br/>→ write_prices_batch(db, stale)<br/>reconcile.py:55 · firestore_writer.py:58<br/>→ D1 daily_prices"]:::store
+        A ~~~ B ~~~ C ~~~ D ~~~ E
+    end
+    style L1 fill:none,stroke:none
+
+    R -->|"in: paths<br/>out: cutoff: str, have: str/None"| A
+    R -->|"in: cutoff, have<br/>out: price: dict/None"| B
+    R -->|"in: cpo_raw, price<br/>out: appended: bool"| C
+    R -->|"in: cpo_raw, cpo_preproc<br/>out: cpo_preproc CSV (side effect)"| D
+    R -->|"in: db, csv_prices: list[dict]<br/>out: n_written: int → D1"| E
+
+    classDef root fill:#0d9488,stroke:#0f766e,stroke-width:2.5px,color:#fff
+    classDef util fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a
+    classDef priv fill:#e0e7ff,stroke:#4338ca,stroke-width:1.5px,color:#312e81
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+    classDef ext fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+        </pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Tabel Modul</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Sub-proses</th><th>Fungsi</th><th>File : Baris</th><th>Tipe</th><th>Input</th><th>Output / Efek</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>1.1</td>
+              <td><code>most_recent_trading_day()</code> + <code>latest_price_date(cpo_raw)</code></td>
+              <td>price_fetcher.py:223 · local_csv_writer.py:76</td>
+              <td>util</td>
+              <td><code>paths['cpo_raw']</code></td>
+              <td><code>cutoff: str</code> (hari trading terbaru), <code>have: str/None</code> (tanggal terakhir di CSV)</td>
+            </tr>
+            <tr>
+              <td>1.2</td>
+              <td><code>fetch_latest_price()</code></td>
+              <td>price_fetcher.py:122</td>
+              <td>ext</td>
+              <td>lookback window (90/365/1095d)</td>
+              <td><code>price: dict/None</code> — keys: date, open, high, low, close, volume</td>
+            </tr>
+            <tr>
+              <td>1.3</td>
+              <td><code>append_price_row_indonesian(cpo_raw, price)</code></td>
+              <td>local_csv_writer.py:106</td>
+              <td>priv</td>
+              <td>path CSV lokal, price dict</td>
+              <td><code>bool</code> — True jika baris ditambahkan; False jika tanggal sudah ada</td>
+            </tr>
+            <tr>
+              <td>1.4</td>
+              <td><code>preprocess_price_csv(cpo_raw, cpo_preproc)</code></td>
+              <td>price_fetcher.py:244</td>
+              <td>util</td>
+              <td>path cpo_raw, path cpo_preproc</td>
+              <td>Menulis cpo_preproc CSV dengan fitur teknikal (RSI, MACD, BB, log-return, dll.)</td>
+            </tr>
+            <tr>
+              <td>1.5</td>
+              <td><code>reconcile_prices(db, csv_prices)</code> → <code>write_prices_batch(db, stale)</code></td>
+              <td>reconcile.py:55 · firestore_writer.py:58</td>
+              <td>store</td>
+              <td>Firestore client, <code>list[dict]</code> harga dari CSV</td>
+              <td><code>n_written: int</code> — batch upsert ke D1 <code>daily_prices</code> (doc ID = YYYY-MM-DD)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

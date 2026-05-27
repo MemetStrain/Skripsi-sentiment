@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P2 News Acquisition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } .page-break { page-break-before: always; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P2 News Acquisition</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 2.0 (DFD L2: 2.1–2.6). 6 sub-proses; urutan eksekusi: kiri → kanan.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill active">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P2 — News Acquisition</strong> berjalan pada langkah 2 dan 3
+        <code>run_daily_update()</code>. Akar adalah gabungan
+        <code>_step_news(paths)</code> (main.py:260, scraping + CSV) dan
+        <code>reconcile_news(db, articles)</code> (reconcile.py:85, mirror ke D2).
+        Enam sub-proses dieksekusi <strong>kiri → kanan</strong>:
+        2.1 cek kesegaran → 2.2 scrape MPOB → 2.3 preprocess teks → 2.4 skor FinBERT-Tone
+        → 2.5 append CSV → 2.6 reconcile ke Firestore.
+        Sub-proses 2.4 menggunakan model <em>yiyanghkust/finbert-tone</em>
+        secara lokal (title-only, batch 16) — tidak ada inferensi di jalur request website.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TB
+    R["_step_news(paths) · reconcile_news(db, articles)<br/>scheduler/main.py:260 · scheduler/reconcile.py:85"]:::root
+
+    subgraph L1 [ ]
+        direction LR
+        A["2.1 latest_news_date(news_sent)<br/>+ most_recent_trading_day()<br/>local_csv_writer.py:57<br/>price_fetcher.py:223"]:::util
+        B["2.2 scrape_new_articles(cutoff_date)<br/>scheduler/news_extractor.py:289<br/>(HTTP → MPOB Website)"]:::ext
+        C["2.3 preprocess_articles(articles)<br/>scheduler/news_extractor.py:81<br/>(NewsPreprocessor, drop empty)"]:::util
+        D["2.4 run_sentiment_on_articles(articles)<br/>scheduler/sentiment_runner.py:63<br/>(FinBERT-Tone, title-only, batch 16)"]:::ext
+        E["2.5 append_news_rows(path, rows, fields)<br/>scheduler/local_csv_writer.py:23<br/>(raw / preproc / sent CSVs)"]:::priv
+        F["2.6 reconcile_news(db, articles)<br/>→ write_news_articles(db, missing)<br/>reconcile.py:85 · firestore_writer.py:165<br/>→ D2 news_articles"]:::store
+        A ~~~ B ~~~ C ~~~ D ~~~ E ~~~ F
+    end
+    style L1 fill:none,stroke:none
+
+    R -->|"in: paths['news_sent']<br/>out: have: str/None, cutoff: str"| A
+    R -->|"in: have (cutoff_date)<br/>out: raw: list[dict]"| B
+    R -->|"in: raw: list[dict]<br/>out: cleaned: list[dict]"| C
+    R -->|"in: cleaned: list[dict]<br/>out: scored: list[dict] (+ sentimen)"| D
+    R -->|"in: path, rows, fields<br/>out: CSV diperbarui (side effect)"| E
+    R -->|"in: db, articles: list[dict]<br/>out: n_written: int → D2"| F
+
+    classDef root fill:#0d9488,stroke:#0f766e,stroke-width:2.5px,color:#fff
+    classDef util fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a
+    classDef priv fill:#e0e7ff,stroke:#4338ca,stroke-width:1.5px,color:#312e81
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+    classDef ext fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+        </pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Tabel Modul</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Sub-proses</th><th>Fungsi</th><th>File : Baris</th><th>Tipe</th><th>Input</th><th>Output / Efek</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>2.1</td>
+              <td><code>latest_news_date(news_sent)</code> + <code>most_recent_trading_day()</code></td>
+              <td>local_csv_writer.py:57 · price_fetcher.py:223</td>
+              <td>util</td>
+              <td><code>paths['news_sent']</code></td>
+              <td><code>have: str/None</code>, <code>cutoff: str</code></td>
+            </tr>
+            <tr>
+              <td>2.2</td>
+              <td><code>scrape_new_articles(cutoff_date)</code></td>
+              <td>news_extractor.py:289</td>
+              <td>ext</td>
+              <td><code>cutoff_date: str/None</code></td>
+              <td><code>raw: list[dict]</code> — artikel mentah (url, date, title, content, category)</td>
+            </tr>
+            <tr>
+              <td>2.3</td>
+              <td><code>preprocess_articles(articles)</code></td>
+              <td>news_extractor.py:81</td>
+              <td>util</td>
+              <td><code>articles: list[dict]</code></td>
+              <td><code>cleaned: list[dict]</code> — artikel bersih; yang title+content kosong di-drop</td>
+            </tr>
+            <tr>
+              <td>2.4</td>
+              <td><code>run_sentiment_on_articles(articles)</code></td>
+              <td>sentiment_runner.py:63</td>
+              <td>ext</td>
+              <td><code>articles: list[dict]</code></td>
+              <td><code>scored: list[dict]</code> — mutasi in-place; tambah: sentiment_label, positive_prob, negative_prob, neutral_prob, sentiment_score</td>
+            </tr>
+            <tr>
+              <td>2.5</td>
+              <td><code>append_news_rows(csv_path, new_rows, fieldnames)</code></td>
+              <td>local_csv_writer.py:23</td>
+              <td>priv</td>
+              <td>path CSV, daftar baris, daftar field</td>
+              <td>CSV diperbarui (dedup by URL; dipanggil 3×: news_raw, news_preproc, news_sent)</td>
+            </tr>
+            <tr>
+              <td>2.6</td>
+              <td><code>reconcile_news(db, articles)</code> → <code>write_news_articles(db, missing)</code></td>
+              <td>reconcile.py:85 · firestore_writer.py:165</td>
+              <td>store</td>
+              <td>Firestore client, <code>articles: list[dict]</code></td>
+              <td><code>n_written: int</code> — batch upsert ke D2 <code>news_articles</code> (doc ID = md5(url))</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

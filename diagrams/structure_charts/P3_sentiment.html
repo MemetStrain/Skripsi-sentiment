@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structure Chart — P3 Sentiment Analysis &amp; Aggregation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } .page-break { page-break-before: always; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Structure Chart — P3 Sentiment Analysis &amp; Aggregation</h1>
+      <p class="text-teal-100 text-sm mt-1">Dekomposisi modul proses 3.0 (DFD L2: 3.1–3.3). 3 sub-proses; urutan eksekusi: kiri → kanan.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="index.html" class="nav-pill">Structure Charts (Index)</a>
+    <a href="../flowcharts/index.html" class="nav-pill">Flowcharts (Index)</a>
+    <a href="../pseudocodes/index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill active">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Pendahuluan</h2>
+      <p class="text-sm text-slate-700 leading-relaxed">
+        Proses <strong>P3 — Sentiment Analysis &amp; Aggregation</strong> berjalan
+        pada langkah 3 <code>run_daily_update()</code> sebagai bagian dari
+        <code>reconcile_all(db, paths)</code> (reconcile.py:156).
+        Akar structure chart adalah <code>reconcile_aggregates(db, articles)</code>
+        (reconcile.py:122) yang mengorkestrasi tiga sub-proses P3.
+        Sub-proses 3.1 (<code>load_news_from_csv</code>) dipanggil
+        lebih awal dalam <code>reconcile_all</code> dan hasilnya diteruskan ke
+        <code>reconcile_aggregates</code> sebagai <code>articles</code>.
+        Tiga sub-proses dieksekusi <strong>kiri → kanan</strong>:
+        3.1 load artikel CSV → 3.2 hitung agregat harian → 3.3 reconcile ke Firestore D3.
+      </p>
+    </section>
+
+    <section class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Diagram</h2>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart TB
+    R["reconcile_all (fase P3) · reconcile_aggregates(db, articles)<br/>scheduler/reconcile.py:156,122"]:::root
+
+    subgraph L1 [ ]
+        direction LR
+        A["3.1 load_news_from_csv<br/>(news_raw, news_sent)<br/>scheduler/news_extractor.py:175"]:::util
+        B["3.2 compute_sentiment_aggregates<br/>(articles)<br/>scheduler/sentiment_runner.py:139"]:::util
+        C["3.3 write_sentiment_aggregates<br/>(db, stale_aggs)<br/>(via reconcile_aggregates)<br/>firestore_writer.py:197<br/>→ D3 sentiment_aggregates"]:::store
+        A ~~~ B ~~~ C
+    end
+    style L1 fill:none,stroke:none
+
+    R -->|"in: news_raw, news_sent paths<br/>out: articles: list[dict]"| A
+    R -->|"in: articles: list[dict]<br/>out: aggregates: list[dict]"| B
+    R -->|"in: db, stale_aggs: list[dict]<br/>out: n_written: int → D3"| C
+
+    classDef root fill:#0d9488,stroke:#0f766e,stroke-width:2.5px,color:#fff
+    classDef util fill:#ccfbf1,stroke:#0d9488,stroke-width:1.5px,color:#134e4a
+    classDef priv fill:#e0e7ff,stroke:#4338ca,stroke-width:1.5px,color:#312e81
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+    classDef ext fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+        </pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">Tabel Modul</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Sub-proses</th><th>Fungsi</th><th>File : Baris</th><th>Tipe</th><th>Input</th><th>Output / Efek</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>3.1</td>
+              <td><code>load_news_from_csv(news_raw, news_sent)</code></td>
+              <td>news_extractor.py:175</td>
+              <td>util</td>
+              <td>path news_raw, path news_sent (opsional)</td>
+              <td><code>articles: list[dict]</code> — seluruh artikel dari CSV (incl. sentimen dari news_sent)</td>
+            </tr>
+            <tr>
+              <td>3.2</td>
+              <td><code>compute_sentiment_aggregates(articles)</code></td>
+              <td>sentiment_runner.py:139</td>
+              <td>util</td>
+              <td><code>articles: list[dict]</code></td>
+              <td><code>aggregates: list[dict]</code> — bucket harian: frequency, date, article_count, positive_prob, negative_prob, neutral_prob, sentiment_score</td>
+            </tr>
+            <tr>
+              <td>3.3</td>
+              <td><code>write_sentiment_aggregates(db, stale_aggs)</code> (dipanggil oleh <code>reconcile_aggregates</code>)</td>
+              <td>firestore_writer.py:197</td>
+              <td>store</td>
+              <td>Firestore client, <code>stale_aggs: list[dict]</code> (yang missing/berubah)</td>
+              <td><code>n_written: int</code> — batch upsert ke D3 <code>sentiment_aggregates</code> (doc ID = Daily_YYYY-MM-DD)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
