@@ -186,7 +186,7 @@
                         </tr>
                     </tbody>
                 </table>
-                <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO price &middot; HMM = market state &middot; News = news sentiment</p>
+                <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO Price; HMM = Market State; News = News Sentiment</p>
             </section>
 
         </div><!-- /Row 1 left -->
@@ -195,7 +195,7 @@
         <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
             <div class="flex items-start justify-between mb-4 gap-3 flex-wrap">
                 <div>
-                    <h3 class="text-base font-bold text-slate-900">Price history &amp; direct multi-step horizon forecast</h3>
+                    <h3 class="text-base font-bold text-slate-900">Price History &amp; Direct Multi-Step Horizon Forecast</h3>
                     <p class="text-xs text-slate-400 mt-0.5">Each model produces a forecast value from its horizon that trails across the visible window.</p>
                 </div>
             </div>
@@ -828,8 +828,8 @@
             };
             const da = h => { try { return metrics[winners[String(h)]][String(h)].CSA.da; } catch (e) { return NaN; } };
             const i1 = implied(1), i7 = implied(7);
-            if (i1) rows.push(kiLi('Implied move h=1', `${kiSigned(i1.move)} (${i1.cfg})`, `Model projection vs today. DA ${kiFmt(da(1), '%')} — read with caution.`, i1.move >= 0 ? 'good' : 'bad'));
-            if (i7) rows.push(kiLi('Implied move h=7', `${kiSigned(i7.move)} (${i7.cfg})`, `DA ${kiFmt(da(7), '%')}. Longer horizon = larger error.`, 'warn'));
+            if (i1) rows.push(kiLi('Implied move H=1', `${kiSigned(i1.move)} (${i1.cfg})`, `Model projection vs today. DA ${kiFmt(da(1), '%')} — read with caution.`, i1.move >= 0 ? 'good' : 'bad'));
+            if (i7) rows.push(kiLi('Implied move H=7', `${kiSigned(i7.move)} (${i7.cfg})`, `DA ${kiFmt(da(7), '%')}. Longer horizon = larger error.`, 'warn'));
             elPrice.innerHTML = rows.join('');
         }
 
@@ -908,7 +908,7 @@
         cmp.push(kiLi('Best vs C1 (avg)', kiSigned(-avgGain) + ' MAPE', `Winner beats price-only baseline by ${kiFmt(avgGain)} pts avg.`, avgGain > 0 ? 'good' : 'warn'));
         cmp.push(kiLi('Feature pattern', pattern || 'n/a', 'Winning config per horizon group.'));
         cmp.push(kiLi('CSA tuning gain', kiFmt(csaGain) + ' pts', Math.abs(csaGain) < 0.02 ? 'Negligible vs BASE.' : 'MAPE reduction from CSA search.', Math.abs(csaGain) < 0.02 ? 'warn' : 'good'));
-        cmp.push(kiLi('Winner margin h=1', kiFmt(margin) + ' pts', margin < 0.05 ? 'Within noise — winner is not decisively better.' : 'Gap to 2nd-best config.', margin < 0.05 ? 'warn' : ''));
+        cmp.push(kiLi('Winner margin H=1', kiFmt(margin) + ' pts', margin < 0.05 ? 'Within noise — winner is not decisively better.' : 'Gap to 2nd-best config.', margin < 0.05 ? 'warn' : ''));
         elCmp.innerHTML = cmp.join('');
 
         // D1 honest skill check (winner @ h=1) — prefer CSA, fall back to BASE
@@ -922,11 +922,11 @@
 
         const met = [];
         if (sk) {
-            met.push(kiLi('Skill check (h=1)', `MAPE ${kiFmt(sk.mape, '%')} · DA ${kiFmt(sk.da, '%')}`,
+            met.push(kiLi('Skill check (H=1)', `MAPE ${kiFmt(sk.mape, '%')} · DA ${kiFmt(sk.da, '%')}`,
                 `sMAPE ${kiFmt(sk.smape, '%')}. Directional accuracy is the honest skill signal — price-error metrics are dominated by the per-row anchor.`,
                 sk.da < 55 ? 'warn' : 'good'));
         }
-        met.push(kiLi('Error growth', kiFmt(growth, '×'), `MAPE h=1 (${kiFmt(sk ? sk.mape : NaN)}%) → h=7 (${kiFmt(s7 ? s7.mape : NaN)}%). Trust short horizons.`, 'warn'));
+        met.push(kiLi('Error growth', kiFmt(growth, '×'), `MAPE H=1 (${kiFmt(sk ? sk.mape : NaN)}%) → H=7 (${kiFmt(s7 ? s7.mape : NaN)}%). Trust short horizons.`, 'warn'));
         met.push(kiLi('DA > 50%', `${above}/7 horizons`, `Best DA ${kiFmt(maxDA, '%')} at h=${maxH ?? '—'}. Naive comparison only (no Pesaran-Timmermann test wired up).`, above >= 4 ? 'good' : 'warn'));
         elMet.innerHTML = met.join('');
     }
@@ -1079,7 +1079,7 @@
                     ${Number.isFinite(da7) ? `<span><span class="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mr-1"></span>7 day ${kiFmt(da7, '%')}</span>` : ''}
                     <span>| 50% = chance</span>
                 </div>
-                <div class="text-[11px] text-slate-400 leading-snug">Direction barely beats chance short-term; price-error metrics are dominated by the per-row anchor.</div>`;
+                <div class="text-[11px] text-slate-400 leading-snug">Direction barely beats chance short-term.</div>`;
         }
     }
 
@@ -1161,7 +1161,7 @@
         if (nextPrice != null && Number.isFinite(pct)) {
             chips.push(
                 '<span class="flex items-center gap-1.5 flex-wrap">' +
-                '<span class="text-slate-400">Next day (h=1):</span>' +
+                '<span class="text-slate-400">Next day :</span>' +
                 '<span class="font-semibold tabular-nums text-slate-800">MYR ' + nextPrice.toLocaleString('id-ID') + '</span>' +
                 '<span class="font-semibold tabular-nums ' + pctCls + '">' + arrow + ' ' + (pctUp ? '+' : '') + pct.toFixed(1) + '%</span>' +
                 (Number.isFinite(mape1) ? '<span class="text-slate-400">· ±' + mape1.toFixed(1) + '% MAPE</span>' : '') +

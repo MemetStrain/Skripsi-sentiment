@@ -38,6 +38,10 @@ OUTPUT_MEANS_CSV = "output/hmm_lag_state_means.csv"
 # Maximum lag (trading days) to search. Lag 0 = same day.
 MAX_LAG = 60
 
+# Date range matching the HMM training data
+TRAIN_START = "2015-01-01"
+TRAIN_END   = "2024-12-31"
+
 
 def _build_state_score_map(stats_path: Path) -> dict[int, float]:
     """Map original HMM state int -> signed score in [-1, +1].
@@ -161,6 +165,9 @@ def main() -> None:
     score_map, stats = _build_state_score_map(stats_path)
     df = pd.read_csv(states_path, parse_dates=["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
+
+    # ── Filter to training date range ───────────────────────────────────────────
+    df = df[(df["Date"] >= TRAIN_START) & (df["Date"] <= TRAIN_END)].reset_index(drop=True)
 
     df["state_score"] = df["State"].map(score_map)
 

@@ -29,7 +29,11 @@ OUTPUT_CSV = "news/output/daily_sentiment_vs_price.csv"
 LAG_CSV = "news/output/lag_search_results.csv"
 
 # Maximum lag (in trading days) to search. Lag 0 = same-day.
-MAX_LAG = 120
+MAX_LAG = 252
+
+# Date range matching the HMM training data
+TRAIN_START = "2015-01-01"
+TRAIN_END   = "2024-12-31"
 
 
 def load_aggregate(path: Path) -> pd.DataFrame:
@@ -154,6 +158,9 @@ def main() -> None:
         .sort_values("Date")
         .reset_index(drop=True)
     )
+
+    # Filter to training date range
+    merged = merged[(merged["Date"] >= TRAIN_START) & (merged["Date"] <= TRAIN_END)].reset_index(drop=True)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(out_path, index=False)
