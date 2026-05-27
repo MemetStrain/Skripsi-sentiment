@@ -61,9 +61,10 @@
         <span class="kw">RETURN</span> render(request, "dashboard.html", _empty_dashboard_ctx())
     <span class="kw">END TRY</span>
 
-    cutoff = (today() - 90.days).isoformat()
+    <span class="cmt">// fetch 365d so the client-side 30/90/180/1Y range toggle can switch without re-querying</span>
+    cutoff = (today() - 365.days).isoformat()
 
-    <span class="cmt">// price_list (90 hari OHLCV)</span>
+    <span class="cmt">// price_list (~365 hari OHLCV)</span>
     price_list = []
     <span class="kw">FOR</span> doc <span class="kw">IN</span> db.collection("daily_prices").where("date",">=",cutoff).order_by("date").stream() <span class="kw">DO</span>
         d = doc.to_dict()
@@ -90,9 +91,10 @@
         })
     <span class="kw">END FOR</span>
 
-    <span class="cmt">// stats: harga terakhir, mean, max, min</span>
+    <span class="cmt">// stats: last 90 rows only (sidebar label reads "Price stats · 90d")</span>
     <span class="kw">IF</span> price_list <span class="kw">NOT EMPTY</span> <span class="kw">THEN</span>
-        prices = [p.close <span class="kw">FOR</span> p <span class="kw">IN</span> price_list]
+        recent = price_list[-90:]
+        prices = [p.close <span class="kw">FOR</span> p <span class="kw">IN</span> recent]
         stats  = { current_price: prices[-1], avg_price: mean(prices), max_price: max(prices),
                    min_price: min(prices), total_days: |prices| }
         latest_date = price_list[-1].date
@@ -123,7 +125,7 @@
         <span class="cmt">// page tetap render dengan metrics N/A</span>
     <span class="kw">END TRY</span>
 
-    <span class="cmt">// sentiment_list (90 hari)</span>
+    <span class="cmt">// sentiment_list (~365 hari)</span>
     sentiment_list = []
     <span class="kw">TRY</span>
         <span class="kw">FOR</span> doc <span class="kw">IN</span> db.collection("sentiment_aggregates").where("date",">=",cutoff).order_by("date").stream() <span class="kw">DO</span>

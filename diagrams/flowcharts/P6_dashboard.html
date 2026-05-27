@@ -71,7 +71,7 @@ flowchart TD
     D1H["6.1 dashboard(request)"]:::process
     D1Q{"firestore.client() OK?"}:::decision
     D1E["messages.error +<br/>_empty_dashboard_ctx()"]:::error
-    D1L["cutoff = today - 90d<br/>stream daily_prices.where('date'≥cutoff)<br/>stream hmm_states.where('date'≥cutoff)<br/>stream sentiment_aggregates.where('date'≥cutoff)<br/>build chart_data + stats"]:::process
+    D1L["cutoff = today - 365d<br/>stream daily_prices.where('date'≥cutoff)<br/>stream hmm_states.where('date'≥cutoff)<br/>stream sentiment_aggregates.where('date'≥cutoff)<br/>build chart_data; stats = price_list[-90:] (sidebar '90d' label)"]:::process
     D1M["try forecast_meta.document('Daily').get()<br/>parse payload_json → metrics h=1 + winners"]:::process
     D1R["render('dashboard.html', ctx)"]:::process
     D1End(["HttpResponse"]):::startend

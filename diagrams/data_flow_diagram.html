@@ -144,9 +144,9 @@ flowchart LR
     P5 -->|"trail prediksi per titik"| D8
     P5 -->|"metadata forecast"| D9
 
-    D1 -->|"harga 90d"| P6
-    D3 -->|"sentimen 90d"| P6
-    D4 -->|"state HMM 90d"| P6
+    D1 -->|"harga 365d"| P6
+    D3 -->|"sentimen 365d"| P6
+    D4 -->|"state HMM 365d"| P6
     D8 -->|"trail prediksi"| P6
     D9 -->|"meta + winners"| P6
     P6 -->|"dashboard HTML / JSON"| User
@@ -401,9 +401,9 @@ flowchart LR
     P6_3(("6.3<br/>news<br/>(request)")):::process
     P6_4(("6.4<br/>about<br/>(request)")):::process
 
-    D1c -->|"harga 90d"| P6_1
-    D4c -->|"state HMM 90d"| P6_1
-    D3c -->|"sentimen 90d"| P6_1
+    D1c -->|"harga 365d"| P6_1
+    D4c -->|"state HMM 365d"| P6_1
+    D3c -->|"sentimen 365d"| P6_1
     D9c -->|"meta + winners (h=1)"| P6_1
     D9c -->|"meta payload"| P6_2
     D8c -->|"trail prediksi"| P6_2
@@ -545,7 +545,7 @@ flowchart LR
             <tr><td>D4</td><td>P5</td><td>State HMM</td><td>HMM_State (int), HMM_State_Label, dummy columns (HMM_Bullish, dll.)</td></tr>
             <tr><td>P5</td><td>D8</td><td>Trail prediksi per titik</td><td>Per (horizon, anchor_date): anchor_price, predicted_date, predicted_price, log_return</td></tr>
             <tr><td>P5</td><td>D9</td><td>Metadata forecast</td><td>winners_by_horizon, configs_by_horizon, metrics (MAPE/SMAPE/DA), forward_fan</td></tr>
-            <tr><td>D1, D3, D4</td><td>P6</td><td>Data harga + sentimen + HMM (90d)</td><td>Window 90 hari terakhir untuk chart dashboard</td></tr>
+            <tr><td>D1, D3, D4</td><td>P6</td><td>Data harga + sentimen + HMM (365d)</td><td>Window 365 hari untuk client-side range toggle (30/90/180/1Y); stats sidebar tetap 90 hari terakhir</td></tr>
             <tr><td>D8</td><td>P6</td><td>Trail prediksi</td><td>Trails per horizon untuk overlay chart; difilter Python (predicted_date ≥ cutoff)</td></tr>
             <tr><td>D9</td><td>P6</td><td>Meta + winners</td><td>winners_by_horizon, configs, metrics h=1 untuk badge; forward_fan untuk multi-step</td></tr>
             <tr><td>D2</td><td>P6</td><td>Artikel berita</td><td>Projection stream: date, title, category, snippet, url, sentiment_label (halaman /news/)</td></tr>

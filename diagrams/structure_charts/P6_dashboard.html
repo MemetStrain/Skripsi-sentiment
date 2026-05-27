@@ -104,7 +104,7 @@ flowchart TB
 
     %% --- 6.1 dashboard internals ---
     V1 -->|"in: —<br/>out: Firestore client"| FC
-    V1 -->|"in: cutoff (90d) where date &gt;= cutoff<br/>out: price_list[] (date,open,high,low,close,volume)"| Q1A["daily_prices.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D1"]:::query
+    V1 -->|"in: cutoff (365d) where date &gt;= cutoff<br/>out: price_list[] (date,open,high,low,close,volume)"| Q1A["daily_prices.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D1"]:::query
     V1 -->|"in: cutoff where date &gt;= cutoff<br/>out: state_dict[date]"| Q1B["hmm_states.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D4"]:::query
     V1 -->|"in: cutoff where date &gt;= cutoff<br/>out: sentiment_list[]"| Q1C["sentiment_aggregates.where('date','&gt;=',cutoff).order_by('date').stream()<br/>← D3"]:::query
     V1 -->|"in: document('Daily').get()<br/>out: meta dict (parse payload_json) → metrics h=1 + winners"| Q1D["forecast_meta.document('Daily').get()<br/>← D9"]:::query
@@ -209,7 +209,7 @@ flowchart TB
           <thead><tr><th>Caller</th><th>Callee</th><th>Data Dilewatkan</th><th>Jenis Coupling</th></tr></thead>
           <tbody>
             <tr><td><code>runserver</code> (akar)</td><td><em>view function</em></td><td><code>HttpRequest</code> (via URL dispatcher)</td><td>Stamp</td></tr>
-            <tr><td><code>dashboard</code></td><td>D1 / D3 / D4</td><td><code>where date ≥ 90d</code></td><td>Data</td></tr>
+            <tr><td><code>dashboard</code></td><td>D1 / D3 / D4</td><td><code>where date ≥ 365d</code>; stats computed from <code>price_list[-90:]</code></td><td>Data</td></tr>
             <tr><td><code>dashboard</code></td><td>D9</td><td>doc <code>Daily</code>; parse <code>payload_json</code></td><td>Data (JSON)</td></tr>
             <tr><td><code>forecasts_api</code></td><td>D9</td><td>doc <code>Daily</code>; parse <code>payload_json</code></td><td>Data (JSON)</td></tr>
             <tr><td><code>forecasts_api</code></td><td>D8</td><td><code>stream()</code> + filter Python (<code>predicted_date ≥ cutoff</code>, <code>horizon ≤ max_h</code>)</td><td>Data</td></tr>
