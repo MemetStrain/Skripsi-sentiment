@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Flow Diagram — Sistem Prediksi Harga CPO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: 'default',
+      themeVariables: { primaryColor: '#ccfbf1', primaryTextColor: '#134e4a', primaryBorderColor: '#0d9488', lineColor: '#475569', secondaryColor: '#f1f5f9', tertiaryColor: '#e2e8f0', background: '#ffffff', mainBkg: '#f0fdfa', nodeBorder: '#0d9488', clusterBkg: '#f0fdfa', clusterBorder: '#99f6e4', titleColor: '#0f172a', edgeLabelBackground: '#ffffff' },
+      flowchart: { curve: 'basis', padding: 20, useMaxWidth: true }
+    });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .diagram-card svg { max-width: 100%; height: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    .sub-heading { color: #0d9488; font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    .balance-note { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.5rem; padding: 0.65rem 1rem; font-size: 0.8rem; color: #166534; margin-top: 0.75rem; }
+    thead tr { background: #0d9488; color: #fff; }
+    tbody tr:nth-child(even) { background: #f0fdfa; }
+    tbody tr:nth-child(odd) { background: #ffffff; }
+    td, th { padding: 0.5rem 0.9rem; border: 1px solid #e2e8f0; font-size: 0.875rem; vertical-align: top; }
+    td code { background: #f8fafc; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8rem; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    .level-pill { display: inline-block; background: #134e4a; color: #ccfbf1; border-radius: 0.375rem; padding: 0.15rem 0.7rem; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; }
+    @media print { .no-print { display: none; } .diagram-card { box-shadow: none; border: 1px solid #e2e8f0; } .page-break { page-break-before: always; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Data Flow Diagram — Level 0, Level 1, Level 2</h1>
+      <p class="text-teal-100 text-sm mt-1">Arsitektur precompute: scheduler lokal → Firestore → website Vercel (thin read-only client). Enam proses Level 1; tiap proses diuraikan ke sub-proses Level 2.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-6xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="data_flow_diagram.html" class="nav-pill active">DFD (ini)</a>
+    <a href="structure_charts/index.html" class="nav-pill">Structure Charts</a>
+    <a href="flowcharts/index.html" class="nav-pill">Flowcharts</a>
+    <a href="pseudocodes/index.html" class="nav-pill">Pseudocodes</a>
+  </nav>
+
+  <!-- In-page level nav -->
+  <div class="max-w-6xl mx-auto px-4 pt-4 flex flex-wrap gap-3 no-print">
+    <a href="#l0" class="nav-pill">↓ Level 0 (Context)</a>
+    <a href="#l1" class="nav-pill">↓ Level 1 (6 Proses)</a>
+    <a href="#l2" class="nav-pill">↓ Level 2 (Sub-proses)</a>
+    <a href="#tables" class="nav-pill">↓ Tabel Referensi</a>
+  </div>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-16">
+
+    <!-- ======================================================= LEVEL 0 -->
+    <section id="l0">
+      <h2 class="text-xl font-semibold section-heading">
+        <span class="level-pill">L0</span>Context Diagram (Level 0)
+      </h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Satu gelembung sistem tunggal; empat entitas eksternal: <strong>Admin/Peneliti</strong>
+        (menjalankan scheduler harian), <strong>MPOB Website</strong> (sumber artikel berita),
+        <strong>Investing.com</strong> (sumber data harga CPO OHLCV), dan
+        <strong>User/Pengunjung</strong> (konsumen dashboard web).
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart LR
+    Admin["Admin /<br/>Peneliti"]:::entity
+    MPOB["MPOB<br/>Website"]:::entity
+    Inv["Investing<br/>.com"]:::entity
+    User["User /<br/>Pengunjung"]:::entity
+    SYS(("Sistem<br/>Prediksi<br/>Harga CPO")):::process
+
+    Admin -->|"Jadwal harian (cron)"| SYS
+    Inv -->|"Data harga CPO (OHLCV)"| SYS
+    MPOB -->|"Artikel berita CPO"| SYS
+    SYS -->|"Dashboard HTML / JSONResponse"| User
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2.5px,color:#134e4a
+        </pre>
+      </div>
+    </section>
+
+    <!-- ======================================================= LEVEL 1 -->
+    <section id="l1" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">
+        <span class="level-pill">L1</span>Level 1 — Enam Proses Utama
+      </h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Sistem diurai menjadi enam proses yang berjalan pada scheduler lokal (P1–P5)
+        dan website Vercel (P6). Data store D1–D5 dan D8–D9 adalah koleksi Firestore;
+        D6–D7 adalah file CSV lokal (sumber kebenaran scheduler). Setiap proses
+        diurai lebih lanjut pada Level 2.
+      </p>
+      <div class="diagram-card">
+        <pre class="mermaid">
+flowchart LR
+    Admin["Admin /<br/>Peneliti"]:::entity
+    MPOB["MPOB<br/>Website"]:::entity
+    Inv["Investing<br/>.com"]:::entity
+    User["User /<br/>Pengunjung"]:::entity
+
+    P1(("1.0<br/>Price<br/>Acquisition")):::process
+    P2(("2.0<br/>News<br/>Acquisition")):::process
+    P3(("3.0<br/>Sentiment<br/>Analysis &amp;<br/>Aggregation")):::process
+    P4(("4.0<br/>HMM State<br/>Decoding")):::process
+    P5(("5.0<br/>Forecast<br/>Precomputation")):::process
+    P6(("6.0<br/>Dashboard<br/>Serving")):::process
+
+    D1[("D1<br/>daily_prices")]:::store
+    D2[("D2<br/>news_articles")]:::store
+    D3[("D3<br/>sentiment_<br/>aggregates")]:::store
+    D4[("D4<br/>hmm_states")]:::store
+    D5[("D5<br/>hmm_models")]:::store
+    D8[("D8<br/>forecasts")]:::store
+    D9[("D9<br/>forecast_meta")]:::store
+
+    Inv -->|"OHLCV harga CPO"| P1
+    Admin -->|"jadwal harian"| P1
+    Admin -->|"jadwal harian"| P2
+    MPOB -->|"artikel berita"| P2
+
+    P1 -->|"harga + fitur teknikal"| D1
+    P2 -->|"artikel + skor sentimen"| D2
+    D2 -->|"artikel"| P3
+    P3 -->|"agregat sentimen harian"| D3
+
+    D1 -->|"OHLCV harian"| P4
+    D5 -->|"param HMM beku"| P4
+    P4 -->|"state HMM per tanggal"| D4
+
+    D1 -->|"harga + fitur teknikal"| P5
+    D3 -->|"agregat sentimen"| P5
+    D4 -->|"state HMM"| P5
+    P5 -->|"trail prediksi per titik"| D8
+    P5 -->|"metadata forecast"| D9
+
+    D1 -->|"harga 90d"| P6
+    D3 -->|"sentimen 90d"| P6
+    D4 -->|"state HMM 90d"| P6
+    D8 -->|"trail prediksi"| P6
+    D9 -->|"meta + winners"| P6
+    P6 -->|"dashboard HTML / JSON"| User
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+        </pre>
+      </div>
+    </section>
+
+    <!-- ======================================================= LEVEL 2 -->
+    <section id="l2" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">
+        <span class="level-pill">L2</span>Level 2 — Sub-proses Tiap Proses L1
+      </h2>
+      <p class="text-sm text-slate-600 mb-2">
+        Setiap diagram L2 menampilkan sub-proses internal proses L1-nya.
+        Setiap diagram dilengkapi catatan <em>balancing</em> yang mengonfirmasi
+        net input/output L2 sama dengan net input/output L1.
+      </p>
+
+      <!-- P1 -->
+      <div class="mt-10" id="l2-p1">
+        <h3 class="sub-heading">P1 — Price Acquisition (5 sub-proses: 1.1–1.5)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Entry: <code>_step_price(paths)</code> scheduler/main.py:222 +
+          <code>reconcile_prices(db, csv)</code> scheduler/reconcile.py:55.
+          Data store lokal D6 = file CSV CPO (<code>cpo_raw</code>, <code>cpo_preproc</code>).
+        </p>
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart LR
+    Inv["Investing<br/>.com"]:::entity
+    D6[("D6<br/>Local CPO CSV<br/>cpo_raw / cpo_preproc")]:::store
+    D1[("D1<br/>daily_prices")]:::store
+
+    P1_1(("1.1<br/>Cek<br/>Kesegaran")):::process
+    P1_2(("1.2<br/>Fetch Harga<br/>Terkini")):::process
+    P1_3(("1.3<br/>Append<br/>CSV")):::process
+    P1_4(("1.4<br/>Preprocess<br/>CSV")):::process
+    P1_5(("1.5<br/>Reconcile<br/>→ Firestore")):::process
+
+    D6 -->|"tanggal terbaru (CSV)"| P1_1
+    P1_1 -->|"cutoff + have"| P1_2
+    Inv -->|"OHLCV harga CPO"| P1_2
+    P1_2 -->|"price dict"| P1_3
+    P1_3 -->|"baris baru"| D6
+    D6 -->|"cpo_raw path"| P1_4
+    P1_4 -->|"cpo_preproc CSV"| D6
+    D6 -->|"daftar harga (list[dict])"| P1_5
+    P1_5 -->|"batch upsert (doc ID = date)"| D1
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+          </pre>
+        </div>
+        <div class="balance-note">
+          ✓ <strong>Balancing L2↔L1:</strong> Net input eksternal = Investing.com → OHLCV (sama dengan L1 P1.0).
+          Net output = D1 daily_prices (sama dengan L1 P1.0). D6 adalah store internal scheduler, tidak terlihat di L1.
+        </div>
+      </div>
+
+      <!-- P2 -->
+      <div class="mt-10" id="l2-p2">
+        <h3 class="sub-heading">P2 — News Acquisition (6 sub-proses: 2.1–2.6)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Entry: <code>_step_news(paths)</code> scheduler/main.py:260 +
+          <code>reconcile_news(db, articles)</code> scheduler/reconcile.py:85.
+          D7 = file CSV berita lokal (<code>news_raw</code>, <code>news_preproc</code>, <code>news_sent</code>).
+        </p>
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart LR
+    MPOB["MPOB<br/>Website"]:::entity
+    D7[("D7<br/>Local News CSV<br/>news_raw / preproc / sent")]:::store
+    D2[("D2<br/>news_articles")]:::store
+
+    P2_1(("2.1<br/>Cek<br/>Kesegaran")):::process
+    P2_2(("2.2<br/>Scrape<br/>Artikel")):::process
+    P2_3(("2.3<br/>Preprocess<br/>Teks")):::process
+    P2_4(("2.4<br/>Skor<br/>FinBERT-Tone")):::process
+    P2_5(("2.5<br/>Append<br/>CSV")):::process
+    P2_6(("2.6<br/>Reconcile<br/>→ Firestore")):::process
+
+    D7 -->|"tanggal terbaru (news_sent)"| P2_1
+    P2_1 -->|"cutoff date"| P2_2
+    MPOB -->|"HTML artikel CPO"| P2_2
+    P2_2 -->|"artikel mentah"| P2_3
+    P2_3 -->|"artikel bersih"| P2_4
+    P2_4 -->|"artikel + skor sentimen"| P2_5
+    P2_5 -->|"baris CSV (raw/preproc/sent)"| D7
+    D7 -->|"daftar artikel (list[dict])"| P2_6
+    P2_6 -->|"batch upsert (doc ID = md5(url))"| D2
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+          </pre>
+        </div>
+        <div class="balance-note">
+          ✓ <strong>Balancing L2↔L1:</strong> Net input eksternal = MPOB Website → artikel HTML (sama dengan L1 P2.0).
+          Net output = D2 news_articles (sama dengan L1 P2.0). D7 adalah store internal scheduler.
+        </div>
+      </div>
+
+      <!-- P3 -->
+      <div class="mt-10" id="l2-p3">
+        <h3 class="sub-heading">P3 — Sentiment Analysis &amp; Aggregation (3 sub-proses: 3.1–3.3)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Entry: bagian <code>reconcile_aggregates(db, articles)</code> dalam
+          <code>reconcile_all()</code> scheduler/reconcile.py:122.
+          Artikel dibaca dari D7 (CSV lokal) oleh <code>load_news_from_csv</code>
+          yang dipanggil sebelum <code>reconcile_aggregates</code> di dalam <code>reconcile_all</code>.
+          Di L1, alur data ini diabstraksi sebagai P3 membaca dari D2.
+        </p>
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart LR
+    D7[("D7<br/>Local News CSV<br/>news_raw + news_sent")]:::store
+    D3[("D3<br/>sentiment_<br/>aggregates")]:::store
+
+    P3_1(("3.1<br/>Load<br/>Artikel")):::process
+    P3_2(("3.2<br/>Hitung<br/>Agregat")):::process
+    P3_3(("3.3<br/>Reconcile<br/>→ Firestore")):::process
+
+    D7 -->|"news_raw + news_sent paths"| P3_1
+    P3_1 -->|"articles: list[dict]"| P3_2
+    P3_2 -->|"agregat harian: list[dict]"| P3_3
+    P3_3 -->|"upsert stale docs<br/>(doc ID = Daily_YYYY-MM-DD)"| D3
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+          </pre>
+        </div>
+        <div class="balance-note">
+          ✓ <strong>Balancing L2↔L1:</strong> Net input = artikel dari D7/D2 (di L1 diabstraksi sebagai D2 → P3.0).
+          Net output = D3 sentiment_aggregates (sama dengan L1 P3.0).
+          Catatan: D7 = konten yang sama dengan D2, hanya beda media (CSV vs Firestore);
+          kedua toko ini sinkron oleh P2.6 sebelum P3 berjalan.
+        </div>
+      </div>
+
+      <!-- P4 -->
+      <div class="mt-10" id="l2-p4">
+        <h3 class="sub-heading">P4 — HMM State Decoding (5 sub-proses: 4.1–4.5)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Entry: <code>update_hmm_states(db)</code> scheduler/hmm_updater.py:157.
+          Parameter HMM beku (D5) dipublikasikan satu kali offline oleh
+          <code>migrate_hmm_to_firestore.py</code>; tidak pernah di-refit saat runtime.
+        </p>
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart LR
+    D5[("D5<br/>hmm_models")]:::store
+    D1[("D1<br/>daily_prices")]:::store
+    D4[("D4<br/>hmm_states")]:::store
+
+    P4_1(("4.1<br/>Load<br/>Param HMM")):::process
+    P4_2(("4.2<br/>Load<br/>Harga")):::process
+    P4_3(("4.3<br/>Bangun<br/>Fitur HMM")):::process
+    P4_4(("4.4<br/>Dekode<br/>State")):::process
+    P4_5(("4.5<br/>Write<br/>State")):::process
+
+    D5 -->|"payload_json (param beku)"| P4_1
+    D1 -->|"OHLCV harian (stream)"| P4_2
+    P4_1 -->|"feat_cols, vol_window,<br/>norm_window, state_to_label"| P4_3
+    P4_2 -->|"price_df"| P4_3
+    P4_3 -->|"X: ndarray (5 fitur Z-score)"| P4_4
+    P4_1 -->|"startprob_, transmat_,<br/>means_, covars_"| P4_4
+    P4_4 -->|"states: ndarray"| P4_5
+    P4_5 -->|"batch upsert<br/>(doc ID = Daily_YYYY-MM-DD)"| D4
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+          </pre>
+        </div>
+        <div class="balance-note">
+          ✓ <strong>Balancing L2↔L1:</strong> Net input = D5 hmm_models (param beku) + D1 daily_prices (OHLCV) — sama dengan L1 P4.0.
+          Net output = D4 hmm_states — sama dengan L1 P4.0.
+        </div>
+      </div>
+
+      <!-- P5 -->
+      <div class="mt-10" id="l2-p5">
+        <h3 class="sub-heading">P5 — Forecast Precomputation (4 sub-proses: 5.1–5.4)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Entry: <code>precompute_and_write(db)</code> scheduler/precompute_forecasts.py:106.
+          Inferensi XGBoost dijalankan lokal (bukan di Vercel) lalu dipersisten ke D8+D9.
+          Window = 365 hari, horizon h = 1..7.
+        </p>
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart LR
+    D1b[("D1<br/>daily_prices")]:::store
+    D3b[("D3<br/>sentiment_<br/>aggregates")]:::store
+    D4b[("D4<br/>hmm_states")]:::store
+    D8[("D8<br/>forecasts")]:::store
+    D9[("D9<br/>forecast_meta")]:::store
+
+    P5_1(("5.1<br/>Bangun<br/>Inference Frame")):::process
+    P5_2(("5.2<br/>Compute<br/>Forecast Trails")):::process
+    P5_3(("5.3<br/>Flatten +<br/>Write Forecasts")):::process
+    P5_4(("5.4<br/>Write Meta<br/>+ Cleanup")):::process
+
+    D1b -->|"OHLCV harian"| P5_1
+    D3b -->|"agregat sentimen"| P5_1
+    D4b -->|"state HMM"| P5_1
+    P5_1 -->|"df: DataFrame (fitur lengkap)"| P5_2
+    P5_2 -->|"trails[] + forward_fan[]"| P5_3
+    P5_2 -->|"payload (winners, metrics, meta)"| P5_4
+    P5_3 -->|"per-titik (h, anchor)<br/>doc ID = Daily_h{h}_{anchor}"| D8
+    P5_4 -->|"winners, metrics, config<br/>doc ID = Daily"| D9
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+          </pre>
+        </div>
+        <div class="balance-note">
+          ✓ <strong>Balancing L2↔L1:</strong> Net input = D1 daily_prices + D3 sentiment_aggregates + D4 hmm_states — sama dengan L1 P5.0.
+          Net output = D8 forecasts + D9 forecast_meta — sama dengan L1 P5.0.
+        </div>
+      </div>
+
+      <!-- P6 -->
+      <div class="mt-10" id="l2-p6">
+        <h3 class="sub-heading">P6 — Dashboard Serving (4 sub-proses: 6.1–6.4)</h3>
+        <p class="text-sm text-slate-600 mb-3">
+          Entry: Django views di <code>website/web/views.py</code>.
+          Semua view bersifat <strong>read-only</strong> — tidak ada modul ML
+          (<code>joblib</code>, <code>numpy</code>, <code>xgboost</code>) di jalur request.
+          Urutan sub-proses = urutan URL pattern (<code>/</code>, <code>/api/forecasts/</code>,
+          <code>/news/</code>, <code>/about/</code>).
+        </p>
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart LR
+    D1c[("D1<br/>daily_prices")]:::store
+    D3c[("D3<br/>sentiment_<br/>aggregates")]:::store
+    D4c[("D4<br/>hmm_states")]:::store
+    D8c[("D8<br/>forecasts")]:::store
+    D9c[("D9<br/>forecast_meta")]:::store
+    D2c[("D2<br/>news_articles")]:::store
+    User["User /<br/>Pengunjung"]:::entity
+
+    P6_1(("6.1<br/>dashboard<br/>(request)")):::process
+    P6_2(("6.2<br/>forecasts_api<br/>(request)")):::process
+    P6_3(("6.3<br/>news<br/>(request)")):::process
+    P6_4(("6.4<br/>about<br/>(request)")):::process
+
+    D1c -->|"harga 90d"| P6_1
+    D4c -->|"state HMM 90d"| P6_1
+    D3c -->|"sentimen 90d"| P6_1
+    D9c -->|"meta + winners (h=1)"| P6_1
+    D9c -->|"meta payload"| P6_2
+    D8c -->|"trail prediksi"| P6_2
+    D2c -->|"artikel (projection stream)"| P6_3
+
+    P6_1 -->|"dashboard.html"| User
+    P6_2 -->|"JsonResponse"| User
+    P6_3 -->|"news.html"| User
+    P6_4 -->|"about.html"| User
+
+    classDef entity fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a
+    classDef process fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef store fill:#f3e8ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+          </pre>
+        </div>
+        <div class="balance-note">
+          ✓ <strong>Balancing L2↔L1:</strong> Net input = D1, D2, D3, D4, D8, D9 — sama dengan L1 P6.0.
+          Net output = dashboard HTML / JSON → User — sama dengan L1 P6.0.
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= REFERENCE TABLES -->
+    <section id="tables" class="page-break">
+      <h2 class="text-xl font-semibold section-heading">Tabel Referensi</h2>
+
+      <!-- External Entities -->
+      <h3 class="sub-heading">1. Entitas Eksternal</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Nama</th><th>Peran</th><th>Berinteraksi dengan</th></tr></thead>
+          <tbody>
+            <tr><td>E1</td><td>Admin / Peneliti</td><td>Menjalankan scheduler harian secara lokal (cron / manual)</td><td>P1, P2, P3, P4, P5</td></tr>
+            <tr><td>E2</td><td>MPOB Website</td><td>Sumber artikel berita harga minyak sawit mentah</td><td>P2</td></tr>
+            <tr><td>E3</td><td>Investing.com</td><td>Sumber data harga CPO harian (OHLCV) via <code>investpy</code></td><td>P1</td></tr>
+            <tr><td>E4</td><td>User / Pengunjung</td><td>Konsumen dashboard web (Vercel) — read-only</td><td>P6</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Processes -->
+      <h3 class="sub-heading">2. Proses Level 1</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Nama</th><th>Entry Function</th><th>File</th><th>Sub-proses L2</th></tr></thead>
+          <tbody>
+            <tr><td>P1</td><td>Price Acquisition</td><td><code>_step_price()</code> + <code>reconcile_prices()</code></td><td>main.py:222 / reconcile.py:55</td><td>1.1–1.5 (5)</td></tr>
+            <tr><td>P2</td><td>News Acquisition</td><td><code>_step_news()</code> + <code>reconcile_news()</code></td><td>main.py:260 / reconcile.py:85</td><td>2.1–2.6 (6)</td></tr>
+            <tr><td>P3</td><td>Sentiment Analysis &amp; Aggregation</td><td><code>reconcile_aggregates()</code></td><td>reconcile.py:122</td><td>3.1–3.3 (3)</td></tr>
+            <tr><td>P4</td><td>HMM State Decoding</td><td><code>update_hmm_states(db)</code></td><td>hmm_updater.py:157</td><td>4.1–4.5 (5)</td></tr>
+            <tr><td>P5</td><td>Forecast Precomputation</td><td><code>precompute_and_write(db)</code></td><td>precompute_forecasts.py:106</td><td>5.1–5.4 (4)</td></tr>
+            <tr><td>P6</td><td>Dashboard Serving</td><td><code>dashboard()</code> / <code>forecasts_api()</code> / <code>news()</code> / <code>about()</code></td><td>web/views.py:20,184,289,395</td><td>6.1–6.4 (4)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Data Stores -->
+      <h3 class="sub-heading">3. Data Store</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>ID</th><th>Nama</th><th>Jenis</th><th>Field Utama</th><th>Doc ID</th><th>Sumber (kode)</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>D1</td><td><code>daily_prices</code></td><td>Firestore</td>
+              <td><code>date, open, high, low, close, volume, updated_at</code></td>
+              <td>YYYY-MM-DD</td>
+              <td>firestore_writer.py:51</td>
+            </tr>
+            <tr>
+              <td>D2</td><td><code>news_articles</code></td><td>Firestore</td>
+              <td><code>url, date, title, content, sentiment_label, sentiment_score, positive_prob, negative_prob, neutral_prob, scraped_at</code></td>
+              <td>md5(url)</td>
+              <td>firestore_writer.py:165</td>
+            </tr>
+            <tr>
+              <td>D3</td><td><code>sentiment_aggregates</code></td><td>Firestore</td>
+              <td><code>frequency, date, article_count, positive_prob, negative_prob, neutral_prob, sentiment_score</code></td>
+              <td>Daily_YYYY-MM-DD</td>
+              <td>firestore_writer.py:197</td>
+            </tr>
+            <tr>
+              <td>D4</td><td><code>hmm_states</code></td><td>Firestore</td>
+              <td><code>date, frequency, state, state_label, log_return, volatility, rsi, updated_at</code></td>
+              <td>Daily_YYYY-MM-DD</td>
+              <td>firestore_writer.py:73</td>
+            </tr>
+            <tr>
+              <td>D5</td><td><code>hmm_models</code></td><td>Firestore</td>
+              <td><code>frequency, n_components, covariance_type, fit_cutoff, payload_json (startprob_, transmat_, means_, covars_)</code></td>
+              <td>Daily</td>
+              <td>firestore_writer.py:112</td>
+            </tr>
+            <tr>
+              <td>D6</td><td>Local CPO CSV</td><td>File CSV lokal</td>
+              <td><code>cpo_raw</code>: Tanggal, Open, High, Low, Close, Volume<br/><code>cpo_preproc</code>: + fitur teknikal (RSI, MACD, BB, dll.)</td>
+              <td>—</td>
+              <td>price_fetcher.py:244 / local_csv_writer.py:106</td>
+            </tr>
+            <tr>
+              <td>D7</td><td>Local News CSV</td><td>File CSV lokal</td>
+              <td><code>news_raw</code>: url, date, title, content<br/><code>news_sent</code>: + sentiment_label, positive_prob, negative_prob, neutral_prob, sentiment_score</td>
+              <td>—</td>
+              <td>local_csv_writer.py:23 / news_extractor.py:175</td>
+            </tr>
+            <tr>
+              <td>D8</td><td><code>forecasts</code></td><td>Firestore</td>
+              <td><code>frequency, horizon, tag, config, anchor_date, anchor_price, predicted_date, predicted_price, log_return, generated_at</code></td>
+              <td>Daily_h{h}_{anchor_date}</td>
+              <td>firestore_writer.py:217</td>
+            </tr>
+            <tr>
+              <td>D9</td><td><code>forecast_meta</code></td><td>Firestore</td>
+              <td><code>frequency, generated_at, max_horizon, window_days, updated_at, payload_json (winners_by_horizon, configs_by_horizon, metrics, tag_to_config, horizons, forward_fan)</code></td>
+              <td>Daily</td>
+              <td>firestore_writer.py:241</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Data Flows -->
+      <h3 class="sub-heading">4. Aliran Data (Level 1)</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead><tr><th>Dari</th><th>Ke</th><th>Nama Aliran</th><th>Isi Data</th></tr></thead>
+          <tbody>
+            <tr><td>E3 Investing.com</td><td>P1</td><td>OHLCV harga CPO</td><td>Open, High, Low, Close, Volume per tanggal trading</td></tr>
+            <tr><td>E1 Admin</td><td>P1, P2</td><td>Jadwal harian</td><td>Sinyal trigger scheduler (cron / python main.py --mode daily)</td></tr>
+            <tr><td>E2 MPOB Website</td><td>P2</td><td>Artikel berita CPO</td><td>HTML halaman berita; di-scrape oleh <code>scrape_new_articles()</code></td></tr>
+            <tr><td>P1</td><td>D1</td><td>Harga + fitur teknikal</td><td>OHLCV + derived columns dari <code>preprocess_price_csv()</code></td></tr>
+            <tr><td>P2</td><td>D2</td><td>Artikel + skor sentimen</td><td>Artikel berita dengan label FinBERT-Tone (positive/negative/neutral)</td></tr>
+            <tr><td>D2</td><td>P3</td><td>Artikel (untuk agregasi)</td><td>Daftar artikel scored; di L2 dibaca dari D7 (CSV lokal)</td></tr>
+            <tr><td>P3</td><td>D3</td><td>Agregat sentimen harian</td><td>article_count, positive_prob, negative_prob, neutral_prob, sentiment_score per tanggal</td></tr>
+            <tr><td>D1</td><td>P4</td><td>OHLCV harian</td><td>Stream seluruh koleksi <code>daily_prices</code>, diurutkan asc</td></tr>
+            <tr><td>D5</td><td>P4</td><td>Parameter HMM beku</td><td><code>payload_json</code>: startprob_, transmat_, means_, covars_, feat_cols, windows</td></tr>
+            <tr><td>P4</td><td>D4</td><td>State HMM per tanggal</td><td>state (int), state_label (Bullish/Bearish/Neutral), log_return_z, volatility_z, rsi_norm</td></tr>
+            <tr><td>D1</td><td>P5</td><td>Harga + fitur teknikal</td><td>DataFrame dari <code>build_inference_frame()</code>: OHLCV + RSI + MACD + lags + interaksi</td></tr>
+            <tr><td>D3</td><td>P5</td><td>Agregat sentimen</td><td>Positive_Prob, Negative_Prob, Neutral_Prob, Sentiment_Score, Confidence per tanggal</td></tr>
+            <tr><td>D4</td><td>P5</td><td>State HMM</td><td>HMM_State (int), HMM_State_Label, dummy columns (HMM_Bullish, dll.)</td></tr>
+            <tr><td>P5</td><td>D8</td><td>Trail prediksi per titik</td><td>Per (horizon, anchor_date): anchor_price, predicted_date, predicted_price, log_return</td></tr>
+            <tr><td>P5</td><td>D9</td><td>Metadata forecast</td><td>winners_by_horizon, configs_by_horizon, metrics (MAPE/SMAPE/DA), forward_fan</td></tr>
+            <tr><td>D1, D3, D4</td><td>P6</td><td>Data harga + sentimen + HMM (90d)</td><td>Window 90 hari terakhir untuk chart dashboard</td></tr>
+            <tr><td>D8</td><td>P6</td><td>Trail prediksi</td><td>Trails per horizon untuk overlay chart; difilter Python (predicted_date ≥ cutoff)</td></tr>
+            <tr><td>D9</td><td>P6</td><td>Meta + winners</td><td>winners_by_horizon, configs, metrics h=1 untuk badge; forward_fan untuk multi-step</td></tr>
+            <tr><td>D2</td><td>P6</td><td>Artikel berita</td><td>Projection stream: date, title, category, snippet, url, sentiment_label (halaman /news/)</td></tr>
+            <tr><td>P6</td><td>E4 User</td><td>Dashboard HTML / JSON</td><td>dashboard.html, about.html, news.html (HTML); JsonResponse forecast trails (JSON)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
