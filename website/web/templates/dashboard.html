@@ -17,7 +17,7 @@
     white-space: normal;
     background: #0f172a;
     color: #f8fafc;
-    font-size: 0.7rem;
+    font-size: 0.73rem;
     font-weight: 400;
     line-height: 1.4;
     text-align: left;
@@ -62,7 +62,7 @@
 
   /* Small-caps label treatment — single accent, replaces the blanket uppercase. */
   .eyebrow {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     letter-spacing: 0.01em;
     color: #475569;
@@ -90,7 +90,7 @@
   .stat-grid > * + * { border-left: 1px solid #e2e8f0; }
 
   /* Per-tile collapsible summary — matches existing horizon-toggle focus style. */
-  .details-summary { font-size: 0.75rem; font-weight: 500; color: #64748b; cursor: pointer; user-select: none; transition: color 140ms ease; }
+  .details-summary { font-size: 0.8rem; font-weight: 500; color: #64748b; cursor: pointer; user-select: none; transition: color 140ms ease; }
   .details-summary:hover { color: #334155; }
   .details-summary:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; border-radius: 2px; }
 
@@ -142,7 +142,7 @@
 
             <!-- Market Regime · Price insight tile -->
             <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Market regime &middot; price</div>
+                <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">Market regime &middot; price</div>
                 <div id="ki-hero-price"></div>
             </div>
 
@@ -150,7 +150,7 @@
             <section class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
                 <h3 class="eyebrow mb-2">Feature set</h3>
                 <p class="text-xs text-slate-500 mb-3 leading-relaxed">Which inputs each configuration (C1&ndash;C4) feeds into its model.</p>
-                <table class="w-full text-[11px] text-slate-600 tabular-nums">
+                <table class="w-full text-xs text-slate-600 tabular-nums">
                     <thead>
                         <tr class="text-slate-400 border-b border-slate-100">
                             <th class="text-left font-medium py-1">Config</th>
@@ -186,7 +186,7 @@
                         </tr>
                     </tbody>
                 </table>
-                <p class="text-[10px] text-slate-400 mt-1.5 leading-snug">Price = CPO Price; HMM = Market State; News = News Sentiment</p>
+                <p class="text-xs text-slate-400 mt-1.5 leading-snug">Price = CPO Price; HMM = Market State; News = News Sentiment</p>
             </section>
 
         </div><!-- /Row 1 left -->
@@ -204,14 +204,14 @@
                 <span class="text-slate-400">Forecast models:</span>
                 <div class="relative" id="horizon-dropdown-wrapper">
                     <button type="button" id="horizon-dropdown-btn"
-                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-[11px] text-slate-600 font-medium transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-600 font-medium transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             aria-haspopup="true" aria-expanded="false">
                         <span id="horizon-dropdown-label">All models shown</span>
                         <svg class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200" id="horizon-dropdown-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                     </button>
                     <div id="horizon-dropdown-panel"
                          class="hidden absolute left-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-lg shadow-lg min-w-[180px] py-1.5">
-                        <div class="px-3 py-1.5 text-[10px] text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100 mb-1">Toggle model trails</div>
+                        <div class="px-3 py-1.5 text-xs text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100 mb-1">Toggle model trails</div>
                         <div id="horizon-legend" class="flex flex-col gap-0 px-1"></div>
                     </div>
                 </div>
@@ -256,7 +256,7 @@
 
             <!-- News Sentiment insight tile -->
             <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">News sentiment</div>
+                <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">News sentiment</div>
                 <div id="ki-hero-sentiment"></div>
             </div>
 
@@ -283,13 +283,13 @@
 
             <!-- Feature Comparison insight tile -->
             <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Feature comparison</div>
+                <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">Feature comparison</div>
                 <div id="ki-hero-comparison"></div>
             </div>
 
             <!-- Forecast Reliability insight tile -->
             <div class="bg-white rounded-xl shadow-card border border-slate-100 p-5">
-                <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Forecast reliability</div>
+                <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">Forecast reliability</div>
                 <div id="ki-hero-metrics"></div>
             </div>
 
@@ -297,7 +297,7 @@
 
         <!-- Combined: Model details & breakdown -->
         <section class="lg:col-span-3 bg-white rounded-xl shadow-card border border-slate-100 p-6">
-            <h3 class="text-base font-bold text-slate-900">Model details &amp; breakdown</h3>
+            <h3 class="text-base font-bold text-slate-900">Model Details &amp; Breakdown</h3>
             <p class="text-xs text-slate-400 mt-0.5 mb-5">Per-horizon winning configs and the full per-category insight breakdown.</p>
 
             <!-- Model name mapping & metrics comparison -->
@@ -307,7 +307,7 @@
                     Each <strong>Model N</strong> corresponds to the best-performing configuration for that forecast horizon (H&nbsp;=&nbsp;N days ahead). Config label indicates the feature set used.
                 </p>
                 <div id="model-index-table" class="overflow-x-auto">
-                    <table class="w-full text-[11px] text-slate-600 tabular-nums">
+                    <table class="w-full text-xs text-slate-600 tabular-nums">
                         <thead>
                             <tr class="text-slate-400 border-b border-slate-100 text-left">
                                 <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Model</th>
@@ -316,7 +316,7 @@
                                 <th class="py-1.5 pr-3 font-medium whitespace-nowrap">Features</th>
                                 <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Mean Absolute Percentage Error — lower is better.">MAPE</th>
                                 <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Root Mean Squared Error in price space (MYR).">RMSE</th>
-                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Directional accuracy — % of correct up/down calls. >50% beats random.">DA</th>
+                                <th class="py-1.5 pr-3 font-medium whitespace-nowrap tip" data-tip="Directional accuracy — % of correct up/down calls. >50% beats random.">Directional Accuracy</th>
                             </tr>
                         </thead>
                         <tbody id="model-index-tbody" class="divide-y divide-slate-50">
@@ -617,7 +617,7 @@
             // Full descriptive label for the dropdown row; chart uses "Model N"
             const fullLabel = `${ordinalHorizon(t.horizon)} Horizon Model (${t.config})`;
             return `
-                <label class="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-slate-50 text-[11px] transition-colors">
+                <label class="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-slate-50 text-xs transition-colors">
                     <input type="checkbox" class="horizon-checkbox accent-primary" data-horizon="${t.horizon}" ${on ? 'checked' : ''}>
                     <span class="inline-block w-5 h-0 border-t-2 border-dashed flex-shrink-0" style="border-color:${color}"></span>
                     <span class="text-slate-600 tabular-nums">
@@ -689,11 +689,11 @@
                     <span class="flex items-center gap-1.5 text-slate-600 tabular-nums shrink-0">
                         <span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${HORIZON_COLORS[h]}"></span>
                         <span class="font-semibold">Model ${h}</span>
-                        <span class="text-slate-400 text-[10px]">(H=${h})</span>
+                        <span class="text-slate-400 text-xs">(H=${h})</span>
                     </span>
                     <div class="text-right">
                         <div class="font-semibold text-slate-700 tabular-nums">${cfg || '—'}</div>
-                        ${feat ? `<div class="text-[11px] text-slate-400 leading-snug">${feat}</div>` : ''}
+                        ${feat ? `<div class="text-xs text-slate-400 leading-snug">${feat}</div>` : ''}
                     </div>
                 </div>`);
         }
@@ -731,7 +731,7 @@
                     </td>
                     <td class="py-1.5 pr-3 text-slate-500">${fullName}</td>
                     <td class="py-1.5 pr-3">
-                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">${cfg}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-xs">${cfg}</span>
                     </td>
                     <td class="py-1.5 pr-3 text-slate-500">${feat}</td>
                     <td class="py-1.5 pr-3 tabular-nums text-slate-700">${mape}</td>
@@ -764,7 +764,7 @@
     // One <li>. tone ∈ {'', 'good', 'warn', 'bad'} sets the value color.
     function kiLi(label, value, note = '', tone = '') {
         const toneCls = { good: 'text-green-600', warn: 'text-amber-600', bad: 'text-red-600' }[tone] || 'text-slate-800';
-        const noteHtml = note ? `<span class="block text-[11px] text-slate-400 leading-snug">${note}</span>` : '';
+        const noteHtml = note ? `<span class="block text-xs text-slate-400 leading-snug">${note}</span>` : '';
         return `<li><span class="text-slate-500">${label}:</span> <span class="font-semibold tabular-nums ${toneCls}">${value}</span>${noteHtml}</li>`;
     }
     function kiNote(text) { return `<li class="text-slate-400">${text}</li>`; }
@@ -958,19 +958,19 @@
             const staleDays = tradingDaysBetween(latestDate, todayIso);
             const stale = staleDays > 3;
             const stalePill = stale
-                ? `<span class="ml-1.5 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[10px] font-semibold tabular-nums">Stale &middot; ${staleDays}d</span>`
+                ? `<span class="ml-1.5 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-xs font-semibold tabular-nums">Stale &middot; ${staleDays}d</span>`
                 : '';
             const asOf = (latestDate && latestDate !== 'N/A')
-                ? `<div class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100">as of <span class="tabular-nums">${latestDate}</span>${stalePill}</div>`
+                ? `<div class="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-100">as of <span class="tabular-nums">${latestDate}</span>${stalePill}</div>`
                 : '';
             elP.innerHTML = `
                 <div class="text-xl font-bold ${tone} mb-3 tabular-nums">${label} <span class="text-sm font-normal text-slate-400">· ${dur} days</span></div>
-                <div class="flex gap-1.5 text-[11px] mb-2">
+                <div class="flex gap-1.5 text-xs mb-2">
                     ${chip('Bearish', st === 0, 'bg-red-100 text-red-700 font-semibold')}
                     ${chip('Neutral', st === 2, 'bg-slate-200 text-slate-700 font-semibold')}
                     ${chip('Bullish', st === 1, 'bg-green-100 text-green-700 font-semibold')}
                 </div>
-                <div class="text-[11px] text-slate-400 leading-snug">${note}</div>
+                <div class="text-xs text-slate-400 leading-snug">${note}</div>
                 ${asOf}`;
             elP.parentElement.classList.toggle('opacity-60', stale);
         } else if (elP) {
@@ -994,13 +994,13 @@
             const dotCls = latest > 0 ? 'bg-green-500' : (latest < 0 ? 'bg-red-500' : 'bg-slate-400');
             const pos    = Math.max(8, Math.min(92, 50 + Math.max(-2, Math.min(2, z)) / 2 * 40));
             elS.innerHTML = `
-                <div class="text-xl font-bold ${tone} mb-3">${sign}, ${rising ? 'rising' : 'falling'} <span class="text-sm">${rising ? '▲' : '▼'}</span></div>
+                <div class="text-xl font-bold ${tone} mb-3">${sign}, ${rising ? 'Rising' : 'Falling'} <span class="text-sm">${rising ? '▲' : '▼'}</span></div>
                 <div class="relative h-1.5 bg-slate-100 rounded-full mb-1">
                     <span class="absolute left-1/2 -top-1 w-px h-3.5 bg-slate-300"></span>
                     <span class="absolute -top-1 w-3 h-3 rounded-full ${dotCls}" style="left:${pos}%; transform:translateX(-50%)"></span>
                 </div>
-                <div class="flex justify-between text-[11px] text-slate-400 mb-2"><span>negative</span><span>positive</span></div>
-                <div class="text-[11px] text-slate-400 leading-snug">Trending ${rising ? 'up' : 'down'} versus the past week.</div>`;
+                <div class="flex justify-between text-xs text-slate-400 mb-2"><span>Negative</span><span>Positive</span></div>
+                <div class="text-xs text-slate-400 leading-snug">Trending ${rising ? 'up' : 'down'} versus the past week.</div>`;
         } else if (elS) {
             elS.innerHTML = `<div class="text-sm text-slate-400">Not enough sentiment data.</div>`;
         }
@@ -1042,13 +1042,13 @@
                 const win = d.cfg === best.cfg;
                 return `<div class="flex-1 flex flex-col items-center gap-0.5" title="${d.cfg} · ${d.variant} · MAPE ${kiFmt(d.mape, '%')}">
                     <span class="w-full rounded-t" style="height:${barH(d.mape)}px; background:${win ? '#0f766e' : '#cbd5e1'}"></span>
-                    <span class="text-[10px] ${win ? 'text-primary font-semibold' : 'text-slate-400'}">${d.cfg}</span></div>`;
+                    <span class="text-xs ${win ? 'text-primary font-semibold' : 'text-slate-400'}">${d.cfg}</span></div>`;
             }).join('');
             const mixed = mapes.some(d => d.variant === 'CSA') && mapes.some(d => d.variant === 'BASE');
             elC.innerHTML = `
                 <div class="text-xl font-bold text-slate-800 mb-3">${tied ? 'Nearly tied' : best.cfg + ' leads'}</div>
                 <div class="flex items-end gap-2.5 h-9 mb-2">${bars}</div>
-                <div class="text-[11px] text-slate-400 leading-snug">${tied
+                <div class="text-xs text-slate-400 leading-snug">${tied
                     ? `Margin &asymp; ${kiFmt(margin)} pts MAPE — adding sentiment/HMM barely changes accuracy.`
                     : `${best.cfg} beats the rest by ${kiFmt(margin)} pts MAPE.`}${mixed
                     ? ` Bars use CSA where tuned (winner) · BASE for the rest.`
@@ -1074,12 +1074,12 @@
                     <span class="absolute -top-0.5 w-2.5 h-2.5 rounded-full bg-amber-500" style="left:${posOf(da1)}%; transform:translateX(-50%)"></span>
                     ${Number.isFinite(da7) ? `<span class="absolute -top-0.5 w-2.5 h-2.5 rounded-full bg-green-500" style="left:${posOf(da7)}%; transform:translateX(-50%)"></span>` : ''}
                 </div>
-                <div class="flex gap-3 text-[11px] text-slate-400 mb-2 tabular-nums">
+                <div class="flex gap-3 text-xs text-slate-400 mb-2 tabular-nums">
                     <span><span class="inline-block w-2 h-2 rounded-full bg-amber-500 align-middle mr-1"></span>1 day ${kiFmt(da1, '%')}</span>
                     ${Number.isFinite(da7) ? `<span><span class="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mr-1"></span>7 day ${kiFmt(da7, '%')}</span>` : ''}
                     <span>| 50% = chance</span>
                 </div>
-                <div class="text-[11px] text-slate-400 leading-snug">Direction barely beats chance short-term.</div>`;
+                <div class="text-xs text-slate-400 leading-snug">Direction barely beats chance short-term.</div>`;
         }
     }
 
@@ -1224,11 +1224,11 @@
         chips.push(
             '<span class="flex items-center gap-1.5 flex-wrap">' +
             '<span class="text-slate-400">Last 7d:</span>' +
-            '<span class="font-semibold tabular-nums text-green-600">' + pos.toFixed(0) + '% positive</span>' +
+            '<span class="font-semibold tabular-nums text-green-600">' + pos.toFixed(0) + '% Positive</span>' +
             '<span class="text-slate-400">·</span>' +
-            '<span class="font-semibold tabular-nums text-slate-600">' + neu.toFixed(0) + '% neutral</span>' +
+            '<span class="font-semibold tabular-nums text-slate-600">' + neu.toFixed(0) + '% Neutral</span>' +
             '<span class="text-slate-400">·</span>' +
-            '<span class="font-semibold tabular-nums text-red-600">' + neg.toFixed(0) + '% negative</span>' +
+            '<span class="font-semibold tabular-nums text-red-600">' + neg.toFixed(0) + '% Negative</span>' +
             '</span>'
         );
 
@@ -1240,7 +1240,7 @@
             const total7 = last7.reduce((s, d) => s + (d[countField] ?? 0), 0);
             // < 5 articles over 7 days = very thin news coverage for CPO commodity
             const thinPill = total7 < 5
-                ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold">thin coverage</span>'
+                ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs font-semibold">thin coverage</span>'
                 : '';
             chips.push(
                 '<span class="text-slate-300" aria-hidden="true">|</span>' +
