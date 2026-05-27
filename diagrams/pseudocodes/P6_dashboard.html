@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P6 Dashboard Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    pre.algorithm { background: #0f172a; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.82rem; line-height: 1.45; padding: 1.25rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } pre.algorithm { background: #f8fafc; color: #0f172a; } pre.algorithm .kw { color: #0d9488; } pre.algorithm .cmt { color: #475569; } pre.algorithm .src { color: #b45309; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P6 Dashboard Web</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk 4 view di <code>website/web/views.py</code> — read-only Firestore, tanpa modul ML.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P6_dashboard.html" class="nav-pill">P6 Flowchart</a>
+    <a href="../structure_charts/P6_dashboard.html" class="nav-pill">P6 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill active">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">6.1 — ALGORITHM dashboard(request)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> dashboard
+<span class="src">SOURCE</span>: website/web/views.py :: dashboard
+
+<span class="kw">INPUT</span>:  request
+<span class="kw">OUTPUT</span>: HttpResponse (dashboard.html)
+
+<span class="kw">BEGIN</span>
+    <span class="kw">TRY</span>
+        db = firestore.client()
+    <span class="kw">CATCH</span> ValueError
+        messages.error(request, "Firebase is not initialized.")
+        <span class="kw">RETURN</span> render(request, "dashboard.html", _empty_dashboard_ctx())
+    <span class="kw">END TRY</span>
+
+    cutoff = (today() - 90.days).isoformat()
+
+    <span class="cmt">// price_list (90 hari OHLCV)</span>
+    price_list = []
+    <span class="kw">FOR</span> doc <span class="kw">IN</span> db.collection("daily_prices").where("date",">=",cutoff).order_by("date").stream() <span class="kw">DO</span>
+        d = doc.to_dict()
+        price_list.append({ date, open, high, low, close, volume } from d)
+    <span class="kw">END FOR</span>
+
+    <span class="cmt">// state_dict {date → state_label/state}</span>
+    state_dict = {}
+    <span class="kw">FOR</span> doc <span class="kw">IN</span> db.collection("hmm_states").where("date",">=",cutoff).order_by("date").stream() <span class="kw">DO</span>
+        d = doc.to_dict()
+        <span class="kw">IF</span> d.frequency <span class="kw">NOT IN</span> (NULL, "Daily") <span class="kw">THEN CONTINUE</span>
+        state_dict[d.date] = { state_label: d.state_label <span class="kw">OR</span> "Neutral", state: d.state <span class="kw">OR</span> 2 }
+    <span class="kw">END FOR</span>
+
+    <span class="cmt">// chart_data: row harga + state_label (None bila tidak ada) + numeric state</span>
+    chart_data = []
+    label_to_int = { "Bearish":0, "Bullish":1, "Neutral":2 }
+    <span class="kw">FOR</span> row <span class="kw">IN</span> price_list <span class="kw">DO</span>
+        info = state_dict.get(row.date, { state:NULL, state_label:NULL })
+        chart_data.append({
+            date, actual=row.close, open, high, low, volume,
+            state       : label_to_int.get(info.state_label) <span class="kw">IF</span> info.state_label <span class="kw">ELSE NULL</span>,
+            state_label : info.state_label
+        })
+    <span class="kw">END FOR</span>
+
+    <span class="cmt">// stats: harga terakhir, mean, max, min</span>
+    <span class="kw">IF</span> price_list <span class="kw">NOT EMPTY</span> <span class="kw">THEN</span>
+        prices = [p.close <span class="kw">FOR</span> p <span class="kw">IN</span> price_list]
+        stats  = { current_price: prices[-1], avg_price: mean(prices), max_price: max(prices),
+                   min_price: min(prices), total_days: |prices| }
+        latest_date = price_list[-1].date
+    <span class="kw">ELSE</span>
+        stats = { current_price:0, avg_price:0, max_price:0, min_price:0, total_days:0 }
+        latest_date = "N/A"
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// metrics + winners dari D9 forecast_meta/Daily</span>
+    metrics         = { mape:0, smape:0, accuracy:0, best_model:"N/A" }
+    winners_payload = {}
+    <span class="kw">TRY</span>
+        meta_doc = db.collection("forecast_meta").document("Daily").get()
+        <span class="kw">IF</span> meta_doc.exists <span class="kw">THEN</span>
+            meta_raw        = meta_doc.to_dict()
+            winners_payload = json.loads(meta_raw.payload_json <span class="kw">OR</span> "{}")
+            h1_tag = winners_payload.winners_by_horizon.get("1")
+            <span class="kw">IF</span> h1_tag <span class="kw">THEN</span>
+                h1_metrics = winners_payload.metrics[h1_tag]["1"].CSA
+                <span class="kw">IF</span> h1_metrics <span class="kw">THEN</span>
+                    metrics = { mape: round(h1_metrics.mape,2), smape: round(h1_metrics.smape,2),
+                                accuracy: round(h1_metrics.da,2),
+                                best_model: "XGBoost CSA (" + winners_payload.configs_by_horizon.get("1","?") + ")" }
+                <span class="kw">END IF</span>
+            <span class="kw">END IF</span>
+        <span class="kw">END IF</span>
+    <span class="kw">CATCH</span> Exception
+        <span class="cmt">// page tetap render dengan metrics N/A</span>
+    <span class="kw">END TRY</span>
+
+    <span class="cmt">// sentiment_list (90 hari)</span>
+    sentiment_list = []
+    <span class="kw">TRY</span>
+        <span class="kw">FOR</span> doc <span class="kw">IN</span> db.collection("sentiment_aggregates").where("date",">=",cutoff).order_by("date").stream() <span class="kw">DO</span>
+            d = doc.to_dict()
+            <span class="kw">IF</span> d.frequency != "Daily" <span class="kw">THEN CONTINUE</span>
+            sentiment_list.append({ date, positive_prob*100, negative_prob*100, neutral_prob*100, sentiment_score })
+        <span class="kw">END FOR</span>
+    <span class="kw">CATCH</span> Exception <span class="kw">DO PASS END</span>
+    <span class="kw">END TRY</span>
+
+    <span class="kw">RETURN</span> render("dashboard.html", {
+        chart_data, metrics, winners_data=winners_payload,
+        sentiment_data=sentiment_list, stats, latest_date,
+        page_title="CPO Price Prediction Dashboard"
+    })
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">6.2 — ALGORITHM forecasts_api(request)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> forecasts_api
+<span class="src">SOURCE</span>: website/web/views.py :: forecasts_api
+
+<span class="kw">INPUT</span>:  request    <span class="cmt">// GET params: max_horizon (1..7), window_days (7..365)</span>
+<span class="kw">OUTPUT</span>: JsonResponse 200 / 503 / 500
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// clamp params</span>
+    <span class="kw">TRY</span>   max_horizon = int(request.GET.max_horizon <span class="kw">OR</span> 7)
+    <span class="kw">CATCH</span> max_horizon = 7
+    <span class="kw">END TRY</span>
+    max_horizon = max(1, min(7, max_horizon))
+
+    <span class="kw">TRY</span>   window_days = int(request.GET.window_days <span class="kw">OR</span> 90)
+    <span class="kw">CATCH</span> window_days = 90
+    <span class="kw">END TRY</span>
+    window_days = max(7, min(365, window_days))
+
+    <span class="kw">TRY</span>
+        db = firestore.client()
+
+        meta_doc = db.collection("forecast_meta").document("Daily").get()
+        <span class="kw">IF</span> NOT meta_doc.exists <span class="kw">THEN</span>
+            <span class="kw">RETURN</span> JsonResponse({ error: "forecast_meta/Daily not found. Run scheduler/main.py to populate forecasts." }, status=503)
+        <span class="kw">END IF</span>
+        meta_raw    = meta_doc.to_dict() <span class="kw">OR</span> {}
+        meta_payload = json.loads(meta_raw.payload_json <span class="kw">OR</span> "{}")
+
+        cutoff = (today() - window_days.days).isoformat()
+
+        <span class="cmt">// Python-side filter (hindari composite index)</span>
+        trails_by_h = {}
+        <span class="kw">FOR</span> d <span class="kw">IN</span> db.collection("forecasts").stream() <span class="kw">DO</span>
+            x = d.to_dict() <span class="kw">OR</span> {}
+            <span class="kw">IF</span> (x.frequency <span class="kw">OR</span> "Daily") != "Daily" <span class="kw">THEN CONTINUE</span>
+            h = int(x.horizon <span class="kw">OR</span> 0)
+            <span class="kw">IF</span> h &lt; 1 <span class="kw">OR</span> h &gt; max_horizon <span class="kw">THEN CONTINUE</span>
+            pred_date = x.predicted_date <span class="kw">OR</span> ""
+            <span class="kw">IF</span> pred_date <span class="kw">IS EMPTY</span> <span class="kw">OR</span> pred_date &lt; cutoff <span class="kw">THEN CONTINUE</span>
+            trails_by_h.setdefault(h, []).append({
+                anchor_date, anchor_price=round(float(x.anchor_price <span class="kw">OR</span> 0.0),2),
+                predicted_date=pred_date, predicted_price=round(float(x.predicted_price <span class="kw">OR</span> 0.0),2),
+                log_return=round(float(x.log_return <span class="kw">OR</span> 0.0),6)
+            })
+        <span class="kw">END FOR</span>
+
+        <span class="kw">IF</span> trails_by_h <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+            <span class="kw">RETURN</span> JsonResponse({ error: "forecasts collection empty. Run scheduler/main.py to populate forecasts." }, status=503)
+        <span class="kw">END IF</span>
+
+        winners = meta_payload.winners_by_horizon
+        configs = meta_payload.configs_by_horizon
+
+        trails = []
+        <span class="kw">FOR</span> h <span class="kw">IN</span> sorted(trails_by_h.keys()) <span class="kw">DO</span>
+            points = sorted(trails_by_h[h], key=anchor_date)
+            trails.append({ horizon: h, tag: winners.get(str(h), ""), config: configs.get(str(h), ""), points })
+        <span class="kw">END FOR</span>
+
+        <span class="kw">RETURN</span> JsonResponse({
+            horizons      : meta_payload.horizons <span class="kw">OR</span> range(1, max_horizon+1),
+            winners       : winners,
+            configs       : configs,
+            trails        : trails,
+            forward_fan   : meta_payload.forward_fan <span class="kw">OR</span> [],
+            metrics       : meta_payload.metrics    <span class="kw">OR</span> {},
+            tag_to_config : meta_payload.tag_to_config <span class="kw">OR</span> {},
+            generated_at  : meta_raw.generated_at <span class="kw">OR</span> ""
+        }, status=200)
+    <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
+        <span class="kw">RETURN</span> JsonResponse({ error: str(e) }, status=500)
+    <span class="kw">END TRY</span>
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">6.3 — ALGORITHM news(request)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> news
+<span class="src">SOURCE</span>: website/web/views.py :: news     [@cache_control(public=True, s_maxage=3600, max_age=60)]
+
+<span class="kw">INPUT</span>:  request    <span class="cmt">// GET params: sentiment (Positive/Negative/Neutral), page</span>
+<span class="kw">OUTPUT</span>: HttpResponse (news.html)
+
+<span class="kw">BEGIN</span>
+    db = firestore.client()
+    sentiment_filter = request.GET.sentiment
+    page_number      = int(request.GET.page <span class="kw">OR</span> 1)
+    items_per_page   = 9
+
+    <span class="cmt">// projection-only stream (drop content field besar)</span>
+    news_docs = db.collection("news_articles").select([date,title,category,snippet,url,sentiment_label,sentiment_score]).stream()
+
+    news_list        = []
+    sentiment_counts = { positive:0, negative:0, neutral:0, total:0 }
+    coverage_start   = NULL; coverage_end = NULL
+
+    <span class="kw">FOR</span> doc <span class="kw">IN</span> news_docs <span class="kw">DO</span>
+        d = doc.to_dict()
+        adate = d.date <span class="kw">OR</span> ""
+        <span class="kw">IF</span> adate <span class="kw">THEN</span>
+            <span class="kw">IF</span> coverage_start <span class="kw">IS NULL</span> <span class="kw">OR</span> adate &lt; coverage_start <span class="kw">THEN</span> coverage_start = adate
+            <span class="kw">IF</span> coverage_end   <span class="kw">IS NULL</span> <span class="kw">OR</span> adate &gt; coverage_end   <span class="kw">THEN</span> coverage_end   = adate
+        <span class="kw">END IF</span>
+
+        label = d.sentiment_label <span class="kw">OR</span> "Neutral"
+        sentiment_counts.total += 1
+        <span class="kw">IF</span> label = "Positive" <span class="kw">THEN</span> sentiment_counts.positive += 1
+        <span class="kw">ELSE IF</span> label = "Negative" <span class="kw">THEN</span> sentiment_counts.negative += 1
+        <span class="kw">ELSE</span> sentiment_counts.neutral += 1
+        <span class="kw">END IF</span>
+
+        <span class="kw">IF</span> sentiment_filter <span class="kw">AND</span> label != sentiment_filter <span class="kw">THEN CONTINUE</span>
+        news_list.append({ date, title, category, snippet, url, sentiment_label=label,
+                           sentiment_score=float(d.sentiment_score <span class="kw">OR</span> 0) })
+    <span class="kw">END FOR</span>
+
+    sort news_list desc by date
+    total_news  = |news_list|
+    total_pages = max(1, ceil(total_news / items_per_page))
+    page_number = clamp(page_number, 1, total_pages)
+    start       = (page_number - 1) * items_per_page
+    news_page   = news_list[start : start + items_per_page]
+
+    build pagination window (max 5 visible page numbers around current)
+
+    <span class="kw">RETURN</span> render("news.html", { news_page, sentiment_counts, current_filter=sentiment_filter,
+                                  pagination, coverage_start, coverage_end,
+                                  page_title="CPO News &amp; Sentiment" })
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">6.4 — ALGORITHM about(request)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> about
+<span class="src">SOURCE</span>: website/web/views.py :: about
+
+<span class="kw">BEGIN</span>
+    <span class="kw">RETURN</span> render("about.html", { page_title: "About" })
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

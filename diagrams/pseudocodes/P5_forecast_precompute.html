@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P5 Forecast Precompute</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    pre.algorithm { background: #0f172a; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.82rem; line-height: 1.45; padding: 1.25rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } pre.algorithm { background: #f8fafc; color: #0f172a; } pre.algorithm .kw { color: #0d9488; } pre.algorithm .cmt { color: #475569; } pre.algorithm .src { color: #b45309; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P5 Forecast Precompute</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>_step_precompute → precompute_and_write → compute_forecast_trails</code>.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P5_forecast_precompute.html" class="nav-pill">P5 Flowchart</a>
+    <a href="../structure_charts/P5_forecast_precompute.html" class="nav-pill">P5 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill active">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM _step_precompute (wrapper try/except)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> _step_precompute
+<span class="src">SOURCE</span>: scheduler/main.py :: _step_precompute
+
+<span class="kw">INPUT</span>:  db
+<span class="kw">OUTPUT</span>: bool   <span class="cmt">// True jika ≥1 doc forecast ditulis</span>
+
+<span class="kw">BEGIN</span>
+    <span class="kw">TRY</span>
+        <span class="kw">IMPORT</span> precompute_forecasts
+        n = precompute_forecasts.precompute_and_write(db)
+    <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
+        log error("Forecast precompute failed: " + e)
+        <span class="kw">RETURN FALSE</span>          <span class="cmt">// langkah 1–4 yang sudah commit tidak di-rollback</span>
+    <span class="kw">END TRY</span>
+    <span class="kw">RETURN</span> n &gt; 0
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM precompute_and_write</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> precompute_and_write
+<span class="src">SOURCE</span>: scheduler/precompute_forecasts.py :: precompute_and_write
+
+<span class="kw">INPUT</span>:  db
+<span class="kw">OUTPUT</span>: int — jumlah dokumen forecast per-titik ditulis ke D8
+
+<span class="kw">CONSTANTS</span>:
+    PRECOMPUTE_WINDOW_DAYS = 365
+    PRECOMPUTE_MAX_HORIZON = 7
+    FREQUENCY              = "Daily"
+
+<span class="kw">BEGIN</span>
+    inference = _import_inference()                   <span class="cmt">// sys.path += ../prediction</span>
+
+    payload = inference.compute_forecast_trails(
+                  db,
+                  max_horizon = PRECOMPUTE_MAX_HORIZON,
+                  window_days = PRECOMPUTE_WINDOW_DAYS
+              )
+
+    trails = payload.trails
+    <span class="kw">IF</span> trails <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log warn("compute_forecast_trails returned no trails"); <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+
+    points = _flatten_trails(trails)                  <span class="cmt">// nested trail → flat list of dicts</span>
+    <span class="kw">IF</span> points <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log warn("Trails contained no points"); <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+
+    n = write_forecasts(db, points)                   <span class="cmt">// → D8 (doc id = Daily_h&lt;h&gt;_&lt;anchor&gt;)</span>
+
+    write_forecast_meta(db, {
+        frequency          : FREQUENCY,
+        generated_at       : payload.generated_at,
+        max_horizon        : PRECOMPUTE_MAX_HORIZON,
+        window_days        : PRECOMPUTE_WINDOW_DAYS,
+        winners_by_horizon : payload.winners,
+        configs_by_horizon : payload.configs,
+        metrics            : payload.metrics,
+        tag_to_config      : payload.tag_to_config,
+        horizons           : payload.horizons,
+        forward_fan        : payload.forward_fan
+    })                                                 <span class="cmt">// → D9 forecast_meta/Daily</span>
+
+    _delete_legacy_doc(db)                             <span class="cmt">// hapus forecasts/latest jika ada</span>
+    <span class="kw">RETURN</span> n
+<span class="kw">END</span>
+
+
+<span class="kw">FUNCTION</span> _flatten_trails(trails) <span class="kw">RETURNS</span> list[dict]
+<span class="kw">BEGIN</span>
+    points = []
+    <span class="kw">FOR</span> trail <span class="kw">IN</span> trails <span class="kw">DO</span>
+        horizon = int(trail.horizon)
+        tag     = str(trail.tag <span class="kw">OR</span> "")
+        config  = str(trail.config <span class="kw">OR</span> "")
+        <span class="kw">FOR</span> p <span class="kw">IN</span> trail.points <span class="kw">DO</span>
+            points.append({
+                frequency       : "Daily",
+                horizon         : horizon,
+                tag             : tag,
+                config          : config,
+                anchor_date     : str(p.anchor_date),
+                anchor_price    : float(p.anchor_price <span class="kw">OR</span> 0.0),
+                predicted_date  : str(p.predicted_date),
+                predicted_price : float(p.predicted_price),
+                log_return      : float(p.log_return <span class="kw">OR</span> 0.0)
+            })
+        <span class="kw">END FOR</span>
+    <span class="kw">END FOR</span>
+    <span class="kw">RETURN</span> points
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM compute_forecast_trails (5.2 core)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> compute_forecast_trails
+<span class="src">SOURCE</span>: prediction/inference.py :: compute_forecast_trails
+
+<span class="kw">INPUT</span>:
+    db, max_horizon=7, window_days=365
+
+<span class="kw">OUTPUT</span>:
+    payload dict { horizons, winners, configs, trails[], forward_fan[],
+                   metrics, tag_to_config, generated_at }
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// load winners.json (← D7) — winning ablation tag &amp; config per horizon</span>
+    winners_payload = load_winners()
+    winners = { int(h): tag <span class="kw">FOR</span> (h, tag) <span class="kw">IN</span> winners_payload.winners_by_horizon }
+    configs = { int(h): cfg <span class="kw">FOR</span> (h, cfg) <span class="kw">IN</span> winners_payload.configs_by_horizon }
+
+    <span class="cmt">// 5.1 bangun inference frame (price + sent + HMM + technicals + lags + cyclical + interaksi)</span>
+    df = build_inference_frame(db)
+    <span class="kw">IF</span> df <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        <span class="kw">RETURN</span> { horizons:[], winners:{}, configs:{}, trails:[], metrics:{} }
+    <span class="kw">END IF</span>
+
+    dates_sorted = df.Date.tolist()
+    last_idx     = |dates_sorted| - 1
+    next_td      = _next_trading_day_after(dates_sorted[last_idx])
+
+    cutoff     = df.Date.max() - window_days
+    window_idx = df.index[df.Date &gt;= cutoff].tolist()
+
+    trails = []
+
+    <span class="cmt">// 5.2 rolling trails: untuk tiap horizon h, prediksi target di anchor+h</span>
+    <span class="kw">FOR</span> h <span class="kw">IN</span> 1..max_horizon <span class="kw">DO</span>
+        tag = winners.get(h)
+        <span class="kw">IF</span> tag <span class="kw">IS NULL</span> <span class="kw">THEN</span>
+            log warn("No winner for h=" + h); <span class="kw">CONTINUE</span>
+        <span class="kw">END IF</span>
+        <span class="kw">TRY</span>
+            (model, scaler, feature_cols) = load_model(tag, h, variant="csa")  <span class="cmt">// joblib + meta.json</span>
+        <span class="kw">CATCH</span> Exception
+            log warn("Failed to load model h=" + h); <span class="kw">CONTINUE</span>
+        <span class="kw">END TRY</span>
+
+        points         = []
+        logged_missing = set()
+        <span class="kw">FOR</span> i <span class="kw">IN</span> window_idx <span class="kw">DO</span>
+            target_idx = i + h
+            <span class="kw">IF</span> target_idx &gt; last_idx + 1 <span class="kw">THEN CONTINUE</span>           <span class="cmt">// konvergensi semua trail di T+1</span>
+            pred_date = dates_sorted[target_idx] <span class="kw">IF</span> target_idx &lt;= last_idx <span class="kw">ELSE</span> next_td
+
+            row = df.iloc[[i]]
+            <span class="kw">TRY</span>
+                X = select_feature_matrix(row, feature_cols)
+            <span class="kw">CATCH</span> ValueError <span class="kw">AS</span> e
+                <span class="kw">IF</span> str(e)[:120] <span class="kw">NOT IN</span> logged_missing <span class="kw">THEN</span>
+                    log warn("h=" + h + " feature mismatch: " + e)
+                    logged_missing.add(str(e)[:120])
+                <span class="kw">END IF</span>
+                <span class="kw">CONTINUE</span>
+            <span class="kw">END TRY</span>
+            <span class="kw">IF</span> any(isnan(X)) <span class="kw">THEN CONTINUE</span>
+            <span class="kw">IF</span> scaler <span class="kw">IS NOT NULL</span> <span class="kw">THEN</span> X = scaler.transform(X)
+
+            log_ret = float(model.predict(X)[0])
+            anchor_close = float(row.Close[0])
+            pred_price   = float(anchor_close * exp(clip(log_ret, -10, 10)))
+
+            points.append({
+                anchor_date    : dates_sorted[i].strftime("YYYY-MM-DD"),
+                anchor_price   : round(anchor_close, 2),
+                predicted_date : pred_date.strftime("YYYY-MM-DD"),
+                predicted_price: round(pred_price, 2),
+                log_return     : round(log_ret, 6)
+            })
+        <span class="kw">END FOR</span>
+        trails.append({ horizon: h, tag: tag, config: configs.get(h, ""), points: points })
+    <span class="kw">END FOR</span>
+
+    <span class="cmt">// 5.3 forward fan: dari anchor terakhir T, prediksi T+1..T+max_horizon</span>
+    forward_fan  = []
+    anchor_row   = df.iloc[[last_idx]]
+    anchor_close = float(anchor_row.Close[0])
+    anchor_date  = dates_sorted[last_idx]
+    future_days  = []; fd = anchor_date
+    <span class="kw">FOR</span> _ <span class="kw">IN</span> 1..max_horizon <span class="kw">DO</span> fd = _next_trading_day_after(fd); future_days.append(fd) <span class="kw">END FOR</span>
+
+    <span class="kw">FOR</span> h <span class="kw">IN</span> 1..max_horizon <span class="kw">DO</span>
+        tag = winners.get(h); <span class="kw">IF</span> tag <span class="kw">IS NULL</span> <span class="kw">THEN CONTINUE</span>
+        <span class="kw">TRY</span>
+            (model, scaler, feature_cols) = load_model(tag, h, variant="csa")
+            X = select_feature_matrix(anchor_row, feature_cols)
+        <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
+            log warn("Forward fan h=" + h + " skipped: " + e); <span class="kw">CONTINUE</span>
+        <span class="kw">END TRY</span>
+        <span class="kw">IF</span> any(isnan(X)) <span class="kw">THEN CONTINUE</span>
+        <span class="kw">IF</span> scaler <span class="kw">IS NOT NULL</span> <span class="kw">THEN</span> X = scaler.transform(X)
+
+        log_ret    = float(model.predict(X)[0])
+        pred_price = float(anchor_close * exp(clip(log_ret, -10, 10)))
+        forward_fan.append({
+            horizon         : h,
+            tag             : tag,
+            config          : configs.get(h, ""),
+            anchor_date     : anchor_date.strftime("YYYY-MM-DD"),
+            anchor_price    : round(anchor_close, 2),
+            predicted_date  : future_days[h-1].strftime("YYYY-MM-DD"),
+            predicted_price : round(pred_price, 2),
+            log_return      : round(log_ret, 6)
+        })
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> {
+        horizons      : range(1, max_horizon+1),
+        winners       : { str(h): t <span class="kw">FOR</span> (h,t) <span class="kw">IN</span> winners },
+        configs       : { str(h): c <span class="kw">FOR</span> (h,c) <span class="kw">IN</span> configs },
+        trails        : trails,
+        forward_fan   : forward_fan,
+        metrics       : winners_payload.metrics,
+        tag_to_config : winners_payload.tag_to_config,
+        generated_at  : datetime.utcnow().isoformat() + "Z"
+    }
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">FUNCTION build_inference_frame (5.1 helper)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">FUNCTION</span> build_inference_frame(db) <span class="kw">RETURNS</span> DataFrame
+<span class="src">SOURCE</span>: prediction/inference.py :: build_inference_frame
+
+<span class="kw">BEGIN</span>
+    price_df = _load_prices(db)                         <span class="cmt">// ← D1 daily_prices</span>
+    <span class="kw">IF</span> price_df <span class="kw">IS EMPTY</span> <span class="kw">THEN RAISE</span> "daily_prices is empty"
+
+    sent_df      = _load_sentiment(db)                  <span class="cmt">// ← D3 sentiment_aggregates</span>
+    hmm_state_df = _load_hmm_state(db)                  <span class="cmt">// ← D4 hmm_states</span>
+
+    df = add_price_features(price_df)                   <span class="cmt">// SMA, EMA, BB, RSI, MACD, ATR, OBV, …</span>
+    df = add_hmm_derived_features(df)                   <span class="cmt">// HMM_RSI, HMM_MACD, HMM_Volatility, …</span>
+
+    df.Change_Pct = df.Close.pct_change() * 100
+
+    <span class="kw">IF</span> hmm_state_df <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        df = df.merge(hmm_state_df, on="Date", how="left")
+        df.HMM_State       = df.HMM_State.fillna(2).astype(int)
+        df.HMM_State_Label = df.HMM_State_Label.fillna("Neutral")
+        top_states = df.HMM_State_Label.value_counts().head(5).index.tolist()
+        <span class="kw">FOR</span> state <span class="kw">IN</span> top_states <span class="kw">DO</span>
+            col_name = "HMM_" + state.replace(" ","_").replace("-","_")
+            df[col_name] = (df.HMM_State_Label == state).astype(int)
+        <span class="kw">END FOR</span>
+        df = df.drop(columns=["HMM_State_Label"])
+    <span class="kw">END IF</span>
+
+    <span class="kw">IF</span> sent_df <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN</span>
+        df = df.merge(sent_df, on="Date", how="left")
+        <span class="kw">FOR</span> c <span class="kw">IN</span> [Article_Count, Positive_Prob, Negative_Prob, Neutral_Prob, Sentiment_Score] <span class="kw">DO</span>
+            <span class="kw">IF</span> c <span class="kw">IN</span> df.columns <span class="kw">THEN</span> df[c] = df[c].fillna(0.0)
+        <span class="kw">END FOR</span>
+        <span class="kw">IF</span> "Positive_Prob" <span class="kw">IN</span> df.columns <span class="kw">AND</span> "Confidence" <span class="kw">NOT IN</span> df.columns <span class="kw">THEN</span>
+            df.Confidence = df[[Positive_Prob, Negative_Prob, Neutral_Prob]].max(axis=1).fillna(0.0)
+        <span class="kw">END IF</span>
+    <span class="kw">END IF</span>
+
+    df = engineer_all_features(df)                      <span class="cmt">// cyclical + all lags + interaksi</span>
+    <span class="kw">RETURN</span> df.sort_values("Date").reset_index()
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

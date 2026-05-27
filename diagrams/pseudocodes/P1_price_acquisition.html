@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P1 Price Acquisition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    pre.algorithm { background: #0f172a; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.82rem; line-height: 1.45; padding: 1.25rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } pre.algorithm { background: #f8fafc; color: #0f172a; } pre.algorithm .kw { color: #0d9488; } pre.algorithm .cmt { color: #475569; } pre.algorithm .src { color: #b45309; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P1 Price Acquisition</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>scheduler/main.py::_step_price</code> + <code>reconcile.py::reconcile_prices</code> + helpers.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P1_price_acquisition.html" class="nav-pill">P1 Flowchart</a>
+    <a href="../structure_charts/P1_price_acquisition.html" class="nav-pill">P1 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill active">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM _step_price + reconcile_prices</h2>
+      <p class="text-sm text-slate-600 mb-3">Mirror 1:1 dari <a href="../flowcharts/P1_price_acquisition.html" class="text-teal-700 underline">flowchart P1</a>. Sub-proses 1.1–1.5.</p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> _step_price
+<span class="src">SOURCE</span>: scheduler/main.py :: _step_price
+
+<span class="kw">INPUT</span>:
+    paths   <span class="cmt">// dict berisi 'cpo_raw' dan 'cpo_preproc' (path CSV)</span>
+
+<span class="kw">OUTPUT</span>:
+    bool    <span class="cmt">// True jika CSV berubah (baris baru di-append)</span>
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// 1.1 cutoff &amp; latest tersimpan</span>
+    cutoff = most_recent_trading_day()                  <span class="cmt">// price_fetcher.py</span>
+    have   = latest_price_date(paths['cpo_raw'])        <span class="cmt">// local_csv_writer.py</span>
+
+    <span class="kw">IF</span> have <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> have &gt;= cutoff <span class="kw">THEN</span>
+        log("Price CSV is current; skip fetch")
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 1.2 fetch latest OHLCV via investiny</span>
+    price = fetch_latest_price()                        <span class="cmt">// lookback adaptif 90/365/1095 hari</span>
+    <span class="kw">IF</span> price <span class="kw">IS NULL</span> <span class="kw">THEN</span>
+        log("fetch_latest_price returned None")
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>
+    <span class="kw">END IF</span>
+
+    <span class="kw">IF</span> have <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> price.date &lt;= have <span class="kw">THEN</span>
+        log("Fetched price not newer than CSV; skip")
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 1.3 append ke CSV lokal (idempoten by date)</span>
+    appended = append_price_row_indonesian(paths['cpo_raw'], price)
+    <span class="kw">IF</span> appended = <span class="kw">FALSE</span> <span class="kw">THEN</span>
+        log("Price already present in CSV (idempotent skip)")
+        <span class="kw">RETURN</span> <span class="kw">FALSE</span>
+    <span class="kw">END IF</span>
+
+    <span class="cmt">// 1.4 re-run preprocessing pipeline → engineered CSV</span>
+    preprocess_price_csv(paths['cpo_raw'], paths['cpo_preproc'])
+
+    <span class="cmt">// 1.5 reconcile CSV → Firestore D1 (batch upsert; idempoten)</span>
+    csv_prices = load_prices_from_csv(paths['cpo_preproc'])   <span class="cmt">// list[dict]</span>
+    n_written  = reconcile_prices(db, csv_prices)             <span class="cmt">// reconcile.py:55</span>
+    log("Price reconcile: " + n_written + " rows upserted to D1 daily_prices")
+
+    <span class="kw">RETURN</span> <span class="kw">TRUE</span>
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">FUNCTION fetch_latest_price (helper 1.2)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">FUNCTION</span> fetch_latest_price() <span class="kw">RETURNS</span> dict | NULL
+<span class="src">SOURCE</span>: scheduler/price_fetcher.py :: fetch_latest_price
+
+<span class="kw">BEGIN</span>
+    end = now()
+    data = <span class="kw">NULL</span>
+    <span class="kw">FOR</span> lookback_days <span class="kw">IN</span> [90, 365, 1095] <span class="kw">DO</span>
+        start = end - lookback_days
+        <span class="kw">TRY</span>
+            data = investiny.historical_data(
+                investing_id = 992745,                 <span class="cmt">// CPO FCPO continuous</span>
+                from_date    = start.strftime("MM/DD/YYYY"),
+                to_date      = end.strftime("MM/DD/YYYY"),
+                interval     = "D"
+            )
+            <span class="kw">IF</span> data <span class="kw">IS NOT EMPTY</span> <span class="kw">THEN BREAK</span>
+        <span class="kw">CATCH</span> Exception <span class="kw">AS</span> e
+            log warn; continue                          <span class="cmt">// retry dengan window lebih lebar</span>
+        <span class="kw">END TRY</span>
+    <span class="kw">END FOR</span>
+
+    <span class="kw">IF</span> data <span class="kw">IS EMPTY</span> <span class="kw">THEN RETURN</span> <span class="kw">NULL</span>
+
+    norm  = lowercase_keys(data)
+    dates  = norm.date; closes = norm.close
+    <span class="kw">IF</span> dates <span class="kw">IS NULL</span> <span class="kw">OR</span> closes <span class="kw">IS NULL</span> <span class="kw">THEN RETURN</span> <span class="kw">NULL</span>
+
+    idx = -1                                            <span class="cmt">// ambil row terakhir (most recent)</span>
+    trade_date = parse_to_ISO(dates[idx])
+    <span class="kw">IF</span> trade_date <span class="kw">IS NULL</span> <span class="kw">THEN RETURN</span> <span class="kw">NULL</span>
+
+    <span class="kw">RETURN</span> {
+        date   : trade_date,
+        open   : float(norm.open[idx]   <span class="kw">OR</span> closes[idx]),
+        high   : float(norm.high[idx]   <span class="kw">OR</span> closes[idx]),
+        low    : float(norm.low[idx]    <span class="kw">OR</span> closes[idx]),
+        close  : float(closes[idx]),
+        volume : float(norm.volume[idx] <span class="kw">OR</span> 0)
+    }
+<span class="kw">END FUNCTION</span>
+</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>

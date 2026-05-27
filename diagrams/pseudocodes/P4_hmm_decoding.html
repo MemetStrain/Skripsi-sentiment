@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pseudocode — P4 HMM State Decoding</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .diagram-card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 16px rgba(0,0,0,.06); padding: 1.5rem; overflow-x: auto; }
+    .section-heading { color: #0f766e; border-bottom: 2px solid #99f6e4; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+    pre.algorithm { background: #0f172a; color: #e2e8f0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.82rem; line-height: 1.45; padding: 1.25rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
+    pre.algorithm .kw  { color: #5eead4; font-weight: bold; }
+    pre.algorithm .cmt { color: #94a3b8; font-style: italic; }
+    pre.algorithm .src { color: #fde68a; }
+    .nav-pill { display: inline-block; background: #f0fdfa; border: 1px solid #99f6e4; color: #0f766e; border-radius: 9999px; padding: 0.2rem 0.9rem; font-size: 0.8rem; text-decoration: none; }
+    .nav-pill:hover { background: #ccfbf1; }
+    .nav-pill.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+    @media print { .no-print { display: none; } pre.algorithm { background: #f8fafc; color: #0f172a; } pre.algorithm .kw { color: #0d9488; } pre.algorithm .cmt { color: #475569; } pre.algorithm .src { color: #b45309; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-teal-600 text-white py-5 px-6 shadow-md no-print">
+    <div class="max-w-5xl mx-auto">
+      <p class="text-teal-200 text-sm font-medium tracking-wide uppercase">Sistem Prediksi Harga CPO · Dokumentasi Skripsi</p>
+      <h1 class="text-2xl font-bold mt-1">Pseudocode — P4 HMM State Decoding</h1>
+      <p class="text-teal-100 text-sm mt-1">Notasi algoritmik untuk <code>scheduler/hmm_updater.py::update_hmm_states</code> + online forward filter.</p>
+    </div>
+  </header>
+
+  <nav class="max-w-5xl mx-auto px-4 pt-5 flex flex-wrap gap-2 no-print">
+    <a href="../data_flow_diagram.html" class="nav-pill">← DFD</a>
+    <a href="../flowcharts/P4_hmm_decoding.html" class="nav-pill">P4 Flowchart</a>
+    <a href="../structure_charts/P4_hmm_decoding.html" class="nav-pill">P4 Structure Chart</a>
+    <a href="index.html" class="nav-pill">Pseudocodes (Index)</a>
+    <a href="P1_price_acquisition.html" class="nav-pill">P1 Price</a>
+    <a href="P2_news_acquisition.html" class="nav-pill">P2 News</a>
+    <a href="P3_sentiment.html" class="nav-pill">P3 Sentiment</a>
+    <a href="P4_hmm_decoding.html" class="nav-pill active">P4 HMM</a>
+    <a href="P5_forecast_precompute.html" class="nav-pill">P5 Forecast</a>
+    <a href="P6_dashboard.html" class="nav-pill">P6 Dashboard</a>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">ALGORITHM update_hmm_states</h2>
+      <p class="text-sm text-slate-600 mb-3">Mirror 1:1 dari <a href="../flowcharts/P4_hmm_decoding.html" class="text-teal-700 underline">flowchart P4</a>. Sub-proses 4.1–4.5. Parameter HMM beku — tidak ada refit saat runtime.</p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">ALGORITHM</span> update_hmm_states
+<span class="src">SOURCE</span>: scheduler/hmm_updater.py :: update_hmm_states
+
+<span class="kw">INPUT</span>:
+    db               <span class="cmt">// Firestore client</span>
+    write_existing   <span class="cmt">// bool = False (default: skip tanggal yang sudah ada di D4)</span>
+
+<span class="kw">OUTPUT</span>:
+    int              <span class="cmt">// jumlah dokumen yang ditulis ke D4</span>
+
+<span class="kw">BEGIN</span>
+    <span class="cmt">// 4.1 load frozen HMM params dari D5 (hmm_models/Daily)</span>
+    params = read_hmm_params(db, 'Daily')            <span class="cmt">// firestore_writer.py:140</span>
+    <span class="kw">IF</span> params <span class="kw">IS NULL</span> <span class="kw">THEN</span>
+        log("No HMM model found in D5; skip")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+    feat_cols     = params.feat_cols
+    vol_window    = params.vol_window
+    norm_window   = params.norm_window
+    state_to_label = params.state_to_label           <span class="cmt">// e.g. {0: "Bearish", 1: "Bullish", 2: "Neutral"}</span>
+
+    <span class="cmt">// 4.2 load seluruh harga dari D1 (daily_prices), urut ascending</span>
+    price_rows = db.collection('daily_prices').order_by('date').stream()
+    <span class="kw">IF</span> price_rows <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("No price data found; skip")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+    price_df = to_dataframe(price_rows)              <span class="cmt">// kolom: date, close</span>
+
+    <span class="cmt">// 4.3 bangun feature matrix HMM (5 fitur Z-score)</span>
+    feat_df = _build_hmm_features(price_df, vol_window, norm_window)
+                                                     <span class="cmt">// hmm_updater.py:79</span>
+    <span class="kw">IF</span> feat_df <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("Feature matrix empty after NaN drop; skip")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+    X = feat_df[feat_cols].values                    <span class="cmt">// ndarray shape (T, 5)</span>
+
+    <span class="cmt">// 4.4 dekode states via online forward filter</span>
+    model  = _hmm_from_params(params)                <span class="cmt">// hmm_updater.py:112</span>
+    states = _forward_filter(model, X)               <span class="cmt">// hmm_updater.py:135 → ndarray[int] shape (T,)</span>
+
+    <span class="cmt">// 4.5 filter + batch write ke D4</span>
+    <span class="kw">IF</span> write_existing = <span class="kw">FALSE</span> <span class="kw">THEN</span>
+        existing_ids = { doc.id <span class="kw">FOR</span> doc <span class="kw">IN</span> db.collection('hmm_states').stream() }
+    <span class="kw">ELSE</span>
+        existing_ids = {}
+    <span class="kw">END IF</span>
+
+    to_write = []
+    <span class="kw">FOR</span> i <span class="kw">IN</span> 0 .. len(feat_df) - 1 <span class="kw">DO</span>
+        date_str = feat_df.index[i].strftime("YYYY-MM-DD")
+        doc_id   = "Daily_" + date_str
+        <span class="kw">IF</span> doc_id <span class="kw">IN</span> existing_ids <span class="kw">THEN CONTINUE</span>
+        to_write.append({
+            doc_id    : doc_id,
+            date      : date_str,
+            state     : int(states[i]),
+            label     : state_to_label[states[i]],
+            frequency : "Daily"
+        })
+    <span class="kw">END FOR</span>
+
+    <span class="kw">IF</span> to_write <span class="kw">IS EMPTY</span> <span class="kw">THEN</span>
+        log("All dates already present in D4; 0 writes")
+        <span class="kw">RETURN</span> 0
+    <span class="kw">END IF</span>
+
+    n_written = write_hmm_states_batch(db, to_write) <span class="cmt">// firestore_writer.py:73</span>
+    log("Wrote " + n_written + " states to D4 hmm_states")
+    <span class="kw">RETURN</span> n_written
+<span class="kw">END</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">FUNCTION _build_hmm_features (helper 4.3)</h2>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">FUNCTION</span> _build_hmm_features(price_df, vol_window, norm_window) <span class="kw">RETURNS</span> DataFrame
+<span class="src">SOURCE</span>: scheduler/hmm_updater.py :: _build_hmm_features
+
+<span class="kw">BEGIN</span>
+    df = price_df.copy()
+    df['Log_Return'] = log(df.close / df.close.shift(1))
+
+    <span class="cmt">// volatilitas rolling (std log-return)</span>
+    df['Volatility']  = df['Log_Return'].rolling(vol_window).std()
+
+    <span class="cmt">// RSI-14 dinormalisasi ke [-1, +1]</span>
+    df['RSI']         = ta.RSI(df.close, timeperiod=14)
+    df['RSI_norm']    = (df['RSI'] - 50) / 50
+
+    <span class="cmt">// MACD = EMA12 - EMA26</span>
+    df['MACD'], _, _  = ta.MACD(df.close, fastperiod=12, slowperiod=26, signalperiod=9)
+
+    <span class="cmt">// Bollinger Band Width = (upper - lower) / middle</span>
+    upper, mid, lower = ta.BBANDS(df.close, timeperiod=20)
+    df['BB_Width']    = (upper - lower) / mid
+
+    <span class="cmt">// Z-score tiap fitur dalam rolling window norm_window (default 252d)</span>
+    <span class="kw">FOR</span> col <span class="kw">IN</span> ['Log_Return', 'Volatility', 'MACD', 'BB_Width'] <span class="kw">DO</span>
+        mu             = df[col].rolling(norm_window).mean()
+        sigma          = df[col].rolling(norm_window).std()
+        df[col + '_Z'] = (df[col] - mu) / sigma.replace(0, NaN)
+    <span class="kw">END FOR</span>
+
+    feat_df = df[['Log_Return_Z', 'Volatility_Z', 'RSI_norm', 'MACD_Z', 'BB_Width_Z']].dropna()
+    <span class="kw">RETURN</span> feat_df
+<span class="kw">END FUNCTION</span>
+</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold section-heading">FUNCTION _forward_filter (helper 4.4)</h2>
+      <p class="text-sm text-slate-600 mb-3">
+        Online forward filter: setiap timestep hanya melihat observasi sampai saat itu
+        (O<sub>1..t</sub>), sehingga state historis <em>tidak berubah</em> saat data baru tiba
+        (berbeda dengan Viterbi yang merevisi seluruh sequence).
+      </p>
+      <div class="diagram-card">
+<pre class="algorithm"><span class="kw">FUNCTION</span> _forward_filter(model, X) <span class="kw">RETURNS</span> ndarray[int]
+<span class="src">SOURCE</span>: scheduler/hmm_updater.py :: _forward_filter
+
+<span class="kw">INPUT</span>:
+    model   <span class="cmt">// GaussianHMM dengan startprob_, transmat_, means_, covars_</span>
+    X       <span class="cmt">// ndarray shape (T, n_features) — feature matrix dari _build_hmm_features</span>
+
+<span class="kw">OUTPUT</span>:
+    states  <span class="cmt">// ndarray[int] shape (T,) — state index per timestep</span>
+
+<span class="kw">BEGIN</span>
+    T       = len(X)
+    n_comp  = model.n_components                     <span class="cmt">// jumlah state HMM</span>
+    states  = zeros(T, dtype=int)
+
+    <span class="cmt">// hitung log-likelihood observasi untuk setiap state: shape (T, n_comp)</span>
+    log_B = model._compute_log_likelihood(X)         <span class="cmt">// multivariate Gaussian per komponen</span>
+    B     = exp(log_B)                               <span class="cmt">// shape (T, n_comp)</span>
+
+    <span class="cmt">// t = 0: alpha = pi * B(x_0), normalisasi</span>
+    alpha    = model.startprob_ * B[0]
+    alpha   /= sum(alpha)                            <span class="cmt">// normalisasi → probabilitas</span>
+    states[0] = argmax(alpha)
+
+    <span class="cmt">// t = 1 .. T-1: forward pass</span>
+    <span class="kw">FOR</span> t <span class="kw">IN</span> 1 .. T - 1 <span class="kw">DO</span>
+        <span class="cmt">// alpha_t = normalize( A^T · alpha_{t-1} ⊙ B(x_t) )</span>
+        <span class="cmt">// A = transmat_, shape (n_comp, n_comp); A[i,j] = P(q_t=j | q_{t-1}=i)</span>
+        alpha      = (model.transmat_.T @ alpha) * B[t]
+        denom      = sum(alpha)
+        <span class="kw">IF</span> denom &gt; 0 <span class="kw">THEN</span>
+            alpha /= denom
+        <span class="kw">ELSE</span>
+            alpha = ones(n_comp) / n_comp             <span class="cmt">// uniform fallback jika underflow</span>
+        <span class="kw">END IF</span>
+        states[t] = argmax(alpha)
+    <span class="kw">END FOR</span>
+
+    <span class="kw">RETURN</span> states
+<span class="kw">END FUNCTION</span>
+</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-12 py-5 bg-slate-100 border-t border-slate-200 text-center text-xs text-slate-500 no-print">
+    Sistem Prediksi Harga CPO · Universitas Bina Nusantara · Dokumentasi Skripsi
+  </footer>
+
+</body>
+</html>
