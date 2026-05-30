@@ -46,6 +46,7 @@ if _THIS_DIR not in sys.path:
 
 from cpo_hmm_states import (  # noqa: E402  reuse production HMM helpers, do not modify
     COVARIANCE_TYPE,
+    DATA_END,
     N_ITER,
     RANDOM_SEED,
     TOL,
@@ -92,6 +93,10 @@ def _load_cpo_variables(path: str) -> pd.DataFrame:
         )
     df = pd.read_csv(path, parse_dates=["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
+    # Cap to the frozen modeling window upper bound (2026-02-28) so HMM
+    # validation numbers respect the same window as cpo_hmm_states.py.
+    # Single source of truth: config.dates via cpo_hmm_states.DATA_END.
+    df = df[df["Date"] <= DATA_END].reset_index(drop=True)
     required = ["Date", "Close", "Log_Return", "RSI", "MACD", "Bollinger_Band_Width"]
     missing = [c for c in required if c not in df.columns]
     if missing:

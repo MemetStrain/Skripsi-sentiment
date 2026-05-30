@@ -34,7 +34,6 @@ LAG_FEATURES: Dict[str, List[int]] = {
     # CPO base (same-day values; `Price`/`Return` derived from `Close`).
     "Price":                [1, 2, 3],
     "Return":               [1, 2],
-    "Volume":               [1],
     "Log_Return":           [1, 2, 3],
 
     # CPO technical indicators (legacy non-lag -> `_lag1`).
@@ -51,7 +50,8 @@ LAG_FEATURES: Dict[str, List[int]] = {
 
     # HMM features
     "HMM_Volatility":       [1],
-    "HMM_State":            [1, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    # "HMM_State":            [1, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    "HMM_State":            [1],
     "HMM_Neutral":          [1],
     "HMM_Bearish":          [1],
     "HMM_Bullish":          [1],
@@ -62,7 +62,8 @@ LAG_FEATURES: Dict[str, List[int]] = {
     "Negative_Prob":        [1],
     "Neutral_Prob":         [1],
     "Confidence":           [1],
-    "Sentiment_Score":      [1, 3, 5, 10, 20, 30],
+    # "Sentiment_Score":      [1, 3, 5, 10, 20, 30],
+    "Sentiment_Score":      [1, 3, 5],
 
     # Interactions
     "Sentiment_x_Return":   [1],

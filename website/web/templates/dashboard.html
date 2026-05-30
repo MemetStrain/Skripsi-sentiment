@@ -1069,8 +1069,9 @@
             const tied   = !(margin >= 0.05);   // within ~0.05 MAPE points = noise
             const lo = Math.min(...mapes.map(d => d.mape)), hi = Math.max(...mapes.map(d => d.mape));
             const barH = mp => (hi - lo < 1e-6) ? 24 : Math.round(18 + (hi - mp) / (hi - lo) * 12);
+            const TIED_THRESH = 0.05;
             const bars = mapes.map(d => {
-                const win = d.cfg === best.cfg;
+                const win = d.mape - best.mape < TIED_THRESH;
                 return `<div class="flex-1 flex flex-col items-center gap-0.5" title="${d.cfg} · ${d.variant} · MAPE ${kiFmt(d.mape, '%')}">
                     <span class="w-full rounded-t" style="height:${barH(d.mape)}px; background:${win ? '#0f766e' : '#cbd5e1'}"></span>
                     <span class="text-xs ${win ? 'text-primary font-semibold' : 'text-slate-400'}">${d.cfg}</span></div>`;

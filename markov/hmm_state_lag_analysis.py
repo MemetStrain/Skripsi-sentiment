@@ -29,6 +29,11 @@ import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr, f_oneway
 
+# Canonical date window -- single source of truth for the whole pipeline
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+from config.dates import FULL_START, TRAIN_END   # noqa: E402
+
 
 STATES_CSV    = "output/hmm_states_results_Daily.csv"
 STATE_STATS_CSV = "output/hmm_states_stats_Daily.csv"
@@ -38,9 +43,11 @@ OUTPUT_MEANS_CSV = "output/hmm_lag_state_means.csv"
 # Maximum lag (trading days) to search. Lag 0 = same day.
 MAX_LAG = 60
 
-# Date range matching the HMM training data
-TRAIN_START = "2015-01-01"
-TRAIN_END   = "2024-12-31"
+# Training date window -- imported from canonical config.
+# FULL_START (2015-08-03): first usable date after HMM warmup data loss.
+# TRAIN_END  (2024-12-31): lag search must NOT touch the test window.
+TRAIN_START = FULL_START
+# TRAIN_END already imported from config
 
 
 def _build_state_score_map(stats_path: Path) -> dict[int, float]:
@@ -238,6 +245,32 @@ def main() -> None:
         print(f"  {'-'*22}  {'-'*5}  {'-'*8}  {'-'*8}")
         for _, r in means.iterrows():
             print(f"  {r['State_Label']:<22}  {int(r['n']):>5}  {r['mean_pct']:>8.3f}  {r['std_pct']:>8.3f}")
+
+    # ── Multiple-comparison correction (Holm and Benjamini-Hochberg) ────────────
+    # Many lags are tested; without correction a lag will appear significant by
+    # chance alone. Both raw and corrected p-values are reported so the thesis
+    # can cite both (convention: alpha=0.05).
+    try:
+        from statsmodels.stats.multitest import multipletests
+        valid_mask = results["spearman_p"].notna()
+        raw_p = results.loc[valid_mask, "spearman_p"].values
+
+        _, p_holm, _, _   = multipletests(raw_p, alpha=0.05, method="holm")
+        _, p_bh,   _, _   = multipletests(raw_p, alpha=0.05, method="fdr_bh")
+
+        results["spearman_p_holm"] = np.nan
+        results["spearman_p_bh"]   = np.nan
+        results.loc[valid_mask, "spearman_p_holm"] = p_holm
+        results.loc[valid_mask, "spearman_p_bh"]   = p_bh
+        results["sig_holm"] = results["spearman_p_holm"] < 0.05
+        results["sig_bh"]   = results["spearman_p_bh"]   < 0.05
+
+        sig_lags = results[results["sig_bh"]]["lag"].tolist()
+        print(f"\n  Multiple-comparison correction (Spearman p-values, n={valid_mask.sum()} tests):")
+        print(f"  Lags significant after B-H (FDR 5%)  : {sig_lags}")
+        print(f"  Lags significant after Holm (FWER 5%) : {results[results['sig_holm']]['lag'].tolist()}")
+    except ImportError:
+        print("\n  NOTE: statsmodels not installed -- skipping MCC. pip install statsmodels")
 
     # ── Save ────────────────────────────────────────────────────────────────────
     results.to_csv(out_lag_path, index=False)

@@ -174,21 +174,54 @@ def pick_winners_by_base_rmse(table_46: pd.DataFrame) -> Dict[int, str]:
     return winners
 
 
-def build_table_4_7_csa(winners: Dict[int, str], out_dir: Path) -> pd.DataFrame:
-    """Tabel 4.7 — CSA testing metrics for the winning ablation per horizon."""
+def build_table_4_7_csa(winners: Dict[int, str], out_dir: Path,
+                        *, strict: bool = True) -> pd.DataFrame:
+    """Tabel 4.7 — metrik CSA winner per-horizon.
+
+    strict=True: error bila ADA winner tanpa baris CSA, supaya tabel tak
+    pernah ter-emit tidak lengkap tanpa sinyal kegagalan.
+    """
     rows: List[dict] = []
+    missing: List[Tuple[int, str]] = []           # (horizon, tag) tanpa CSA
     for h, tag in sorted(winners.items()):
         r = _read_metric_row(tag, h, "CSA")
         if r:
             rows.append(r)
+        else:
+            missing.append((h, tag))              # catat, jangan dilewati diam2
+    if missing and strict:
+        raise RuntimeError(                       # gagalkan run, jangan diam2
+            f"CSA tidak lengkap: {len(missing)}/{len(winners)} winner tanpa "
+            f"baris CSA -> {missing}. Jalankan ulang CSA pass untuk sel ini "
+            f"sebelum membangun Tabel 4.7."
+        )
     if not rows:
-        return pd.DataFrame()
+        raise RuntimeError("Tidak ada baris CSA untuk Tabel 4.7.")
     df = pd.DataFrame(rows)[["Horizon", "Config", "Ablation", "Optimization",
                              "MAPE", "sMAPE", "RMSE",
                              "Directional_Accuracy", "n_samples"]]
     df.to_csv(out_dir / "tabel_4.7_csa_winners_testing.csv", index=False)
     return df
 
+def _assert_winner_outputs_fresh(winners: Dict[int, str],
+                                 run_started_at: float) -> None:
+    """Pastikan tiap sel winner punya results CSV yang ditulis setelah run mulai.
+
+    Mencegah bundle 'ber-tanggal-hari-ini' dibangun dari output_horizons basi.
+    """
+    stale: List[str] = []
+    for h, tag in winners.items():
+        p = _results_csv(tag, h)
+        if not p.exists():
+            raise FileNotFoundError(f"Results hilang untuk {tag} h{h}: {p}")
+        if p.stat().st_mtime < run_started_at:    # ditulis sebelum run mulai
+            stale.append(f"{tag} h{h}")
+    if stale:
+        raise RuntimeError(
+            f"Output basi (ditulis sebelum run ini): {stale}. "
+            f"Jangan pakai --skip-base-pass/--skip-csa-pass terhadap "
+            f"output_horizons lama."
+        )
 
 # ----- DM HLN helpers -------------------------------------------------------
 
@@ -421,7 +454,7 @@ def write_summary(out_dir: Path,
       f"cv={csa_config['cv_folds']}.")
     P("")
     P("CSA was run only on the 7 winning (Config, Horizon) cells picked by "
-      "minimum BASE MAPE — the user's scoped plan in lieu of the full "
+      "minimum BASE RMSE — the user's scoped plan in lieu of the full "
       "4 x 7 CSA grid. Pairwise DM tests therefore use BASE for fairness "
       "(Tabel 4.8); Tabel 4.9 confirms whether CSA actually improved over "
       "BASE on each winner.")
@@ -583,6 +616,9 @@ def main() -> int:
     ap.add_argument("--skip-csa-pass", action="store_true",
                     help="Skip CSA on winners; Tabel 4.7 + 4.9 will be empty.")
     ap.add_argument("--out-dir", type=str, default="")
+    ap.add_argument("--force-deliverables", action="store_true",
+                    help="Skip freshness check and build deliverables from "
+                         "existing output_horizons CSVs as-is.")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir) if args.out_dir else \
@@ -612,6 +648,8 @@ def main() -> int:
                   "cv_folds": args.csa_cv_folds}, only=winner_pairs)
 
     print("\n[Step 4] Build deliverables")
+    if not args.force_deliverables:
+        _assert_winner_outputs_fresh(winners, t_total)
     t47 = build_table_4_7_csa(winners, out_dir)
     t48 = build_table_4_8_dm_base_pairwise(out_dir)
     t49 = build_table_4_9_dm_csa_vs_base(winners, out_dir)

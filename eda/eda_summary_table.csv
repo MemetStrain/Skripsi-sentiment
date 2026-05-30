@@ -1,0 +1,5 @@
+variable,label,scale,count,mean,std,skewness,kurtosis,SW_p,DA_p,JB_p,normality,recommended_test,contemp_coef,contemp_p,contemp_n,test_used
+Close,CPO Close Price (MYR/ton),ratio,2534,3394.212707,1125.277824,0.9116,0.948,0.0,0.0,0.0,NOT normal,Spearman,0.0446,0.024629,2533,Spearman
+Log_Return,Log Return y_t = ln(Close_t / Close_{t-1}),ratio,2533,0.000267,0.018391,-0.2458,3.838,0.0,0.0,0.0,NOT normal,Spearman,,,0,self
+Sentiment_Score,FinBERT Title Sentiment Score,interval,2534,0.017011,0.496593,0.053,-0.328,0.0,0.00019,0.001885,NOT normal,Spearman,0.0273,0.16889,2533,Spearman
+State,HMM State (encoded integer 0-2),ordinal,2534,0.810182,0.855926,0.3735,-1.5336,,,,N/A (ordinal),Spearman + Kruskal-Wallis,0.0013,0.946357,2533,Spearman + Kruskal-Wallis

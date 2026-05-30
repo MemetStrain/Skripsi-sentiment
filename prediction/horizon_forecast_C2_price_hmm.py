@@ -32,7 +32,7 @@ import seaborn as sns
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.forecast_utils import (
     PROJECT_ROOT, HORIZONS, BASE_PARAMS, VAL_CUTOFF, MODELS_DIR,
-    CPO_VARS_DROP,
+    CPO_VARS_DROP, clip_to_modeling_window,
     prepare_cv_test_split, create_sklearn_model,
     calculate_metrics, csa_objective_sklearn, run_csa,
     save_model_artifacts, save_feature_importance,
@@ -92,6 +92,10 @@ def load_and_merge_data(interval: str) -> pd.DataFrame:
     print(f"  Merging datasets...")
     merged = cpo.merge(hmm, on='Date', how='inner', suffixes=('', '_hmm'))
     merged = merged.sort_values('Date').reset_index(drop=True)
+
+    # Clip to the frozen modeling window [2015-08-03 .. 2026-02-28] so the test
+    # holdout never absorbs data appended past the evaluation cutoff.
+    merged = clip_to_modeling_window(merged)
 
     if 'HMM_State_Label' in merged.columns:
         top_states = merged['HMM_State_Label'].value_counts().head(5).index.tolist()

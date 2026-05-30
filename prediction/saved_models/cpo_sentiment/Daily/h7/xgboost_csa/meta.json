@@ -12,7 +12,6 @@
     "Price_lag3",
     "Return_lag1",
     "Return_lag2",
-    "Volume_lag1",
     "Log_Return_lag1",
     "Log_Return_lag2",
     "Log_Return_lag3",
@@ -34,18 +33,15 @@
     "Sentiment_Score_lag1",
     "Sentiment_Score_lag3",
     "Sentiment_Score_lag5",
-    "Sentiment_Score_lag10",
-    "Sentiment_Score_lag20",
-    "Sentiment_Score_lag30",
     "Sentiment_x_Return_lag1"
   ],
   "params": {
-    "n_estimators": 218,
-    "max_depth": 3,
-    "learning_rate": 0.029957113136295364,
-    "subsample": 0.9421842336044028,
-    "colsample_bytree": 0.8814631437520095,
-    "min_child_weight": 5
+    "n_estimators": 51,
+    "max_depth": 4,
+    "learning_rate": 0.01,
+    "subsample": 0.6941269063227979,
+    "colsample_bytree": 0.6,
+    "min_child_weight": 3
   },
-  "saved_at": "2026-05-23T14:27:54.468118"
+  "saved_at": "2026-05-30T17:58:41.116708"
 }

@@ -47,10 +47,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.forecast_utils import (
     PROJECT_ROOT,
     BASE_PARAMS,
+    VAL_CUTOFF as _CANONICAL_CUTOFF,
     calculate_metrics,
     save_model_artifacts,
     csa_objective_sklearn,
     run_csa,
+    clip_to_modeling_window,
 )
 from feature_engineering import build_unified_features
 
@@ -87,7 +89,7 @@ ABLATION: str = (
 )
 
 # ── Split config ─────────────────────────────────────────────────────────────
-VAL_CUTOFF: str = '2025-01-01'  # data before this = CV; data from this onward = test
+VAL_CUTOFF: str = _CANONICAL_CUTOFF.strftime('%Y-%m-%d')  # sourced from config.dates
 CV_FOLDS:   int = 5             # TimeSeriesSplit folds on pre-cutoff data
 
 # ── XGBoost parameters ────────────────────────────────────────────────────────
@@ -163,6 +165,10 @@ def load_and_merge() -> pd.DataFrame:
         merged = merged.merge(sent, on='Date', how='inner')
 
     merged = merged.sort_values('Date').reset_index(drop=True)
+
+    # Clip to the frozen modeling window [2015-08-03 .. 2026-02-28] so the test
+    # holdout never absorbs data appended past the evaluation cutoff.
+    merged = clip_to_modeling_window(merged)
 
     # One-hot encode HMM state label if present (drop the string column)
     if 'HMM_State_Label' in merged.columns:

@@ -43,11 +43,13 @@ State interpretation:
 
 import json
 import os
+import sys
 import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
 from sklearn.cluster import KMeans
 
 warnings.filterwarnings("ignore")
@@ -58,6 +60,13 @@ except ImportError:
     raise ImportError(
         "hmmlearn not installed. Run:  pip install hmmlearn"
     )
+
+# Canonical date window -- single source of truth for the whole pipeline
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config.dates import (  # noqa: E402
+    TEST_START_TS as _TEST_START_TS,
+    TEST_END_TS as TEST_END_TS,
+)
 
 # ─────────────────────────────── CONFIGURATION ────────────────────────────── #
 
@@ -87,11 +96,20 @@ N_RESTARTS  = 50     # Independent K-Means-seeded restarts; best log-L is kept
 TOL         = 1e-4   # EM convergence tolerance
 RANDOM_SEED = 42
 
-# Causal filtering: HMM is fit on Date < FIT_CUTOFF only, and states are
-# decoded for all dates via online forward filter (no Viterbi smoothing).
-# This eliminates lookahead bias in HMM features used by downstream price
-# prediction models — must match VAL_CUTOFF in prediction/utils/forecast_utils.
-FIT_CUTOFF = pd.Timestamp("2025-01-01")
+# Causal filtering: HMM is fit on Date < FIT_CUTOFF only (i.e. <= 2024-12-31),
+# and states are decoded for all dates via online forward filter (no Viterbi
+# smoothing). This eliminates lookahead bias in HMM features used by downstream
+# price prediction models. FIT_CUTOFF matches TEST_START / VAL_CUTOFF so the
+# HMM train window is exactly the modeling train window.
+FIT_CUTOFF = _TEST_START_TS   # 2025-01-01, from config.dates
+
+# Upper bound of the frozen modeling window (2026-02-28, from config.dates).
+# Only the UPPER end is enforced on the raw series: the lower end is governed by
+# the rolling Z-score (252d) + volatility (20d) warmup, which already drops the
+# head to ~2015-08-03. Trimming the tail does NOT change any decoded state for an
+# earlier date (the forward filter is causal), so HMM states for dates up to the
+# cutoff are identical to a run on the full series.
+DATA_END = TEST_END_TS       # 2026-02-28, from config.dates
 
 # Output
 OUTPUT_DIR = "output"
@@ -114,6 +132,11 @@ def load_cpo_variables(filepath: str, frequency: str) -> pd.DataFrame:
 
     df = pd.read_csv(filepath, parse_dates=["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
+
+    # Enforce the frozen modeling window's UPPER bound only. Trimming rows past
+    # DATA_END keeps the decoded state file aligned with the evaluation window;
+    # the head warmup (and thus the start date ~2015-08-03) is unaffected.
+    df = df[df["Date"] <= DATA_END].reset_index(drop=True)
 
     required = ["Date", "Close", "Log_Return", "RSI", "MACD", "Bollinger_Band_Width"]
     missing  = [c for c in required if c not in df.columns]
@@ -625,7 +648,7 @@ def create_visualisations(df: pd.DataFrame, states: np.ndarray,
       2. Log returns coloured by state
       3. Time spent per state (bar chart)
       4. Transition matrix heatmap
-      5. Volatility coloured by state
+      5. Volatility coloured by stateLoaded
       6. Return distribution per state (violin)
       7. BIC curve (model-selection diagnostic)
     """

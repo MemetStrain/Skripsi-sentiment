@@ -12,7 +12,6 @@
     "Price_lag3",
     "Return_lag1",
     "Return_lag2",
-    "Volume_lag1",
     "Log_Return_lag1",
     "Log_Return_lag2",
     "Log_Return_lag3",
@@ -28,5 +27,5 @@
     "Bollinger_Band_Width_lag1"
   ],
   "params": {},
-  "saved_at": "2026-05-24T22:35:39.514771"
+  "saved_at": "2026-05-30T14:31:07.509713"
 }

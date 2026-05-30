@@ -16,11 +16,17 @@ Outputs:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
+
+# Canonical date window -- single source of truth for the whole pipeline
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+from config.dates import FULL_START, TRAIN_END   # noqa: E402
 
 
 AGGREGATE_CSV = "news/output/sentiment_aggregate_Daily_title.csv"
@@ -31,9 +37,11 @@ LAG_CSV = "news/output/lag_search_results.csv"
 # Maximum lag (in trading days) to search. Lag 0 = same-day.
 MAX_LAG = 252
 
-# Date range matching the HMM training data
-TRAIN_START = "2015-01-01"
-TRAIN_END   = "2024-12-31"
+# Training date window -- imported from canonical config.
+# FULL_START (2015-08-03): first usable date after HMM warmup data loss.
+# TRAIN_END  (2024-12-31): lag search must NOT touch the test window.
+TRAIN_START = FULL_START
+# TRAIN_END already imported from config
 
 
 def load_aggregate(path: Path) -> pd.DataFrame:
@@ -175,6 +183,32 @@ def main() -> None:
     print(f"Merged daily frame  -> {out_path}")
 
     results = find_best_lag("FinBERT (Title)", merged["Sentiment_Score"], merged["return_t"], MAX_LAG)
+
+    # Multiple-comparison correction (Holm and Benjamini-Hochberg).
+    # Many lags are tested; without correction a lag will appear significant by
+    # chance alone. Both raw and corrected p-values are reported (alpha=0.05).
+    try:
+        from statsmodels.stats.multitest import multipletests
+        valid_mask = results["pearson_p"].notna()
+        raw_p = results.loc[valid_mask, "pearson_p"].values
+
+        _, p_holm, _, _ = multipletests(raw_p, alpha=0.05, method="holm")
+        _, p_bh,   _, _ = multipletests(raw_p, alpha=0.05, method="fdr_bh")
+
+        results["pearson_p_holm"] = np.nan
+        results["pearson_p_bh"]   = np.nan
+        results.loc[valid_mask, "pearson_p_holm"] = p_holm
+        results.loc[valid_mask, "pearson_p_bh"]   = p_bh
+        results["sig_holm"] = results["pearson_p_holm"] < 0.05
+        results["sig_bh"]   = results["pearson_p_bh"]   < 0.05
+
+        sig_lags_bh   = results[results["sig_bh"]]["lag"].tolist()
+        sig_lags_holm = results[results["sig_holm"]]["lag"].tolist()
+        print(f"\n  Multiple-comparison correction (Pearson p-values, n={valid_mask.sum()} tests):")
+        print(f"  Lags significant after B-H (FDR 5%)  : {sig_lags_bh}")
+        print(f"  Lags significant after Holm (FWER 5%): {sig_lags_holm}")
+    except ImportError:
+        print("\n  NOTE: statsmodels not installed -- skipping MCC. pip install statsmodels")
 
     results.to_csv(lag_path, index=False)
     print(f"\nFull lag results -> {lag_path}")

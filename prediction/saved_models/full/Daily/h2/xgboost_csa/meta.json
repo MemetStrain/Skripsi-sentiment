@@ -12,7 +12,6 @@
     "Price_lag3",
     "Return_lag1",
     "Return_lag2",
-    "Volume_lag1",
     "Log_Return_lag1",
     "Log_Return_lag2",
     "Log_Return_lag3",
@@ -28,15 +27,6 @@
     "Bollinger_Band_Width_lag1",
     "HMM_Volatility_lag1",
     "HMM_State_lag1",
-    "HMM_State_lag3",
-    "HMM_State_lag4",
-    "HMM_State_lag5",
-    "HMM_State_lag6",
-    "HMM_State_lag7",
-    "HMM_State_lag8",
-    "HMM_State_lag9",
-    "HMM_State_lag10",
-    "HMM_State_lag11",
     "HMM_Neutral_lag1",
     "HMM_Bearish_lag1",
     "HMM_Bullish_lag1",
@@ -48,19 +38,16 @@
     "Sentiment_Score_lag1",
     "Sentiment_Score_lag3",
     "Sentiment_Score_lag5",
-    "Sentiment_Score_lag10",
-    "Sentiment_Score_lag20",
-    "Sentiment_Score_lag30",
     "Volatility_x_RSI_lag1",
     "Sentiment_x_Return_lag1"
   ],
   "params": {
     "n_estimators": 50,
     "max_depth": 3,
-    "learning_rate": 0.010009417095018753,
-    "subsample": 0.6052164494095602,
-    "colsample_bytree": 0.8022240323863247,
-    "min_child_weight": 2
+    "learning_rate": 0.011434858780727659,
+    "subsample": 0.6,
+    "colsample_bytree": 0.6992884940655986,
+    "min_child_weight": 10
   },
-  "saved_at": "2026-05-19T11:20:48.496436"
+  "saved_at": "2026-05-30T18:33:50.599845"
 }

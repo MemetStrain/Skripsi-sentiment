@@ -1,0 +1,8 @@
+horizon,winner_config,ablation,variant,n,dm_stat,p_value_raw,significant_raw_0.05,better_raw,p_value_holm,significant_holm_0.05,better_holm
+1,C3,cpo_sentiment,CSA,263,0.5956,0.552,False,tie,1.0,False,tie
+2,C3,cpo_sentiment,CSA,263,-0.316,0.7523,False,tie,1.0,False,tie
+3,C3,cpo_sentiment,CSA,263,-0.6568,0.5119,False,tie,1.0,False,tie
+4,C4,full,CSA,263,-0.3232,0.7468,False,tie,1.0,False,tie
+5,C4,full,CSA,263,0.3685,0.7128,False,tie,1.0,False,tie
+6,C2,cpo_hmm,CSA,275,0.0908,0.9277,False,tie,1.0,False,tie
+7,C2,cpo_hmm,CSA,275,0.3529,0.7244,False,tie,1.0,False,tie

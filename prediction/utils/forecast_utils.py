@@ -25,6 +25,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from crow_search_optimizer import CrowSearchOptimizer, ParameterSpec, CSAResult  # noqa: F401
 
+# Canonical date window -- single source of truth for the whole pipeline
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.dates import (  # noqa: E402
+    VAL_CUTOFF as _VAL_CUTOFF,
+    FULL_START_TS as _FULL_START_TS,
+    FULL_END_TS as _FULL_END_TS,
+)
+
 # =============================================================================
 # Shared constants
 # =============================================================================
@@ -54,11 +62,36 @@ CSA_PARAM_SPACES = {
 
 
 # Hard cutoff: data before this date = train+CV (pre-test); from this date
-# onwards = final test holdout. Set to 2025-01-01 (was 2026-01-01) so the
-# holdout window covers ~16 months (Jan 2025 - Apr 2026 ≈ 315-340 rows),
-# giving the DM HLN tests enough statistical power vs. the ~70-row window
-# the original cutoff produced.
-VAL_CUTOFF = pd.Timestamp('2025-01-01')
+# onwards = final test holdout. Sourced from config.dates.TEST_START so this
+# is always in sync with the canonical pipeline window (2025-01-01).
+VAL_CUTOFF = _VAL_CUTOFF
+
+# Canonical modeling window bounds, re-exported from config.dates so every
+# ablation loader can clip to an identical [FULL_START, FULL_END] span.
+# FULL_START_TS = 2015-08-03 (first usable date after HMM warmup)
+# FULL_END_TS   = 2026-02-28 (end of the frozen evaluation window; the last
+#                 actual trading day in the data is 2026-02-26).
+FULL_START_TS = _FULL_START_TS
+FULL_END_TS   = _FULL_END_TS
+
+
+def clip_to_modeling_window(df: pd.DataFrame,
+                            date_col: str = 'Date') -> pd.DataFrame:
+    """Clip a frame to the canonical modeling window [FULL_START, FULL_END].
+
+    Why this exists: the train/test split only filtered on VAL_CUTOFF (a lower
+    bound), so any data appended past the frozen evaluation window (e.g. live
+    rows after 2026-02-28) silently leaked into the test holdout and changed
+    the reported Bab 4 metrics. Clipping both ends here guarantees every
+    ablation is trained and evaluated on the same fixed span, regardless of how
+    much newer data the source CSVs accumulate.
+
+    Both bounds are inclusive (>= FULL_START_TS and <= FULL_END_TS).
+    """
+    if date_col not in df.columns:
+        raise KeyError(f"clip_to_modeling_window: '{date_col}' column not found")
+    out = df[(df[date_col] >= FULL_START_TS) & (df[date_col] <= FULL_END_TS)]
+    return out.sort_values(date_col).reset_index(drop=True)
 
 
 # Raw same-day OHLCV columns from the CPO file. These should be dropped at load
