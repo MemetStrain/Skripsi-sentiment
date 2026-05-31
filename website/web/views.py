@@ -68,14 +68,21 @@ def dashboard(request):
             'state': d.get('state', 2),
         }
 
-    # Build chart data
+    # Build chart data. Forward-fill HMM state so that price dates with no
+    # matching hmm_states doc (e.g. today before the daily scheduler runs)
+    # inherit the last known regime rather than showing nothing.
+    label_to_int = {'Bearish': 0, 'Bullish': 1, 'Neutral': 2}
     chart_data = []
+    last_state_info: dict | None = None
     for row in price_list:
-        state_info = state_dict.get(row['date'], {'state': None, 'state_label': None})
+        state_info = state_dict.get(row['date'])
+        if state_info is not None:
+            last_state_info = state_info
+        elif last_state_info is not None:
+            state_info = last_state_info          # forward-fill
+        else:
+            state_info = {'state': None, 'state_label': None}
         state_label = state_info['state_label']
-        # Map label to numeric for colour coding (0=Bearish,1=Bullish,2=Neutral).
-        # None for dates with no HMM entry → no background shading (white).
-        label_to_int = {'Bearish': 0, 'Bullish': 1, 'Neutral': 2}
         chart_data.append({
             'date': row['date'],
             'actual': row['close'],

@@ -324,34 +324,63 @@ def build_pt_directional(out_dir: Path) -> Path | None:
     return dst
 
 
-def build_h4_sufficiency(out_dir: Path) -> pd.DataFrame:
-    """H4 sufficiency — C4 BASE vs naive RW per horizon (council 6d honest skill signal)."""
-    rows: List[dict] = []
+def build_h4_sufficiency(out_dir: Path, winners: Dict[int, str]) -> pd.DataFrame:
+    """H4 sufficiency — winner-CSA per horizon vs naive RW (official Tabel 4.20).
+
+    Also writes the legacy C4-BASE file as an appendix artefact.
+    """
+    # --- legacy appendix: C4 BASE vs naive (kept for reference) ---
+    legacy_rows: List[dict] = []
     for h in HORIZONS:
         path = _predictions_csv("full", h)
         if not path.exists():
             continue
-        df = pd.read_csv(path)
-        if "Actual_LogReturn" not in df.columns or "xgboost_base_LogReturn" not in df.columns:
+        df_c4 = pd.read_csv(path)
+        if "Actual_LogReturn" not in df_c4.columns or "xgboost_base_LogReturn" not in df_c4.columns:
             continue
-        y_true = df["Actual_LogReturn"].to_numpy(dtype=float)
-        y_c4   = df["xgboost_base_LogReturn"].to_numpy(dtype=float)
+        y_true = df_c4["Actual_LogReturn"].to_numpy(dtype=float)
+        y_c4   = df_c4["xgboost_base_LogReturn"].to_numpy(dtype=float)
         mask = ~(np.isnan(y_true) | np.isnan(y_c4))
-        err_c4    = y_true[mask] - y_c4[mask]
-        err_naive = y_true[mask] - 0.0          # naive RW predicts lr=0
-        n = int(mask.sum())
-        dm, p = diebold_mariano_test(err_c4, err_naive, h=h, loss="squared")
-        rows.append({
-            "Horizon": h,
-            "n": n,
+        dm, p = diebold_mariano_test(y_true[mask] - y_c4[mask], y_true[mask] - 0.0,
+                                     h=h, loss="squared")
+        legacy_rows.append({
+            "Horizon": h, "n": int(mask.sum()),
             "DM_star": round(dm, 4) if not np.isnan(dm) else float("nan"),
             "p_value": round(p, 4) if not np.isnan(p) else float("nan"),
             "significant_at_0.05": (not np.isnan(p)) and (p < 0.05),
             "better_model": _verdict(dm, p, "C4_full_BASE", "naive_rw"),
         })
-    df = pd.DataFrame(rows)
-    df.to_csv(out_dir / "h4_sufficiency_C4_vs_naive_rw.csv", index=False)
-    return df
+    pd.DataFrame(legacy_rows).to_csv(out_dir / "h4_sufficiency_C4_vs_naive_rw.csv", index=False)
+
+    # --- official: winner-CSA per horizon vs naive (Tabel 4.20) ---
+    rows: List[dict] = []
+    for h in HORIZONS:
+        tag = winners[h]
+        path = _predictions_csv(tag, h)
+        if not path.exists():
+            print(f"  [H4] WARNING: predictions missing for {tag} h{h}, skipping")
+            continue
+        df = pd.read_csv(path)
+        if "Actual_LogReturn" not in df.columns or "xgboost_csa_LogReturn" not in df.columns:
+            print(f"  [H4] WARNING: required columns missing in {tag} h{h}, skipping")
+            continue
+        y_true = df["Actual_LogReturn"].to_numpy(dtype=float)
+        y_win  = df["xgboost_csa_LogReturn"].to_numpy(dtype=float)
+        mask   = ~(np.isnan(y_true) | np.isnan(y_win))
+        err_win, err_naive = y_true[mask] - y_win[mask], y_true[mask] - 0.0
+        dm, p = diebold_mariano_test(err_win, err_naive, h=h, loss="squared")
+        rows.append({
+            "Horizon": h,
+            "Winner_Config": TAG_TO_CONFIG[tag],
+            "n": int(mask.sum()),
+            "DM_star": round(dm, 4) if not np.isnan(dm) else float("nan"),
+            "p_value": round(p, 4) if not np.isnan(p) else float("nan"),
+            "significant_at_0.05": (not np.isnan(p)) and (p < 0.05),
+            "better_model": _verdict(dm, p, f"{TAG_TO_CONFIG[tag]}_CSA", "naive_rw"),
+        })
+    out = pd.DataFrame(rows)
+    out.to_csv(out_dir / "h4_sufficiency_winnerCSA_vs_naive_rw.csv", index=False)
+    return out
 
 
 def _verdict(dm: float, p: float, label_a: str, label_b: str) -> str:
@@ -517,10 +546,16 @@ def write_summary(out_dir: Path,
     P(_md_table(pt))
     P("")
 
-    P("## H4 sufficiency — C4 BASE vs naive random walk")
+    P("## H4 sufficiency — winner-CSA per horizon vs naive random walk (Tabel 4.20)")
     P("")
-    P("Source: `h4_sufficiency_C4_vs_naive_rw.csv`. Naive RW predicts "
-      "log-return = 0, so its forecast error equals the realised log-return.")
+    P("Source: `h4_sufficiency_winnerCSA_vs_naive_rw.csv`. "
+      "Pengujian dilakukan pada **winner per horizon varian CSA** (bukan C4 BASE). "
+      "Naive RW predicts log-return = 0 sehingga error-nya sama dengan "
+      "log-return aktual. DM HLN-corrected, squared loss, ruang log-return. "
+      "DM* negatif + p<0.05 → winner lebih baik dari naive; "
+      "DM* positif + p<0.05 → naive lebih baik. "
+      "File lampiran `h4_sufficiency_C4_vs_naive_rw.csv` berisi uji lama "
+      "(C4 BASE vs naive) untuk referensi.")
     P("")
     P(_md_table(h4))
     P("")
@@ -655,7 +690,7 @@ def main() -> int:
     t49 = build_table_4_9_dm_csa_vs_base(winners, out_dir)
     pt_csv = build_pt_directional(out_dir)
     pt_df = pd.read_csv(pt_csv) if pt_csv is not None else pd.DataFrame()
-    h4   = build_h4_sufficiency(out_dir)
+    h4   = build_h4_sufficiency(out_dir, winners)
     h2_i = build_h2_feature_importance(out_dir)
     h2_a = build_h2_acf(out_dir)
     build_figure_4_3(t46, t47, out_dir)

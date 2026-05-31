@@ -170,19 +170,19 @@ Source: `pt_directional_Daily_testing.csv`. PT(1992) is per-config (H0: arah pre
 |         7 | testing | csa       | C3_cpo_sentiment | 230 |  47.8261 |   2.14446  |   0.015998 | True                  |
 |         2 | testing | csa       | C4_full          | 226 |  48.6726 |  -0.31503  |   0.623631 | False                 |
 
-## H4 sufficiency — C4 BASE vs naive random walk
+## H4 sufficiency — winner-CSA per horizon vs naive random walk (Tabel 4.20)
 
-Source: `h4_sufficiency_C4_vs_naive_rw.csv`. Naive RW predicts log-return = 0, so its forecast error equals the realised log-return.
+Source: `h4_sufficiency_winnerCSA_vs_naive_rw.csv`. Pengujian dilakukan pada **winner per horizon varian CSA** (bukan C4 BASE). Naive RW predicts log-return = 0 sehingga error-nya sama dengan log-return aktual. DM HLN-corrected, squared loss, ruang log-return. DM* negatif + p<0.05 → winner lebih baik dari naive; DM* positif + p<0.05 → naive lebih baik. File lampiran `h4_sufficiency_C4_vs_naive_rw.csv` berisi uji lama (C4 BASE vs naive) untuk referensi.
 
-|   Horizon |   n |   DM_star |   p_value | significant_at_0.05   | better_model   |
-|----------:|----:|----------:|----------:|:----------------------|:---------------|
-|         1 | 230 |    3.6829 |    0.0003 | True                  | naive_rw       |
-|         2 | 230 |    2.6135 |    0.0096 | True                  | naive_rw       |
-|         3 | 230 |    3.2517 |    0.0013 | True                  | naive_rw       |
-|         4 | 230 |    2.1711 |    0.0309 | True                  | naive_rw       |
-|         5 | 230 |    2.837  |    0.005  | True                  | naive_rw       |
-|         6 | 230 |    2.716  |    0.0071 | True                  | naive_rw       |
-|         7 | 230 |    3.2565 |    0.0013 | True                  | naive_rw       |
+|   Horizon | Winner_Config   |   n |   DM_star |   p_value | significant_at_0.05   | better_model   |
+|----------:|:----------------|----:|----------:|----------:|:----------------------|:---------------|
+|         1 | C2              | 230 |    1.2338 |    0.2185 | False                 | tie            |
+|         2 | C4              | 230 |    0.481  |    0.631  | False                 | tie            |
+|         3 | C3              | 230 |   -0.1485 |    0.8821 | False                 | tie            |
+|         4 | C2              | 230 |    0.8763 |    0.3818 | False                 | tie            |
+|         5 | C2              | 230 |    1.0438 |    0.2977 | False                 | tie            |
+|         6 | C2              | 230 |    1.0326 |    0.3029 | False                 | tie            |
+|         7 | C3              | 230 |    1.4026 |    0.1621 | False                 | tie            |
 
 ## H2 — feature importance C1 BASE h=1 (top 5)
 

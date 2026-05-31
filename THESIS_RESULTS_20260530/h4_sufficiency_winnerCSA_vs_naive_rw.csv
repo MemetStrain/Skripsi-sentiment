@@ -1,0 +1,8 @@
+Horizon,Winner_Config,n,DM_star,p_value,significant_at_0.05,better_model
+1,C2,230,1.2338,0.2185,False,tie
+2,C4,230,0.481,0.631,False,tie
+3,C3,230,-0.1485,0.8821,False,tie
+4,C2,230,0.8763,0.3818,False,tie
+5,C2,230,1.0438,0.2977,False,tie
+6,C2,230,1.0326,0.3029,False,tie
+7,C3,230,1.4026,0.1621,False,tie
