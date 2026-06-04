@@ -41,3 +41,6 @@ Thumbs.db
 
 # Diagrams & drawio exports
 drawio_xml_charts/
+
+# Robustness-check artifacts (defense only, never committed)
+defense/
